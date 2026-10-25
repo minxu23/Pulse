@@ -1,0 +1,12 @@
+# macOS
+.DS_Store
+
+# Xcode per-user state and build output
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+
+# Demo build output (rebuilt by Demo/更新演示应用.command, or on first launch)
+Demo/.build/
+Demo/Pulse.app/
