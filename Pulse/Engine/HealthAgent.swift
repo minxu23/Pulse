@@ -444,6 +444,11 @@ enum HealthAgent {
         if c.openEvents.contains(where: { $0.severity >= .consult }) {
             add("exclamationmark.circle.fill", "先处理健康提醒", "按建议复测或就医，并记录处理结果。", .events)
         }
+        // A lab recheck due within a month: time to book it.
+        if let r = LabRecheck.items(c.labs, profile: c.profile, now: c.now)
+            .filter({ [.overdue, .soon].contains($0.status(now: c.now)) }).min(by: { $0.due! < $1.due! }), let due = r.due {
+            add("testtube.2", "预约\(r.title)", "\(r.interval)，\(due < c.now.startOfDay ? "已经到期" : "大约 \(due.formatted(.dateTime.month().day())) 到期")。拿到结果后在化验结果里记下。", .labs)
+        }
         if case .rise = c.trend.sustained {
             add("bed.double.fill", "这几天以恢复为主", "降低训练强度，优先保证睡眠；伴随不适时及时就医。", .heart)
         }

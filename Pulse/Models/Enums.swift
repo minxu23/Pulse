@@ -613,7 +613,7 @@ enum ApneaTreatment: String, Codable, CaseIterable, Identifiable {
 }
 
 enum CareArea: String, Codable, CaseIterable, Identifiable {
-    case general, sleep, cardio, diabetes, training
+    case general, sleep, cardio, diabetes, kidney, training
     var id: String { rawValue }
     var label: String {
         switch self {
@@ -621,6 +621,7 @@ enum CareArea: String, Codable, CaseIterable, Identifiable {
         case .sleep: "睡眠呼吸"
         case .cardio: "心血管"
         case .diabetes: "糖尿病"
+        case .kidney: "肾脏"
         case .training: "专项运动"
         }
     }
@@ -630,6 +631,7 @@ enum CareArea: String, Codable, CaseIterable, Identifiable {
         case .sleep: "bed.double"
         case .cardio: "heart"
         case .diabetes: "drop"
+        case .kidney: "testtube.2"
         case .training: "figure.run"
         }
     }

@@ -410,7 +410,28 @@ enum DataHub {
         let candidates = AlertEngine.evaluate(days: a.days, vitals: vitals, trend: a.trend, profile: a.profile, now: now)
         var added = 0
         for c in candidates where addEvent(c, in: ctx) != nil { added += 1 }
+        syncLabRechecks(in: ctx, profile: a.profile, now: now)
         return added
+    }
+
+    /// Lab rechecks as 照护与随访 tasks: one appears a month before it is due, and a newer result
+    /// ticks it off (also one the user or 复盘 added for the same test).
+    static func syncLabRechecks(in ctx: ModelContext, profile p: ProfileSnapshot, now: Date = .app) {
+        let labs = ((try? ctx.fetch(FetchDescriptor<LabResult>())) ?? []).map(\.point)
+        let tasks = (try? ctx.fetch(FetchDescriptor<CareTask>())) ?? []
+        let items = LabRecheck.items(labs, profile: p, now: now)
+        let plan = LabRecheck.plan(items: items, tasks: tasks.map { .init(title: $0.title, createdAt: $0.createdAt, done: $0.done, due: $0.due) },
+                                   labs: labs, now: now)
+        for i in plan.complete {
+            tasks[i].done = true
+            tasks[i].doneAt = now
+        }
+        for item in plan.add {
+            let t = CareTask(title: item.title, area: item.area, due: item.due, note: "\(item.interval)（\(item.basis)）")
+            t.createdAt = now
+            ctx.insert(t)
+        }
+        if !plan.complete.isEmpty || !plan.add.isEmpty { try? ctx.save() }
     }
 
     @discardableResult

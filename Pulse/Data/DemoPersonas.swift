@@ -258,9 +258,10 @@ extension PersonaSpec {
                    (12, .hemoglobin, 127), (12, .uricAcid, 452), (12, .hba1c, 7.6)],
             proteinTargetG: 55, potassiumLimit: true, loggedP: 1.0, recordDays: 21,
             saltSources: 0...3, proteinServings: 5...10, potassiumFoods: 0...3, phosphorusFoods: 0...2),
-        tasks: [("糖化血红蛋白（HbA1c）复查", .diabetes, -18, false, "上次 8.1%"),
+        // The slipped follow-up is one no lab result answers: rechecks are ticked off by the result (化验复查提醒).
+        tasks: [("眼底检查", .diabetes, -18, false, "糖尿病每年一次，上次是去年秋天"),
                 ("心内科复诊", .cardio, 10, false, "带上家庭血压记录"),
-                ("眼底检查", .diabetes, -120, true, "")],
+                ("足部检查", .diabetes, -120, true, "")],
         symptoms: [(9, "疑似低血糖（出汗、手抖）", "凌晨醒来出汗、手抖，测指尖血糖 3.6 mmol/L，吃了饼干后好转。")])
 }
 

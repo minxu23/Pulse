@@ -54,7 +54,11 @@ struct ReviewPriorityTests {
         // Suggestions for the priorities that the general rules do not make, e.g. a kidney recheck.
         let titles = ((try? ctx.fetch(FetchDescriptor<CareTask>())) ?? []).filter { !$0.done }.map(\.title)
         let extra = ReviewPriorities.proposals(c, priorities: pr, taskTitles: titles)
-        #expect(extra.contains { $0.id == "task-kidney" && $0.rationale.contains("血钾 5.4") })
+        // The potassium recheck is already a 照护与随访 task (化验复查提醒), so it is not offered again…
+        #expect(titles.contains { LabRecheck.groups(inTitle: $0).contains(.potassium) } && !extra.contains { $0.id == "task-kidney" })
+        // …and without that task, it is.
+        let others = titles.filter { LabRecheck.groups(inTitle: $0).isEmpty }
+        #expect(ReviewPriorities.proposals(c, priorities: pr, taskTitles: others).contains { $0.id == "task-kidney" && $0.rationale.contains("血钾 5.4") })
         let ranked = ReviewCoach.proposals(context: c, handledInsights: [], taskTitles: titles, priorities: pr)
         #expect(ranked.count <= 3 && !ranked.isEmpty)
         let ranks = ranked.map { p in ReviewPriorities.area(of: p).flatMap { pr.map(\.area).firstIndex(of: $0) } ?? pr.count }

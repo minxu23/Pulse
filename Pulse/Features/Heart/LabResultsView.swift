@@ -25,6 +25,8 @@ struct LabResultsView: View {
                     .foregroundStyle(Theme.accent)
             }
             .buttonStyle(.plain)
+            let rechecks = LabRecheck.items(points, profile: p, now: .app)
+            if !rechecks.isEmpty { LabRecheckCard(items: rechecks) }
             if points.isEmpty {
                 Card {
                     EmptyHint(icon: "testtube.2", text: "还没有化验结果。拿到化验单后，把 eGFR、血肌酐、血钾、尿白蛋白/肌酐比等填进来，Pulse 会按参考范围解读，并跟踪肾功能的变化。")

@@ -196,7 +196,11 @@ struct DiabetesCareView: View {
 
     private var followUpCard: some View {
         let list = tasks.filter { $0.area == .diabetes }
-        let missing = DiabetesChecks.all.filter { c in !list.contains { $0.title == c.title } }
+        // A check already covered by a lab recheck task (化验复查提醒) is not offered again.
+        let open = tasks.filter { !$0.done }.map { LabRecheck.groups(inTitle: $0.title) }
+        let missing = DiabetesChecks.all.filter { c in
+            !list.contains { $0.title == c.title } && !LabRecheck.groups(inTitle: c.title).contains { g in open.contains { $0.contains(g) } }
+        }
         return VStack(alignment: .leading, spacing: Theme.Space.item) {
             CardTitle(title: "检查与随访") {
                 Button { addTask = true } label: { Label("添加", systemImage: "plus") }.buttonStyle(.bordered)

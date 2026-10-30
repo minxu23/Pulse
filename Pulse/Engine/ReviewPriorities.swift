@@ -190,6 +190,7 @@ enum ReviewPriorities {
             case .sleep: return .sleep
             case .cardio: return .bloodPressure
             case .diabetes: return .glucose
+            case .kidney: return .kidney
             case .training: return .activity
             case .general: return p.id.hasPrefix("task-kidney") || p.id.hasPrefix("task-salt") ? .kidney : nil
             }

@@ -304,34 +304,20 @@ extension HealthAgent {
     static func recheck(_ c: AgentContext) -> AgentReply {
         let p = c.profile
         let df = Date.FormatStyle().month().day()
-        var items: [String] = []
-        let egfr = c.lab(.egfr), uacr = c.lab(.uacr)
-        if p.conditions.contains(.ckd) || egfr.map({ $0.value < 60 }) == true {
-            // KDIGO: how often eGFR and albuminuria are checked, by stage.
-            let g = egfr?.value ?? 60, al = uacr?.value ?? 0
-            let months: Int
-            switch (g, al) {
-            case (..<30, _): months = 3
-            case (30..<45, 30...), (45..<60, 300...): months = 4
-            case (30..<45, _), (45..<60, 30...): months = 6
-            default: months = 12
+        // The same schedule as 化验结果 › 复查安排.
+        var items = LabRecheck.items(c.labs, profile: p, now: c.now).map { i in
+            var line = "\(i.name)（\(i.tests)）：\(i.interval)"
+            if let last = i.last, let due = i.due {
+                line += "；上次 \(last.formatted(df))，下次大约 \(due.formatted(df))\(due < c.now.startOfDay ? "，已经到期了" : "")"
+            } else {
+                line += "；还没有记录结果，记下最近一次的化验单，Pulse 帮你算下次的时间"
             }
-            var line = "肾功能（eGFR、肌酐）和尿白蛋白/肌酐比：按你现在的结果，一般每 \(months) 个月左右查一次"
-            if let e = egfr { line += "；上次是 \(e.date.formatted(df))，下次大约在 \(e.date.adding(months: months).formatted(.dateTime.month()))" }
-            items.append(line)
+            return line
         }
-        if let k = c.lab(.potassium, within: 180), k.value > 5.0 || k.value < 3.5 {
-            items.append("血钾：\(k.date.formatted(df)) 是 \(k.valueText)，偏\(k.value > 5 ? "高" : "低")，医生一般会安排几周内复查，按医生说的时间去")
-        }
-        if p.hasDiabetes {
-            let a1c = c.lab(.hba1c, within: 400)
-            let atTarget = a1c.map { $0.value <= 7.0 } ?? false
-            items.append("糖化血红蛋白：\(atTarget ? "达标时每 6 个月一次" : "还没达标时每 3 个月一次")\(a1c.map { "（上次 \($0.valueText)%，\($0.date.formatted(df))）" } ?? "")；每年查一次眼底和足部")
-        }
+        if p.hasDiabetes { items.append("眼底和足部：每年查一次") }
         if p.conditions.contains(.hypertension) || c.bp.count > 0 {
             items.append("血压：在家早晚测，每次复诊前把最近 7 天的记录带上")
         }
-        if let ua = c.lab(.uricAcid, within: 365), ua.value > 420 { items.append("尿酸：和肾功能一起查就行") }
         if items.isEmpty { items.append("没有慢性病的话，每年做一次常规体检就够") }
         let first = "按你现在的情况，一般这样安排，具体以医生给你定的为准："
         return AgentReply(text: lines([first, bullets(items), "复诊时可以在「我的 › 隐私与数据导出」生成就诊摘要带上。"]),

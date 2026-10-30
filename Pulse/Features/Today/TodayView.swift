@@ -441,7 +441,10 @@ struct PhaseTileInfo {
             if bp > 0 { parts.append("血压 \(bp) 次") }
             let g = data.todayVitals.filter { $0.kind == .glucose }
             if g.count >= 24 { parts.append("血糖 \(Stats.mean(g.map(\.value))!.oneDecimal)") } else if let last = g.last { parts.append("血糖 \(last.value.oneDecimal)") }
-            let due = data.openTasks.contains { ($0.due ?? .distantFuture) < data.now.adding(days: 1) }
+            // A lab recheck shows a week ahead, so there is time to book it.
+            let due = data.openTasks.contains {
+                ($0.due ?? .distantFuture) < data.now.adding(days: LabRecheck.groups(inTitle: $0.title).isEmpty ? 1 : LabRecheck.flagLead)
+            }
             return PhaseTileInfo(phase: ph, metric: "\(data.record?.waterMl ?? 0)", unit: "ml 饮水", caption: parts.joined(separator: " · "),
                                  state: state(false), flag: due ? "照护" : nil)
         case .evening:

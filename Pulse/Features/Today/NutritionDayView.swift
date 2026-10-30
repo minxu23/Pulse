@@ -29,7 +29,7 @@ struct NutritionDayView: View {
         ReadingsCard(readings: data.todayVitals.filter { $0.kind != .glucose || !cgm },
                      sessions: data.todaySessions, meals: data.todayMeals, onLog: { sheet = .log($0) })
 
-        if p.modules.contains(.cardioCare) || p.modules.contains(.diabetesCare) {
+        if p.modules.contains(.cardioCare) || p.modules.contains(.diabetesCare) || data.openTasks.contains(where: { $0.area == .kidney && $0.due != nil }) {
             CareTodayCard(profile: p, record: data.record, readings: data.recentVitals, tasks: data.openTasks)
         }
 
@@ -458,11 +458,18 @@ struct CareTodayCard: View {
                 }
                 .buttonStyle(.plain)
             }
-            if let next = tasks.first(where: { $0.due != nil && [.cardio, .diabetes, .sleep].contains($0.area) }) {
-                Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block)
+            if let next = tasks.first(where: { $0.due != nil && [.cardio, .diabetes, .kidney, .sleep].contains($0.area) }) {
+                if profile.modules.contains(.cardioCare) || profile.modules.contains(.diabetesCare) {
+                    Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block)
+                }
                 let overdue = next.due! < .app
-                IconTextRow(icon: "calendar.badge.clock", color: overdue ? .orange : .secondary, title: next.title,
-                            text: "\(overdue ? "已到期" : "日期") \(next.due!.formatted(.dateTime.month().day()))")
+                let row = IconTextRow(icon: "calendar.badge.clock", color: overdue ? .orange : .secondary, title: next.title,
+                                      text: "\(overdue ? "已到期" : "日期") \(next.due!.formatted(.dateTime.month().day()))")
+                // A lab recheck opens 化验结果, where its schedule and date are.
+                if LabRecheck.groups(inTitle: next.title).isEmpty { row } else {
+                    NavigationLink { LabResultsView() } label: { row.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle()) }
+                        .buttonStyle(.plain)
+                }
             }
         }
         .cardSurface()
