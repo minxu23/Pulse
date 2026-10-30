@@ -1,0 +1,83 @@
+import Foundation
+import SwiftData
+import UserNotifications
+
+/// 到期提醒: system notifications for 照护与随访 tasks with a due date — a week ahead for one that
+/// needs booking (a lab recheck, a visit, an examination), and at 9 on the day. Local only: nothing
+/// leaves the phone. The schedule is rebuilt from the tasks whenever the app comes to the front or
+/// goes to the background, so a ticked-off or moved task never rings.
+enum CareReminders {
+    static let enabledKey = "reminders.care"
+    static let prefix = "pulse.care."
+    static let hour = 9
+    /// iOS keeps 64 pending notifications per app; leave room.
+    static let limit = 48
+
+    static var enabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
+
+    struct Task: Equatable {
+        let id: String
+        let title: String
+        let note: String
+        let due: Date?
+        let done: Bool
+    }
+
+    struct Planned: Equatable {
+        let id: String
+        let title: String
+        let body: String
+        let fire: Date
+    }
+
+    /// Tasks worth a word a week ahead: something to book.
+    static func needsBooking(_ title: String) -> Bool {
+        !LabRecheck.groups(inTitle: title).isEmpty || ["复诊", "复查", "检查", "预约", "随访", "就诊"].contains { title.contains($0) }
+    }
+
+    /// What to schedule for these tasks, soonest first; nothing in the past.
+    static func plan(_ tasks: [Task], now: Date) -> [Planned] {
+        let day = Date.FormatStyle().month().day().weekday(.abbreviated).locale(Locale(identifier: "zh_CN"))
+        var out: [Planned] = []
+        for t in tasks where !t.done {
+            guard let due = t.due?.startOfDay else { continue }
+            if needsBooking(t.title) {
+                out.append(Planned(id: prefix + t.id + ".week", title: "下周：\(t.title)",
+                                   body: "大约 \(due.formatted(day))。需要预约的话，现在约正好；日期以医生的安排为准。",
+                                   fire: due.adding(days: -7).adding(minutes: hour * 60)))
+            }
+            out.append(Planned(id: prefix + t.id + ".day", title: "今天：\(t.title)",
+                               body: t.note.isEmpty ? "完成后在 Pulse 的「照护与随访」里打个勾。" : t.note,
+                               fire: due.adding(minutes: hour * 60)))
+        }
+        return Array(out.filter { $0.fire > now }.sorted { $0.fire < $1.fire }.prefix(limit))
+    }
+
+    /// Asks once; false when the user said no (then only the system Settings can turn it on).
+    static func requestPermission() async -> Bool {
+        (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+    }
+
+    /// Replaces Pulse's pending reminders with the ones the tasks call for now (none when turned off).
+    @MainActor static func sync(in ctx: ModelContext) {
+        // Not from tests, and not in a demo running on a shifted clock: the dates would be off.
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil, !DemoClock.isShifted else { return }
+        let tasks = ((try? ctx.fetch(FetchDescriptor<CareTask>())) ?? [])
+            .map { Task(id: $0.id.uuidString, title: $0.title, note: $0.note, due: $0.due, done: $0.done) }
+        let planned = enabled ? plan(tasks, now: Date()) : []
+        _Concurrency.Task {
+            let center = UNUserNotificationCenter.current()
+            let ours = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix(prefix) }
+            center.removePendingNotificationRequests(withIdentifiers: ours)
+            for p in planned {
+                let content = UNMutableNotificationContent()
+                content.title = p.title
+                content.body = p.body
+                content.sound = .default
+                let when = Calendar.pulse.dateComponents([.year, .month, .day, .hour, .minute], from: p.fire)
+                try? await center.add(UNNotificationRequest(identifier: p.id, content: content,
+                                                            trigger: UNCalendarNotificationTrigger(dateMatching: when, repeats: false)))
+            }
+        }
+    }
+}

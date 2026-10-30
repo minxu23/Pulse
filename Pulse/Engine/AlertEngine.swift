@@ -29,6 +29,8 @@ enum AlertEngine {
         out += bpTrendAlerts(vitals: vitals, profile: p, now: now)
         out += spo2Alerts(days: days, now: now)
         if let w = weightAlert(vitals, profile: p, now: now) { out.append(w) }
+        if let k = KidneySigns.alert(days, vitals: vitals, profile: p, now: now) { out.append(k) }
+        if let g = Dialysis.alert(vitals, profile: p, now: now) { out.append(g) }
         return out
     }
 
@@ -36,8 +38,9 @@ enum AlertEngine {
 
     /// For kidney disease, heart failure or a fluid limit: weight up ≥ 2 kg within 3 days usually
     /// means retained fluid, not fat.
+    /// On dialysis, gaining between sessions is expected; `Dialysis.alert` reads it against the dry weight.
     static func weightAlert(_ vitals: [VitalPoint], profile p: ProfileSnapshot, now: Date) -> AlertCandidate? {
-        guard p.watchesWeight, let g = CardioAnalyzer.weightGain(vitals, now: now) else { return nil }
+        guard p.watchesWeight, !p.onDialysis, let g = CardioAnalyzer.weightGain(vitals, now: now) else { return nil }
         let day = Date.FormatStyle().month().day()
         return AlertCandidate(
             dedupeKey: "weightGain-\(dayKey(g.to.time))", kind: .weightGain, severity: .consult,

@@ -43,6 +43,29 @@ enum LabKind: String, Codable, CaseIterable, Identifiable {
         case .hba1c: "%"
         }
     }
+    /// The units lab reports use; the first is Pulse's own (`unit`).
+    var units: [String] {
+        switch self {
+        case .uacr: ["mg/g", "mg/mmol"]
+        case .creatinine, .uricAcid: ["μmol/L", "mg/dL"]
+        case .phosphorus: ["mmol/L", "mg/dL"]
+        case .hemoglobin: ["g/L", "g/dL"]
+        case .hba1c: ["%", "mmol/mol"]
+        default: [unit]
+        }
+    }
+    /// A value in one of `units`, in Pulse's own unit.
+    func standard(_ v: Double, unit u: String) -> Double {
+        switch (self, u) {
+        case (.uacr, "mg/mmol"): v * 8.84
+        case (.creatinine, "mg/dL"): v * 88.4
+        case (.uricAcid, "mg/dL"): v * 59.48
+        case (.phosphorus, "mg/dL"): v * 0.3229
+        case (.hemoglobin, "g/dL"): v * 10
+        case (.hba1c, "mmol/mol"): v / 10.929 + 2.152
+        default: v
+        }
+    }
     var decimals: Int {
         switch self {
         case .potassium, .hba1c: 1

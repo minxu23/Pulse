@@ -73,8 +73,12 @@ enum DataExporter {
             if categories.contains(.behavior) {
                 d["alcoholUnits"] = r.alcoholUnits; d["caffeineCups"] = r.caffeineCups; d["waterMl"] = r.waterMl
                 if r.nutrientsLogged {
-                    d["saltG"] = r.saltG as Any; d["saltSources"] = r.saltSources; d["proteinServings"] = r.proteinServings as Any
+                    d["saltG"] = r.saltG as Any; d["saltSources"] = r.saltSources; d["proteinServings"] = r.proteinServings as Any; d["proteinFoods"] = r.proteinFoods
                     d["potassiumFoods"] = r.potassiumFoods; d["phosphorusFoods"] = r.phosphorusFoods
+                }
+                if r.edema != nil || r.urineOutput != nil || r.foamyUrine != nil {
+                    d["edema"] = r.edema as Any; d["edemaPlaces"] = r.edemaPlaces; d["urineOutput"] = r.urineOutput as Any
+                    d["urineMl"] = r.urineMl as Any; d["foamyUrine"] = r.foamyUrine as Any
                 }
                 d["stress"] = r.stress as Any; d["lateMeal"] = r.lateMeal; d["tags"] = r.tagsRaw; d["note"] = r.dayNote
             }

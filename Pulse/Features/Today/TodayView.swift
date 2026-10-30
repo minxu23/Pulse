@@ -133,7 +133,7 @@ struct TodayView: View {
             }
             Spacer()
             Menu {
-                ForEach(QuickLogKind.allCases) { k in
+                ForEach(QuickLogKind.menu(for: d.p)) { k in
                     Button { sheet = k == .workout ? .workout(nil) : .log(k) } label: { Label(k.label, systemImage: k.icon) }
                 }
             } label: {
@@ -479,7 +479,7 @@ struct PhaseGrid: View {
                 .buttonStyle(.plain)
             }
             Menu {
-                ForEach(QuickLogKind.allCases) { k in
+                ForEach(QuickLogKind.menu(for: data.p)) { k in
                     Button { sheet = k == .workout ? .workout(nil) : .log(k) } label: { Label(k.label, systemImage: k.icon) }
                 }
             } label: {

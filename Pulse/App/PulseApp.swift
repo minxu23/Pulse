@@ -86,6 +86,8 @@ struct RootView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { refresh() }
+            // Whatever changed while the app was open (a task ticked off, a date moved) is what rings.
+            if phase == .background { CareReminders.sync(in: ctx) }
         }
         #if DEBUG
         .fullScreenCover(item: $debugPage) { page in
@@ -111,6 +113,7 @@ struct RootView: View {
         DataHub.ensureWeekPlan(in: ctx)
         DataHub.refreshAlerts(in: ctx)
         try? ctx.save()
+        CareReminders.sync(in: ctx)
         if p.useHealthKit {
             Task { await HealthKitService.shared.sync(into: ctx, days: 14) }
         }

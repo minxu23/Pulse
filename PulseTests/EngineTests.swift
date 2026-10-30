@@ -510,6 +510,46 @@ struct ReviewCoachTests {
         #expect(!ReviewCoach.brief(current: cur, previous: prev, context: c, isCurrentWeek: true, nextTarget: (90, "")).headline.contains("没跟上"))
     }
 
+    /// The user's first priority leads the headline, even when training lags or other numbers improved.
+    @Test func briefLeadsWithTheFirstPriority() throws {
+        var cur = WeekSnapshot(weekStart: today.weekStart, span: 3, rhr: 70, sleepHours: 7, activeMinutes: 10, energy: 3, alcohol: 0,
+                               stress: 3, done: 0, total: 2, completion: 0, missedWeekdays: [2], daysLogged: 3)
+        var prev = cur
+        prev.rhr = 73; prev.sleepHours = 6.5; prev.alcohol = 3; prev.completion = 0.5; prev.done = 1
+        func context(thisWeek: Double, lastWeek: Double) -> AgentContext {
+            let bp = (0..<3).flatMap { i in
+                [VitalPoint(time: today.weekStart.adding(days: i).adding(minutes: 450), kind: .bloodPressure, value: thisWeek, value2: 85, context: .morning),
+                 VitalPoint(time: today.weekStart.adding(days: i - 7).adding(minutes: 450), kind: .bloodPressure, value: lastWeek, value2: 85, context: .morning)]
+            }
+            return AgentContext.make(profile: ProfileSnapshot(), name: "测试", days: series(30) { 70 + wiggle($0) }, plan: [], workouts: [],
+                                     vitals: bp, events: [], stopBang: [], baselineSetAt: nil, raceName: "", now: today)
+        }
+        let pr = [ReviewPriority(area: .bloodPressure, reason: "", mine: true), ReviewPriority(area: .activity, reason: "", mine: true)]
+        func brief(_ c: AgentContext) -> WeeklyBrief { ReviewCoach.brief(current: cur, previous: prev, context: c, isCurrentWeek: true, nextTarget: (90, ""), priorities: pr) }
+        // Training lags: blood pressure still comes first, training is the week's difficulty.
+        let down = brief(context(thisWeek: 128, lastWeek: 136))
+        #expect(down.headline == "这周家庭血压比上周好，训练还没跟上")
+        #expect(down.story?.main == "这周家庭血压比上周好" && down.story?.hard == "训练还没跟上节奏，周一的训练没练成", "\(down.story?.text ?? "")")
+        // A second priority that slipped stays in the story, with training.
+        let pr2 = pr + [ReviewPriority(area: .stress, reason: "", mine: true)]
+        prev.energy = 3.5
+        let both = ReviewCoach.brief(current: cur, previous: prev, context: context(thisWeek: 128, lastWeek: 136), isCurrentWeek: true, nextTarget: (90, ""), priorities: pr2)
+        #expect(both.story?.hard == "醒来时的精神不如上周，训练也还没跟上节奏，周一的训练没练成", "\(both.story?.text ?? "")")
+        prev.energy = 3
+        #expect(brief(context(thisWeek: 140, lastWeek: 132)).headline == "这周家庭血压不如上周，训练也没跟上")
+        #expect(brief(context(thisWeek: 133, lastWeek: 132)).headline == "这周家庭血压和上周差不多，训练还没跟上")
+        // Training on track and three other numbers better: a slipping first priority is not hidden by 「在变好」.
+        cur.completion = 1; cur.done = 2
+        let up = brief(context(thisWeek: 140, lastWeek: 132))
+        #expect(up.headline.hasPrefix("这周家庭血压不如上周，") && !up.headline.contains("在变好"), "\(up.headline)")
+        #expect(up.story?.main == "这周家庭血压不如上周")
+        // Training first in the user's order: training leads as before.
+        let trainingFirst = [ReviewPriority(area: .activity, reason: "", mine: true), ReviewPriority(area: .bloodPressure, reason: "", mine: true)]
+        cur.completion = 0; cur.done = 0
+        #expect(ReviewCoach.brief(current: cur, previous: prev, context: context(thisWeek: 128, lastWeek: 136), isCurrentWeek: true,
+                                  nextTarget: (90, ""), priorities: trainingFirst).headline.hasPrefix("训练还没跟上"))
+    }
+
     @Test func nextWeekLineFollowsCompletion() {
         #expect(ReviewCoach.nextWeekLine(current: 150, next: 165, completion: 0.9, isCurrentWeek: true).contains("增加到 165"))
         #expect(ReviewCoach.nextWeekLine(current: 150, next: 120, completion: 0.4, isCurrentWeek: false).contains("降到 120"))

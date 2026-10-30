@@ -108,6 +108,8 @@ enum SymptomGuide {
             : "脚肿多数和久坐久站、吃得咸有关，先抬高腿休息；但有几种情况要尽快就医。"
         var seen: [String] = []
         if let g = CardioAnalyzer.weightGain(c.vitals, now: c.now) { seen.append("体重 3 天内涨了 \(g.kg.oneDecimal) kg") }
+        if let s = KidneySigns.summary(c.days, now: c.now), s.edemaDays > 0 { seen.append("你记录的" + s.text.replacingOccurrences(of: "近 14 天记了 \(s.days) 天：", with: "近 14 天里，")) }
+        if let g = Dialysis.gain(c.vitals, profile: p, now: c.now) { seen.append("体重比\(g.against)多 \(g.kg.oneDecimal) kg") }
         let ccb = c.medications.filter { $0.name.contains("地平") }
         if !ccb.isEmpty { seen.append("你吃的\(ccb.map(\.name).joined(separator: "、"))常见的副作用之一就是脚踝肿；复诊时告诉医生，不要自己停药") }
         if let u = c.lab(.uacr, within: 365), u.value >= 30 { seen.append("尿白蛋白/肌酐比 \(u.valueText) 偏高，尿里漏蛋白多时也容易肿") }
@@ -156,6 +158,7 @@ enum SymptomGuide {
                                           "刚扭伤或明显肿痛，冰敷 15 分钟，一天几次",
                                           "不疼了先从平时一半的量开始，每周加不超过 10%"]))
         parts.append("肿得厉害、关节卡住或打软腿、不能负重，或者 1–2 周还没好转，去看骨科或运动医学科。")
+        if KidneyMeds.atRisk(c.profile, labs: c.labs) { parts.append("想吃止痛药的话，布洛芬这类药可能伤肾，先问医生或药师用哪种。") }
         var blocks: [AgentUIBlock] = []
         if PlanChat.isRequest(q) {
             blocks = PlanChat.reply(q, context: c).blocks.filter { $0.proposal != nil }
@@ -235,6 +238,10 @@ enum SymptomGuide {
             return answer("尿里有血要尽快去医院查一下。", ["剧烈运动后偶尔会有，但不能自己判断，先查尿常规。"], sources: ["常识"])
         }
         if a.has(["尿少", "尿量"]) {
+            if p.onDialysis {
+                return answer("透析以后尿量变少很常见，尿量的变化按透析中心的要求记录、告诉医护人员。", ["喝水按透析中心定的量；两次透析之间体重涨得多、气短或脚肿，及时联系透析中心。"],
+                              sources: ["健康状况"], followUps: ["最近脚有点肿怎么办？"])
+            }
             let first = p.watchesWeight ? "尿变少，同时有脚肿或体重涨，可能是身体存了水，尽快联系医生。" : "尿少多数是喝水少或出汗多，先看看这两天喝了多少。"
             return answer(first, [p.watchesWeight ? "利尿剂不要自己加减；今天称一下体重。" : "一天尿量明显少、颜色很深，或者伴有腰疼、发烧，去医院查一下。"],
                           sources: ["健康状况"], followUps: ["最近脚有点肿怎么办？"])
@@ -259,6 +266,7 @@ enum SymptomGuide {
             hasBP ? "血压在 180/110 以上又头疼得厉害，或者伴有一侧无力、说话不清、看东西模糊，立即拨打 120。" : "突然剧烈头疼（像被打了一下），或者伴有发烧、脖子发硬、一侧无力，立即就医。",
             found(why),
             "头疼越来越频繁或越来越重，去看医生。",
+            KidneyMeds.atRisk(p, labs: c.labs) ? "想吃止痛药的话，布洛芬这类药可能伤肾，先问医生或药师用哪种。" : nil,
         ], sources: ["睡眠", hasBP ? "血压" : nil].compactMap { $0 }, followUps: hasBP ? ["我的血压控制得怎么样？"] : ["我的睡眠怎么样？"])
     }
 }

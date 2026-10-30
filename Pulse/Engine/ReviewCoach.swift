@@ -175,18 +175,31 @@ enum ReviewCoach {
             }.map(\.element)
         }
         let better = byPriority(metrics.filter { $0.trend == .better }), worse = byPriority(metrics.filter { $0.trend == .worse })
+        // The first priority with a number to compare leads, whatever else happened — unless it is
+        // training itself, which leads anyway when it lags.
+        let lead = priorities.prefix(3).lazy.compactMap { p in metrics.first { $0.name == p.area.metricName && $0.trend != .none } }.first
+            .flatMap { $0.name == sessions.name ? nil : $0 }
+        func change(_ m: BriefMetric) -> String {
+            let (up, down) = m.name == "偏咸天数" ? ("比上周少", "比上周多") : ("比上周好", "不如上周")
+            return m.name + (m.trend == .better ? up : (m.trend == .worse ? down : "和上周差不多"))
+        }
         let headline: String
         let behind = c.total >= 2 && (c.completion ?? 1) < 0.5
         if isCurrentWeek && c.span <= 2 {
             headline = "这周刚开始，先看看前 \(c.span) 天"
+        } else if behind, let lead {
+            headline = "这周\(change(lead))，训练\(lead.trend == .worse ? "也" : "还")没跟上"
         } else if behind {
             // Training that has not happened outweighs good numbers elsewhere.
             headline = better.isEmpty ? "这周的训练还没跟上节奏"
                 : "训练还没跟上，不过\(better.prefix(2).map(\.name).joined(separator: "、"))比上周好"
-        } else if better.count >= 3 {
+        } else if better.count >= 3 && lead?.trend != .worse {
             headline = "这周在变好，\(better.prefix(2).map(\.name).joined(separator: "、"))都比上周好"
         } else if worse.count >= 2 && worse.count > better.count {
             headline = "这周\(worse.prefix(2).map(\.name).joined(separator: "、"))不如上周，下周一起调整"
+        } else if let lead, lead.trend == .worse {
+            // A first priority that slipped is not hidden behind good news elsewhere.
+            headline = "这周\(change(lead))" + (better.first.map { "，\(change($0))" } ?? "，下周一起调整")
         } else if let b = better.first {
             headline = "这周\(b.name)有进步，其他和上周差不多"
         } else {
@@ -195,23 +208,39 @@ enum ReviewCoach {
         // The summary tells one story — what the week was about, a bright spot, a difficulty — not every number.
         let missed = Array(Set(c.missedWeekdays)).sorted { PlanGenerator.order($0) < PlanGenerator.order($1) }.map(Weekday.name)
         var used: Set<String> = []
+        // Said with its direction: a model turns "静息心率有进步" into "有了提升", which reads as higher.
+        func said(_ m: BriefMetric) -> String {
+            guard m.trend != .flat else { return "这周\(m.name)和上周差不多" }
+            let line = phrase(m)
+            return line.hasPrefix("你") ? line : "这周" + line
+        }
         let main: String
+        var lagging: String?
         if isCurrentWeek && c.span <= 2 {
             main = "这周才过了 \(c.span) 天，还看不出趋势"
         } else if behind {
-            main = "这周的训练还没跟上节奏，" + (missed.isEmpty ? "只完成了 \(c.done)/\(c.total) 次"
-                : "\(missed.joined(separator: "、"))的训练\(missed.count > 1 ? "都" : "")没练成")
+            let sessionsMissed = missed.isEmpty ? "只完成了 \(c.done)/\(c.total) 次"
+                : "\(missed.joined(separator: "、"))的训练\(missed.count > 1 ? "都" : "")没练成"
+            // With a first priority to lead, training is the week's difficulty rather than its story.
+            if let lead {
+                main = said(lead)
+                lagging = sessionsMissed
+                used.insert(lead.name)
+            } else {
+                main = "这周的训练还没跟上节奏，" + sessionsMissed
+            }
             used.insert(sessions.name)
-        } else if better.count >= 3 {
+        } else if better.count >= 3 && lead?.trend != .worse {
             main = "这周状态在变好，\(better.prefix(2).map(\.name).joined(separator: "、"))都比上周好"
             used.formUnion(better.prefix(2).map(\.name))
         } else if worse.count >= 2 && worse.count > better.count {
             main = "这周\(worse.prefix(2).map(\.name).joined(separator: "、"))都不如上周"
             used.formUnion(worse.prefix(2).map(\.name))
+        } else if let lead, lead.trend == .worse {
+            main = said(lead)
+            used.insert(lead.name)
         } else if let b = better.first {
-            // Said with its direction: a model turns "静息心率有进步" into "有了提升", which reads as higher.
-            let line = phrase(b)
-            main = (line.hasPrefix("你") ? line : "这周" + line) + "，其他和上周差不多"
+            main = said(b) + "，其他和上周差不多"
             used.insert(b.name)
         } else {
             main = "这周整体平稳，和上周差不多"
@@ -221,6 +250,10 @@ enum ReviewCoach {
         let order = first + ["平均睡眠", "活动", "饮酒", "静息心率", "醒后精力", "训练完成"]
         let hardOnes = worse.filter { !used.contains($0.name) }.sorted { order.firstIndex(of: $0.name) ?? 9 < order.firstIndex(of: $1.name) ?? 9 }
         var hard = hardOnes.prefix(2).enumerated().map { phrase($0.element, also: $0.offset > 0) }.joined(separator: "，")
+        if let lagging {
+            // Training joins a priority that slipped rather than pushing it out of the story.
+            hard = (hardOnes.first { first.contains($0.name) }.map { phrase($0) + "，训练也" } ?? "训练") + "还没跟上节奏，" + lagging
+        }
         if hard.isEmpty {
             if c.alcohol > context.profile.weeklyAlcoholLimit { hard = "这周饮酒 \(c.alcohol.oneDecimal) 单位，超过了每周上限" }
             else if let s = c.sleepHours, s < context.profile.sleepNeedMinutes / 60 - 0.5 { hard = "睡得偏少，平均每晚 \(s.oneDecimal) 小时" }
@@ -248,6 +281,7 @@ enum ReviewCoach {
         case "醒后精力": ("醒来时的精神", up ? "比上周好" : "不如上周")
         case "饮酒" where up && (Double(m.value) ?? 1) == 0: ("你这周", "一点酒都没喝")
         case "饮酒": ("饮酒", "比上周\(up ? "少" : "多")了" + (also ? some : " \(d) 单位"))
+        case "偏咸天数": ("偏咸的天数", "比上周\(up ? "少" : "多")")
         default: (m.name, up ? "比上周好" : "不如上周")
         }
         return who + (also ? "也" : "") + what

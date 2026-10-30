@@ -9,6 +9,8 @@ struct ProfileView: View {
     @Query(sort: \ActivitySession.start) private var sessions: [ActivitySession]
     @State private var pendingPersona: DemoPersona?
     @State private var renamingAgent = false
+    @AppStorage(CareReminders.enabledKey) private var careReminders = false
+    @State private var remindersDenied = false
 
     var body: some View {
         NavigationStack {
@@ -20,7 +22,7 @@ struct ProfileView: View {
 
                     Section {
                         link("基础信息", "person", Theme.body) { Form { BasicsSection(p: p) }.navigationTitle("基础信息").calmStyle() }
-                        link("健康状况与用药", "cross.case", .pink) { Form { ConditionsSection(p: p); DietTargetsSection(p: p); MedicationsSection() }.navigationTitle("健康状况与用药").calmStyle() }
+                        link("健康状况与用药", "cross.case", .pink) { Form { ConditionsSection(p: p); DietTargetsSection(p: p); if p.conditions.contains(.ckd) || p.dialysis { DialysisSection(p: p) }; MedicationsSection() }.navigationTitle("健康状况与用药").calmStyle() }
                         link("运动基础与生活节奏", "figure.walk", Theme.activity) { Form { ExerciseBaseSection(p: p); LifeConstraintsSection(p: p) }.navigationTitle("运动与生活节奏").calmStyle() }
                         link("改善方向与目标", "target", .blue) { Form { GoalsSection(p: p) }.navigationTitle("目标").calmStyle() }
                         link("静息心率基线", "heart.text.square", Theme.heartData) { BaselineView(profile: p, analytics: a) }
@@ -59,6 +61,28 @@ struct ProfileView: View {
                         link("记录历史与补充修改", "clock.arrow.circlepath", .gray) { HistoryView() }
                         link("隐私与数据导出", "lock.shield", .blue) { DataPrivacyView() }
                     } header: { Text("我的数据") }
+
+                    Section {
+                        Toggle(isOn: Binding(get: { careReminders }, set: { on in
+                            guard on else { careReminders = false; CareReminders.sync(in: ctx); return }
+                            Task {
+                                let ok = await CareReminders.requestPermission()
+                                careReminders = ok
+                                remindersDenied = !ok
+                                CareReminders.sync(in: ctx)
+                            }
+                        })) {
+                            Label { Text("到期提醒") } icon: { tileIcon("bell", .red) }
+                        }
+                        if remindersDenied {
+                            Button("去系统设置允许通知") {
+                                if let url = URL(string: UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(url) }
+                            }
+                        }
+                    } header: { Text("提醒") } footer: {
+                        Text(remindersDenied ? "通知被关掉了：在系统「设置 › 通知 › Pulse」里允许后，再回来打开。"
+                             : "复查、复诊这类照护与随访事项，到期前一周和当天上午 9 点，手机会通知你。提醒只在本机安排，不经过网络。")
+                    }
 
                     Section {
                         Button { renamingAgent = true } label: {

@@ -98,12 +98,61 @@ struct DietTargetsSection: View {
     }
 }
 
+/// 血液透析: the session days and the dry weight, from the dialysis centre. Turning it on also
+/// limits fluids; sessions are kept free of training.
+struct DialysisSection: View {
+    @Bindable var p: UserProfile
+    @State private var dryText = ""
+    var body: some View {
+        Section {
+            Toggle("在做血液透析", isOn: Binding(get: { p.dialysis }, set: { on in
+                p.dialysis = on
+                if on {
+                    p.fluidLimit = true
+                    if p.dialysisWeekdays.isEmpty { p.dialysisWeekdays = [2, 4, 6] }
+                }
+            }))
+            if p.dialysis {
+                VStack(alignment: .leading, spacing: Theme.Space.item) {
+                    Text("透析日")
+                    FlowLayout(spacing: Theme.Space.item) {
+                        ForEach(Weekday.mondayFirst, id: \.self) { d in
+                            ToggleChip(text: Weekday.name(d), isOn: Binding(get: { p.dialysisWeekdays.contains(d) }, set: { on in
+                                p.dialysisWeekdays = Weekday.mondayFirst.filter { $0 == d ? on : p.dialysisWeekdays.contains($0) }
+                            }))
+                        }
+                    }
+                }
+                .padding(.vertical, Theme.Space.tight)
+                HStack {
+                    Text("干体重")
+                    Spacer()
+                    TextField("医生定的", text: $dryText).keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 90)
+                    Text("kg").foregroundStyle(.secondary)
+                }
+                .onAppear { dryText = p.dryWeightKg.map(\.oneDecimal) ?? "" }
+                .onChange(of: dryText) { _, t in
+                    p.dryWeightKg = Double(t.replacingOccurrences(of: ",", with: ".")).flatMap { (30...200).contains($0) ? $0 : nil }
+                }
+            }
+        } header: {
+            Text("透析")
+        } footer: {
+            Text(p.dialysis ? "透析日不安排训练；两次透析之间体重涨到干体重的 4% 以上时提醒你。干体重和每天喝多少水，按透析中心定的填（饮水在「恢复目标」里改）。"
+                 : "做血液透析时打开，Pulse 会避开透析日安排运动，并留意两次透析之间的体重。")
+        }
+    }
+}
+
 struct MedicationsSection: View {
     @Environment(\.modelContext) private var ctx
     @Query(sort: \MedicationEntry.startDate, order: .reverse) private var meds: [MedicationEntry]
+    @Query private var profiles: [UserProfile]
+    @Query private var labs: [LabResult]
     @State private var adding = false
 
     var body: some View {
+        let kidneys = KidneyMeds.atRisk(profiles.first?.snapshot(medications: meds) ?? ProfileSnapshot(), labs: labs.map(\.point))
         Section {
             ForEach(meds) { m in
                 VStack(alignment: .leading, spacing: Theme.Space.hairline) {
@@ -115,6 +164,9 @@ struct MedicationsSection: View {
                     }
                     Text("\(m.dose.isEmpty ? "" : m.dose + " · ")\(m.startDate.formatted(date: .numeric, time: .omitted)) 起 · \(m.category.hrEffect.label)")
                         .font(.footnote).foregroundStyle(.secondary)
+                    if kidneys && m.isActive && KidneyMeds.isNSAID(m.name) {
+                        StatusLabel(.attention("这类止痛药可能伤肾，长期吃先问肾内科医生或药师")).font(.subheadline)
+                    }
                 }
                 .swipeActions {
                     Button("删除", role: .destructive) { ctx.delete(m) }
@@ -134,6 +186,8 @@ struct MedicationsSection: View {
 struct AddMedicationSheet: View {
     @Environment(\.modelContext) private var ctx
     @Environment(\.dismiss) private var dismiss
+    @Query private var profiles: [UserProfile]
+    @Query private var labs: [LabResult]
     @State private var name = ""
     @State private var category: MedicationCategory = .other
     @State private var dose = ""
@@ -149,6 +203,9 @@ struct AddMedicationSheet: View {
                 TextField("剂量与用法（可选）", text: $dose)
                 DatePicker("开始日期", selection: $start, displayedComponents: .date)
                 Section { Text(category.hrEffect.label).foregroundStyle(.secondary) }
+                if KidneyMeds.isNSAID(name), KidneyMeds.atRisk(profiles.first?.snapshot(medications: []) ?? ProfileSnapshot(), labs: labs.map(\.point)) {
+                    Section { StatusLabel(.attention(KidneyMeds.caution)).fixedSize(horizontal: false, vertical: true) }
+                }
             }
             .navigationTitle("添加用药")
             .navigationBarTitleDisplayMode(.inline)

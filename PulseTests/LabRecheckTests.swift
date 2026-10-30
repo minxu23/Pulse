@@ -112,6 +112,24 @@ struct LabRecheckTests {
         }
     }
 
+    @Test func notificationsAWeekAheadAndOnTheDay() {
+        let due = evening.startOfDay.adding(days: 20)
+        let tasks = [CareReminders.Task(id: "k", title: "复查血钾", note: "", due: due, done: false),
+                     CareReminders.Task(id: "bp", title: "连续 7 天早晚量血压", note: "早晚各一次", due: evening.startOfDay.adding(days: 3), done: false),
+                     CareReminders.Task(id: "old", title: "心内科复诊", note: "", due: evening.startOfDay.adding(days: -2), done: false),
+                     CareReminders.Task(id: "done", title: "复查肾功能", note: "", due: due, done: true),
+                     CareReminders.Task(id: "none", title: "眼底检查", note: "", due: nil, done: false)]
+        let plan = CareReminders.plan(tasks, now: evening)
+        // Soonest first; something to book a week ahead too; nothing past, done or without a date.
+        #expect(plan.map(\.id) == ["pulse.care.bp.day", "pulse.care.k.week", "pulse.care.k.day"], "\(plan.map(\.id))")
+        #expect(plan[1].title == "下周：复查血钾" && plan[1].fire == due.adding(days: -7).adding(minutes: 9 * 60))
+        #expect(plan[2].title == "今天：复查血钾" && plan[2].body.contains("打个勾") && plan[0].body == "早晚各一次")
+        #expect(CareReminders.needsBooking("糖化血红蛋白（HbA1c）检测") && !CareReminders.needsBooking("连续 7 天早晚量血压"))
+        // Never more than iOS keeps.
+        let many = (0..<40).map { CareReminders.Task(id: "\($0)", title: "复查血钾", note: "", due: evening.adding(days: 10 + $0), done: false) }
+        #expect(CareReminders.plan(many, now: evening).count == CareReminders.limit)
+    }
+
     @Test func theAgentUsesTheSameSchedule() throws {
         let (container, ctx) = try load(.wangjianguo)
         _ = container

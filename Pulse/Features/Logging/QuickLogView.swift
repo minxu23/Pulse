@@ -2,8 +2,12 @@ import SwiftUI
 import SwiftData
 
 enum QuickLogKind: String, Identifiable, CaseIterable {
-    case workout, alcohol, caffeine, water, diet, stress, context, symptom, bloodPressure, glucose, vital, lab, sleep
+    case workout, alcohol, caffeine, water, diet, stress, context, symptom, kidneySigns, bloodPressure, glucose, vital, lab, sleep
     var id: String { rawValue }
+    /// What the + menus offer: 水肿与尿量 only to those who watch fluid.
+    static func menu(for p: ProfileSnapshot) -> [QuickLogKind] {
+        allCases.filter { $0 != .kidneySigns || KidneySigns.relevant(p) }
+    }
     var label: String {
         switch self {
         case .workout: "运动"
@@ -14,6 +18,7 @@ enum QuickLogKind: String, Identifiable, CaseIterable {
         case .stress: "压力"
         case .context: "状况"
         case .symptom: "症状"
+        case .kidneySigns: "水肿与尿量"
         case .bloodPressure: "血压"
         case .glucose: "血糖"
         case .vital: "其他指标"
@@ -31,6 +36,7 @@ enum QuickLogKind: String, Identifiable, CaseIterable {
         case .stress: "brain.head.profile"
         case .context: "tag"
         case .symptom: "person.fill.questionmark"
+        case .kidneySigns: "drop.triangle"
         case .bloodPressure: "gauge.with.dots.needle.33percent"
         case .glucose: "drop.fill"
         case .vital: "waveform.path.ecg.rectangle"
@@ -64,6 +70,7 @@ struct QuickLogSheet: View {
                 case .stress: StressLogForm(initialDate: day)
                 case .context: ContextLogForm(initialDate: day)
                 case .symptom: SymptomLogForm()
+                case .kidneySigns: KidneySignsLogForm(initialDate: day)
                 case .bloodPressure: VitalLogForm(kind: .bloodPressure)
                 case .glucose: VitalLogForm(kind: .glucose)
                 case .vital: VitalLogForm(kind: .heartRate)
@@ -229,10 +236,10 @@ struct DietLogForm: View {
     // Kidney diet
     @State private var saltText = ""
     @State private var saltSources: Set<String> = []
-    @State private var protein: Double = 0
-    @State private var proteinSet = false
-    @State private var potassium: Set<String> = []
-    @State private var phosphorus: Set<String> = []
+    /// Portions of each food.
+    @State private var protein: [String: Int] = [:]
+    @State private var potassium: [String: Int] = [:]
+    @State private var phosphorus: [String: Int] = [:]
 
     var body: some View {
         let showCarbs = (profiles.first?.hasModule(.diabetesCare) ?? false) || (profiles.first?.hasModule(.marathon) ?? false)
@@ -280,8 +287,9 @@ struct DietLogForm: View {
             let r = DataHub.record(for: date, in: ctx)
             quality = r.dietQuality; lateMeal = r.lateMeal
             saltText = r.saltG.map { $0.oneDecimal } ?? ""
-            saltSources = Set(r.saltSources); potassium = Set(r.potassiumFoods); phosphorus = Set(r.phosphorusFoods)
-            protein = r.proteinServings ?? 0; proteinSet = r.proteinServings != nil
+            saltSources = Set(r.saltSources)
+            func portions(_ list: [String]) -> [String: Int] { Dictionary(list.map { ($0, 1) }, uniquingKeysWith: +) }
+            protein = portions(r.proteinFoods); potassium = portions(r.potassiumFoods); phosphorus = portions(r.phosphorusFoods)
         }
         .saveToolbar {
             let r = DataHub.record(for: date, in: ctx)
@@ -291,11 +299,14 @@ struct DietLogForm: View {
             if kidney {
                 r.nutrientsLogged = true
                 r.saltG = Double(saltText.replacingOccurrences(of: ",", with: ".")).flatMap { (0.5...40).contains($0) ? $0 : nil }
-                // Kept in the order of the lists, so the day reads the same each time.
+                // Kept in the order of the lists, one entry per portion, so the day reads the same each time.
+                func list(_ foods: [String], _ n: [String: Int]) -> [String] { foods.flatMap { Array(repeating: $0, count: n[$0] ?? 0) } }
                 r.saltSources = DietFoods.salt.filter(saltSources.contains)
-                r.potassiumFoods = DietFoods.potassium.filter(potassium.contains)
-                r.phosphorusFoods = DietFoods.phosphorus.filter(phosphorus.contains)
-                r.proteinServings = proteinSet ? protein : nil
+                r.potassiumFoods = list(DietFoods.potassium, potassium)
+                r.phosphorusFoods = list(DietFoods.phosphorus, phosphorus)
+                r.proteinFoods = list(DietFoods.proteinFoods.map(\.name), protein)
+                // An older 「肉蛋奶豆 N 份」 stands until foods are counted instead.
+                if !r.proteinFoods.isEmpty { r.proteinServings = nil }
             }
             if addMeal {
                 let m = MealLog(time: date.isSameDay(.app) ? .app : date.adding(minutes: 12 * 60), kind: mealKind)
@@ -322,29 +333,57 @@ extension DietLogForm {
         } footer: {
             Text("勾选今天吃过的高盐食物。每天盐不超过 \((p?.saltLimitG ?? 5).oneDecimal) g；一个啤酒瓶盖（去掉胶垫）的盐约 6 g。")
         }
+        let proteinG = DietFoods.proteinFoods.reduce(0.0) { $0 + $1.proteinG * Double(protein[$1.name] ?? 0) }
         Section {
-            Stepper(value: Binding(get: { protein }, set: { protein = $0; proteinSet = true }), in: 0...20, step: 0.5) {
-                Text(proteinSet ? "肉蛋奶豆 \(protein.oneDecimal) 份 · 约 \(Int(protein * DietFoods.proteinPerServing)) g" : "肉蛋奶豆：还没填")
+            ForEach(DietFoods.proteinFoods, id: \.name) { f in
+                let n = protein[f.name] ?? 0
+                Stepper(value: Binding(get: { n }, set: { protein[f.name] = $0 }), in: 0...12) {
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
+                        Text(n > 0 ? "\(f.name) ×\(n)" : f.name)
+                        Text("\(f.portion) · 约 \(Int(f.proteinG)) g").font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+                .accessibilityValue("\(n) 份")
             }
         } header: {
-            Text("蛋白质")
+            Text(proteinG > 0 ? "蛋白质 · 约 \(Int(proteinG)) g" : "蛋白质")
         } footer: {
-            Text(DietFoods.servingHint + (p?.proteinTargetG.map { "医生定的量：每天约 \($0) g。" } ?? ""))
+            Text("按今天吃的份数估算，主食和蔬菜也算在内。" + (p?.proteinTargetG.map { "医生定的量：每天约 \($0) g。" } ?? ""))
         }
         Section {
-            foodChips(DietFoods.potassium, $potassium)
+            countChips(DietFoods.potassium, $potassium)
         } header: {
-            Text("高钾食物")
+            Text(potassium.isEmpty ? "高钾食物" : "高钾食物 · 约 \(KidneyDiet.potassiumMg(potassium.flatMap { Array(repeating: $0.key, count: $0.value) })) mg 钾")
         } footer: {
-            Text(p?.potassiumLimit == true ? "医生让你限钾：这些食物少吃；绿叶菜焯水后再炒能去掉一部分钾。低钠盐里也有钾。" : "勾选今天吃过的，吃多少合适按医生或营养师的建议。")
+            Text("点一下记 1 份（香蕉 1 根、土豆 1 个拳头大、绿叶菜 1 碗），再点加一份。只算这些食物里的钾，不是全天总量。"
+                 + (p?.potassiumLimit == true ? "医生让你限钾：这些食物少吃；绿叶菜焯水后再炒能去掉一部分钾。低钠盐里也有钾。" : "吃多少合适按医生或营养师的建议。"))
         }
         Section {
-            foodChips(DietFoods.phosphorus, $phosphorus)
+            countChips(DietFoods.phosphorus, $phosphorus)
         } header: {
-            Text("高磷食物")
+            Text(phosphorus.isEmpty ? "高磷食物" : "高磷食物 · 约 \(KidneyDiet.phosphorusMg(phosphorus.flatMap { Array(repeating: $0.key, count: $0.value) })) mg 磷")
         } footer: {
             Text("加工食品和深色汽水里的磷最容易被吸收。")
         }
+    }
+
+    /// Foods counted in portions: each tap adds one, up to three, then back to none.
+    private func countChips(_ foods: [String], _ counts: Binding<[String: Int]>) -> some View {
+        FlowLayout(spacing: Theme.Space.item) {
+            ForEach(foods, id: \.self) { f in
+                let n = counts.wrappedValue[f] ?? 0
+                Button { counts.wrappedValue[f] = n >= 3 ? nil : n + 1 } label: {
+                    Chip(text: n > 1 ? "\(f) ×\(n)" : f, icon: n > 0 ? "checkmark" : nil, color: n > 0 ? Theme.accent : .secondary, filled: n > 0)
+                        .frame(minHeight: Theme.Size.tap)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityValue(n == 0 ? "没吃" : "\(n) 份")
+                .accessibilityHint("点一下加一份，3 份后再点清零")
+                .accessibilityAddTraits(n > 0 ? .isSelected : [])
+            }
+        }
+        .padding(.vertical, Theme.Space.tight)
     }
 
     private func foodChips(_ foods: [String], _ chosen: Binding<Set<String>>) -> some View {
@@ -358,8 +397,9 @@ extension DietLogForm {
     }
 }
 
-/// 化验结果: the values on one lab report. Creatinine without an eGFR on the report gives an
-/// estimated eGFR (CKD-EPI 2021); values far outside the usual range raise an event.
+/// 化验结果: the values on one lab report, in the units the report uses (saved in Pulse's own).
+/// Creatinine without an eGFR on the report gives an estimated eGFR (CKD-EPI 2021); values far
+/// outside the usual range raise an event.
 struct LabLogForm: View {
     @Environment(\.modelContext) private var ctx
     @Query private var profiles: [UserProfile]
@@ -367,10 +407,19 @@ struct LabLogForm: View {
     @Query(sort: \LabResult.date) private var labs: [LabResult]
     @State private var date = Date.app
     @State private var texts: [LabKind: String] = [:]
+    /// The report's unit for each value, remembered for the next report.
+    @State private var units: [LabKind: String] = Dictionary(uniqueKeysWithValues: LabKind.allCases.compactMap { k in
+        UserDefaults.standard.string(forKey: "lab.unit." + k.rawValue).flatMap { k.units.contains($0) ? (k, $0) : nil }
+    })
     @State private var note = ""
 
-    private func value(_ k: LabKind) -> Double? {
+    private func unit(_ k: LabKind) -> String { units[k] ?? k.unit }
+    private func typed(_ k: LabKind) -> Double? {
         texts[k].flatMap { Double($0.replacingOccurrences(of: ",", with: ".")) }
+    }
+    /// What was typed, in Pulse's own unit.
+    private func value(_ k: LabKind) -> Double? {
+        typed(k).map { k.standard($0, unit: unit(k)) }
     }
     private var entered: [(LabKind, Double)] {
         LabKind.allCases.compactMap { k in value(k).flatMap { k.plausible.contains($0) ? (k, $0) : nil } }
@@ -388,7 +437,7 @@ struct LabLogForm: View {
                 if value(.egfr) == nil, let cr = value(.creatinine), let e = LabAnalyzer.ckdEPI(creatinine: cr, age: p.age, sex: p.sex) {
                     Text("化验单上没有 eGFR 时，按肌酐估算约 \(Int(e.rounded()))（CKD-EPI 2021），会一起保存。")
                 } else {
-                    Text("尿白蛋白/肌酐比如果单位是 mg/mmol，乘以 8.84 换算成 mg/g。")
+                    Text("单位和化验单上的不一样时，点单位换一个，Pulse 会自动换算。")
                 }
             }
             Section {
@@ -408,15 +457,36 @@ struct LabLogForm: View {
             HStack {
                 VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                     Text(k.label)
-                    Text(k.unit).font(.footnote).foregroundStyle(.secondary)
+                    if k.units.count > 1 {
+                        Menu {
+                            Picker("单位", selection: Binding(get: { unit(k) }, set: { u in
+                                units[k] = u
+                                UserDefaults.standard.set(u, forKey: "lab.unit." + k.rawValue)
+                            })) {
+                                ForEach(k.units, id: \.self) { Text($0).tag($0) }
+                            }
+                        } label: {
+                            HStack(spacing: Theme.Space.hairline) {
+                                Text(unit(k))
+                                Image(systemName: "chevron.up.chevron.down").imageScale(.small)
+                            }
+                            .font(.footnote)
+                        }
+                        .accessibilityLabel("单位：\(unit(k))")
+                    } else {
+                        Text(k.unit).font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
                 Spacer()
                 TextField("—", text: Binding(get: { texts[k] ?? "" }, set: { texts[k] = $0 }))
                     .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 90)
             }
-            if let v = value(k) {
+            if let raw = typed(k), let v = value(k) {
                 if k.plausible.contains(v) {
+                    if unit(k) != k.unit { Text("约 \(k.format(v)) \(k.unit)").font(.subheadline).foregroundStyle(.secondary) }
                     StatusLabel(LabAnalyzer.status(k, v, profile: p).metric).font(.subheadline)
+                } else if let other = k.units.first(where: { $0 != unit(k) && k.plausible.contains(k.standard(raw, unit: $0)) }) {
+                    StatusLabel(.attention("这个数值像是 \(other)，点单位换一下")).font(.subheadline)
                 } else {
                     StatusLabel(.attention("数值好像不对，请对照化验单和单位")).font(.subheadline)
                 }
@@ -506,6 +576,89 @@ struct ContextLogForm: View {
             r.tags = derived.union(tags)
             r.illnessSymptoms = tags.contains(.illness)
         }
+    }
+}
+
+// MARK: - Swelling and urine (水肿与尿量)
+
+/// One day's swelling, urine and foam, for kidney disease, heart failure, a fluid limit or dialysis.
+/// Two days of marked swelling or less urine raise an event (`KidneySigns.alert`).
+struct KidneySignsLogForm: View {
+    @Environment(\.modelContext) private var ctx
+    @Query private var profiles: [UserProfile]
+    let initialDate: Date
+    @State private var date = Date.app
+    @State private var edema: Edema?
+    @State private var places: Set<String> = []
+    @State private var urine: UrineAmount?
+    @State private var urineMl: Double?
+    @State private var foamy = false
+
+    var body: some View {
+        let dialysis = profiles.first?.dialysis == true
+        Form {
+            DatePicker("日期", selection: $date, in: ...Date.app, displayedComponents: .date)
+            Section {
+                Picker("水肿", selection: $edema) {
+                    Text("没填").tag(Edema?.none)
+                    ForEach(Edema.allCases) { Text($0.label).tag(Optional($0)) }
+                }
+                .pickerStyle(.segmented)
+                if let e = edema {
+                    Text(e.detail).font(.subheadline).foregroundStyle(.secondary)
+                    if e != .none {
+                        FlowLayout(spacing: Theme.Space.item) {
+                            ForEach(KidneySigns.places, id: \.self) { f in
+                                ToggleChip(text: f, isOn: Binding(get: { places.contains(f) }, set: { if $0 { places.insert(f) } else { places.remove(f) } }))
+                            }
+                        }
+                        .padding(.vertical, Theme.Space.tight)
+                    }
+                }
+            } header: {
+                Text("水肿")
+            } footer: {
+                Text("用手指按脚踝或小腿前面几秒，松开后留下小坑就是水肿。")
+            }
+            Section {
+                Picker("尿量", selection: $urine) {
+                    Text("没填").tag(UrineAmount?.none)
+                    ForEach(UrineAmount.allCases) { Text($0.label).tag(Optional($0)) }
+                }
+                HStack {
+                    Text("量过 24 小时尿量")
+                    Spacer()
+                    TextField("可不填", text: $urineMl.text()).keyboardType(.numberPad).multilineTextAlignment(.trailing).frame(width: 80)
+                    Text("ml").foregroundStyle(.secondary)
+                }
+                Toggle("尿里泡沫多，久久不散", isOn: $foamy)
+            } header: {
+                Text("尿")
+            } footer: {
+                Text(dialysis ? "透析后尿量少很常见，按透析中心的要求记。" : "尿量连续两天比平时少，或者同时脚肿、体重涨，要尽快联系医生。")
+            }
+        }
+        .onAppear { date = initialDate; load(date) }
+        .onChange(of: date) { _, d in load(d) }
+        .saveToolbar {
+            let r = DataHub.record(for: date, in: ctx)
+            r.edema = edema?.rawValue
+            r.edemaPlaces = edema == nil || edema == Edema.none ? [] : KidneySigns.places.filter(places.contains)
+            r.urineOutput = urine?.rawValue
+            r.urineMl = urineMl.flatMap { (50...6000).contains($0) ? Int($0) : nil }
+            r.foamyUrine = foamy ? true : (edema != nil || urine != nil ? false : nil)
+            try? ctx.save()
+            DataHub.refreshAlerts(in: ctx)
+        }
+    }
+
+    private func load(_ d: Date) {
+        let r = DataHub.record(for: d, in: ctx)
+        edema = r.edema.flatMap(Edema.init)
+        places = Set(r.edemaPlaces)
+        urine = r.urineOutput.flatMap(UrineAmount.init)
+        urineMl = r.urineMl.map(Double.init)
+        foamy = r.foamyUrine == true
     }
 }
 
@@ -736,7 +889,8 @@ struct VitalLogForm: View {
         let weights = kind == .weight
             ? ((try? ctx.fetch(FetchDescriptor<VitalReading>())) ?? []).filter { $0.kind == .weight && $0.time > time.adding(days: -4) }.map(\.point) + [reading.point]
             : []
-        if let c = AlertEngine.evaluateVital(reading.point, profile: p) ?? AlertEngine.weightAlert(weights, profile: p, now: max(time, .app)),
+        if let c = AlertEngine.evaluateVital(reading.point, profile: p) ?? AlertEngine.weightAlert(weights, profile: p, now: max(time, .app))
+            ?? Dialysis.alert(weights, profile: p, now: max(time, .app)),
            DataHub.addEvent(c, in: ctx) != nil {
             withAnimation { result = c }
         } else {

@@ -16,6 +16,7 @@ struct NutritionDayView: View {
 
         IntakeHeroCard(data: data, onLog: { sheet = .log($0) })
         if p.tracksNutrients { KidneyDietCard(data: data, onLog: { sheet = .log($0) }) }
+        if KidneySigns.relevant(p) { KidneySignsCard(data: data, onLog: { sheet = .log($0) }) }
         MealsCard(meals: data.todayMeals, fuelTip: fuelTip, onLog: { sheet = .log($0) })
 
         SectionTitle(title: "身体指标", subtitle: "结合测量时间、活动和饮食")
@@ -142,7 +143,7 @@ struct KidneyDietCard: View {
         VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("盐、蛋白质、钾和磷")
             if lines.isEmpty {
-                Text("记下今天吃过的高盐、高钾、高磷食物和肉蛋奶豆的份数，Pulse 按医生给的量帮你对照。")
+                Text("记下今天吃了几个鸡蛋、几两肉、几碗饭，和吃过的高盐、高钾、高磷食物，Pulse 估算蛋白质和钾、磷，按医生给的量帮你对照。")
                     .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             } else {
                 VStack(alignment: .leading, spacing: Theme.Space.item) {
@@ -152,11 +153,63 @@ struct KidneyDietCard: View {
                 }
             }
             if let w = KidneyDiet.week(data.analytics.days, profile: p, now: data.now), w.days >= 2 {
-                Text("近 7 天记录了 \(w.days) 天：偏咸 \(w.saltyDays) 天\(w.proteinAvgG.map { "，蛋白质平均约 \(Int($0)) g" } ?? "")，高钾食物平均每天 \(w.potassiumPerDay.oneDecimal) 样。")
+                Text("近 7 天记录了 \(w.days) 天：偏咸 \(w.saltyDays) 天\(w.proteinAvgG.map { "，蛋白质平均约 \(Int($0)) g" } ?? "")，高钾食物平均每天 \(w.potassiumPerDay.oneDecimal) 份（约 \(Int(w.potassiumMgPerDay)) mg 钾）。")
                     .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Button { onLog(.diet) } label: {
                 Label(lines.isEmpty ? "记录今天的饮食" : "修改今天的记录", systemImage: "square.and.pencil").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered).controlSize(.large)
+        }
+        .cardSurface()
+    }
+}
+
+// MARK: - Swelling and urine
+
+/// 水肿与尿量: today's record and the last two weeks; on dialysis, the session days and the weight
+/// gained since the last one.
+struct KidneySignsCard: View {
+    let data: TodayData
+    var onLog: (QuickLogKind) -> Void
+
+    var body: some View {
+        let p = data.p
+        let today = data.analytics.today ?? DayData(day: data.day)
+        let lines = KidneySigns.lines(today)
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
+            CardTitle("水肿与尿量", detail: p.onDialysis ? "血液透析 · \(Dialysis.schedule(p))" : nil)
+            if p.onDialysis {
+                VStack(alignment: .leading, spacing: Theme.Space.item) {
+                    if let next = Dialysis.next(from: data.now, p) {
+                        StatusLabel(.neutral(next.isSameDay(data.now) ? "今天透析，今天不安排训练" : "下次透析：\(next.formatted(.dateTime.month().day().weekday(.wide)))"))
+                    }
+                    if let g = Dialysis.gain(data.recentVitals, profile: p, now: data.now) {
+                        let text = "体重 \(g.latest.value.oneDecimal) kg，比\(g.against)多 \(g.kg.oneDecimal) kg" + (g.percent.map { "（\(Int($0.rounded()))%）" } ?? "")
+                        StatusLabel(Dialysis.tooMuch(g) ? .attention(text) : .neutral(text))
+                    } else if p.dryWeightKg == nil {
+                        Text("在「我的 › 健康状况与用药」填上医生定的干体重，Pulse 帮你看两次透析之间体重涨了多少。")
+                            .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .font(.subheadline)
+            }
+            if lines.isEmpty {
+                Text("按一按脚踝、留意尿量和泡沫，记下来能看出变化；连续两天明显水肿或尿变少，Pulse 会提醒你联系医生。")
+                    .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            } else {
+                VStack(alignment: .leading, spacing: Theme.Space.item) {
+                    ForEach(Array(lines.enumerated()), id: \.offset) { _, l in
+                        StatusLabel(l.metric).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            if let s = KidneySigns.summary(data.analytics.days, now: data.now), s.days >= 2 {
+                Text(s.text + "。" + (s.foamyDays >= 3 ? "泡沫尿常有的话，复查时查一下尿白蛋白/肌酐比。" : ""))
+                    .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Button { onLog(.kidneySigns) } label: {
+                Label(lines.isEmpty ? "记录今天的水肿与尿量" : "修改今天的记录", systemImage: "square.and.pencil").frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered).controlSize(.large)
         }

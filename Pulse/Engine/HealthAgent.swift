@@ -256,7 +256,7 @@ enum AgentIntent: String, CaseIterable {
                           "胸痛", "胸口痛", "胸闷", "喘不上气", "呼吸困难", "憋得慌", "晕倒", "晕厥", "昏倒", "昏迷", "意识不清", "一侧无力", "半边", "口角歪", "说话不清", "言语不清", "抽搐", "心跳很快停不下来", "严重低血糖", "想自杀", "不想活"]
         case .daySummary: ["总结一下今天", "今天总结", "今天的总结", "今天怎么样", "今天的数据", "明天要注意", "明天注意", "今晚该注意", "今晚注意", "今晚要注意", "睡前注意"]
         case .meds: ["药", "剂量", "胰岛素", "停药", "减药", "加药", "二甲双胍", "格列", "地平", "沙坦", "普利", "洛尔", "他汀", "阿司匹林",
-                     "利尿剂", "呋塞米", "华法林", "司美格鲁肽", "利拉鲁肽"]
+                     "利尿剂", "呋塞米", "华法林", "司美格鲁肽", "利拉鲁肽"] + KidneyMeds.nsaids
         case .device, .planChange, .trainingCheck, .condition, .food, .reading, .symptom, .about, .knowledge: []
         case .labs: ["化验", "检验", "验血", "抽血", "肌酐", "eGFR", "egfr", "肾小球滤过率", "肾功能", "血钾", "尿蛋白", "尿白蛋白", "UACR", "血磷", "血红蛋白", "尿酸", "糖化血红蛋白", "HbA1c"]
         case .weather: ["天气", "下雨", "雨天", "雷阵雨", "雷雨", "高温", "太热", "天热", "下雪", "雾霾", "空气质量", "空气污染", "AQI", "台风", "降温"]
@@ -1260,7 +1260,7 @@ enum HealthAgent {
         if let w = KidneyDiet.week(c.days, profile: c.profile, now: c.now) {
             var line = "近 7 天记录了 \(w.days) 天：偏咸 \(w.saltyDays) 天"
             if let g = w.proteinAvgG { line += "，蛋白质平均约 \(Int(g)) g\(c.profile.proteinTargetG.map { "（医生定的 \($0) g）" } ?? "")" }
-            line += "，高钾食物平均每天 \(w.potassiumPerDay.oneDecimal) 样，高磷食物 \(w.phosphorusPerDay.oneDecimal) 样。"
+            line += "，高钾食物平均每天 \(w.potassiumPerDay.oneDecimal) 份（约 \(Int(w.potassiumMgPerDay)) mg 钾），高磷食物 \(w.phosphorusPerDay.oneDecimal) 份（约 \(Int(w.phosphorusMgPerDay)) mg 磷）。"
             // Lab and diet side by side: what was eaten, not proof of a cause.
             if let k = c.lab(.potassium, within: 60), k.value > 5.3, w.potassiumPerDay >= 1 {
                 line += "最近一次血钾 \(k.valueText) 偏高，同期高钾食物吃得不少（这是记录里看到的情况，不一定是原因），怎么调整问医生或营养师。"
@@ -1357,6 +1357,14 @@ enum HealthAgent {
         let named = m.filter { q.contains($0.name) }.map(\.name)
         let drug = named.first ?? (q.contains("降压") ? "降压药" : (q.contains("胰岛素") ? "胰岛素" : (q.contains("降糖") ? "降糖药" : "药")))
         let first: String
+        // Painkillers: what they do to the kidneys comes first.
+        if KidneyMeds.asksAbout(q) {
+            let atRisk = KidneyMeds.atRisk(p, labs: c.labs)
+            first = atRisk ? KidneyMeds.caution : KidneyMeds.general
+            return AgentReply(text: lines([first, q.contains("阿司匹林") || m.contains { $0.name.contains("阿司匹林") } ? KidneyMeds.aspirin : nil,
+                                           atRisk ? "复诊时把最近吃过的止痛药告诉医生，包括偶尔吃的。" : nil]),
+                              sources: ["健康状况", "用药记录"], followUps: ["我的肾功能怎么样？"], conclusion: first)
+        }
         if ["停", "不吃", "不用吃", "戒掉"].contains(where: { q.contains($0) }) {
             first = "\(drug)能不能停，要问开药的医生，别自己停：突然停药可能让血压、血糖反弹，有的药还要慢慢减。"
         } else if ["减半", "减量", "少吃", "加量", "多吃", "加大", "几片", "多少", "剂量", "打多少", "单位"].contains(where: { q.contains($0) }) {
@@ -1537,6 +1545,11 @@ enum HealthAgent {
         if p.fluidLimited { add(.conditions, "限水：医生要求每天饮水不超过 \(p.waterTargetMl) ml，不要建议多喝水。") }
         if let l = LabAnalyzer.digest(c.labs, profile: p) { add(.labs, "化验（最近一次）：\(l)。") }
         if let k = KidneyDiet.digest(c.days, profile: p, now: c.now) { add(.kidneyDiet, k + "。") }
+        if let k = KidneySigns.digest(c.days, profile: p, now: c.now) { add(.conditions, k + "。") }
+        if let d = Dialysis.digest(c.vitals, profile: p, now: c.now) { add(.conditions, d) }
+        if KidneyMeds.atRisk(p, labs: c.labs), c.medications.contains(where: { KidneyMeds.isNSAID($0.name) }) {
+            add(.conditions, "用户在吃布洛芬这类止痛消炎药，而肾脏需要保护：提醒先问肾内科医生或药师，不要建议剂量。")
+        }
         let t = c.trend
         if let a7 = t.avg7 {
             add(.rhr, "静息心率：近7天 \(a7.noDecimal)，近4周 \(t.avg28?.noDecimal ?? "—")，基线 \(t.baseline?.noDecimal ?? "—")。\(t.headline)")

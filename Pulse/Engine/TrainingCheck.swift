@@ -116,6 +116,12 @@ enum TrainingCheck {
         var blockers: [String] = []
         var cautions: [String] = []
         var weatherNotes: [String] = []
+        // A dialysis day: no training; light walking at most, after resting.
+        if Dialysis.isDay(target, p) {
+            let line = "\(dayName)是透析日，透析前后身体负担大"
+            if session == .easy { cautions.append(line + "，透析后先休息，想活动就在家慢慢走几分钟。") }
+            else { blockers.append(line + "，不安排训练；把训练放到不透析的日子。") }
+        }
 
         // At 2 am the user's "明天" (or "今天") both mean the coming daytime; say how it was read.
         let clarified = early && target == today && said != nil

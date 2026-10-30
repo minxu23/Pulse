@@ -81,6 +81,8 @@ struct DayLine: Identifiable, Equatable {
     let text: String
     /// Nil without enough history, or for one-off events (a missed session): those count as worse.
     var usual: Usual? = nil
+    /// Off target on every measured day for a while (`ReviewPriorities.standingRun` or more).
+    var standing = false
     var id: String { area.rawValue + text }
     /// Needs attention and is not better than usual.
     var flagged: Bool { tone == .attention && usual != .better }
@@ -325,17 +327,50 @@ enum ReviewPriorities {
         return d >= worseBy ? .worse : (d <= -betterBy ? .better : .same)
     }
 
-    private static func bpOn(_ day: Date, _ c: AgentContext) -> (sys: Double, dia: Double, n: Int)? {
-        let r = c.vitals.filter { $0.kind == .bloodPressure && $0.time >= day && $0.time < day.adding(days: 1) }
-        guard let s = Stats.mean(r.map(\.value)), let d = Stats.mean(r.compactMap(\.value2)) else { return nil }
-        return (s, d, r.count)
+    /// Measured days in a row above the line before the daily review says so on its own, once: a
+    /// usual level that has crept up still is not fine, however steady it is.
+    static let standingRun = 7
+
+    /// How many measured days in a row, back from `day`, were out of range (`out` is nil on a day
+    /// without a measurement).
+    private static func run(endingOn day: Date, days: Int = 60, _ out: (Date) -> Bool?) -> Int {
+        var n = 0
+        for i in 0..<days {
+            guard let o = out(day.adding(days: -i)) else { continue }
+            guard o else { break }
+            n += 1
+        }
+        return n
     }
 
-    private static func cgmOn(_ day: Date, _ c: AgentContext) -> (tir: Double, mean: Double?, lows: Bool)? {
-        let g = c.vitals.filter { $0.kind == .glucose && $0.time >= day && $0.time < day.adding(days: 1) }
-        guard g.count >= 24 else { return nil }
-        let m = GlucoseAnalyzer.metrics(g.map { ($0.time, $0.value) }, low: c.profile.glucoseLow, high: c.profile.glucoseHigh, now: day.adding(days: 1))
-        return m.tir.map { ($0, m.mean, g.contains { $0.value < c.profile.glucoseLow }) }
+    /// How a blood pressure or glucose day off target ends: compared with the person's usual, except
+    /// that a `severe` day is never "usual", and a run of measured days off target (`off`) says how
+    /// long it has gone on instead of 「和你平时差不多」 — with the doctor once, on the day the run
+    /// reaches `standingRun`, unless a run did in the four weeks before.
+    private static func standing(_ cmp: DayLine.Usual?, _ vs: String, severe: Bool, on day: Date, days: String,
+                                 _ off: (Date) -> Bool?) -> (text: String, usual: DayLine.Usual?, standing: Bool) {
+        let streak = run(endingOn: day, off)
+        guard streak >= standingRun else { return (vs, severe ? .worse : cmp, false) }
+        let text = "，\(days) \(streak) 天都是这样" + (cmp == .same ? "" : vs)
+        let first = streak == standingRun && !(1...28).contains { run(endingOn: day.adding(days: -$0), off) >= standingRun }
+        return first ? (text + "，值得带着记录和医生谈谈", .worse, true) : (text, severe ? .worse : cmp, true)
+    }
+
+    /// Each day's home blood pressure: the mean of its readings.
+    private static func bpByDay(_ c: AgentContext) -> [Date: (sys: Double, dia: Double, n: Int)] {
+        Dictionary(grouping: c.vitals.filter { $0.kind == .bloodPressure }) { $0.time.startOfDay }.compactMapValues { r in
+            guard let s = Stats.mean(r.map(\.value)), let d = Stats.mean(r.compactMap(\.value2)) else { return nil }
+            return (s, d, r.count)
+        }
+    }
+
+    /// Each day's CGM time in range, for days with a full enough trace.
+    private static func cgmTIR(_ c: AgentContext) -> [Date: Double] {
+        Dictionary(grouping: c.vitals.filter { $0.kind == .glucose }) { $0.time.startOfDay }.compactMapValues { g in
+            guard g.count >= 24 else { return nil }
+            let day = g[0].time.startOfDay
+            return GlucoseAnalyzer.metrics(g.map { ($0.time, $0.value) }, low: c.profile.glucoseLow, high: c.profile.glucoseHigh, now: day.adding(days: 1)).tir
+        }
     }
 
     static func line(for a: PriorityArea, _ d: DayData, _ c: AgentContext) -> DayLine? {
@@ -376,37 +411,50 @@ enum ReviewPriorities {
                     : DayLine(area: a, tone: .neutral, text: "计划「\(s.title)」，还没做\(steps)")
             }
         case .bloodPressure:
-            guard let (sys, dia, n) = bpOn(d.day, c) else { return DayLine(area: a, tone: .neutral, text: "这天没量血压") }
+            let bp = bpByDay(c)
+            guard let (sys, dia, n) = bp[d.day] else { return DayLine(area: a, tone: .neutral, text: "这天没量血压") }
             let high = sys >= 135 || dia >= 85
             let value = "\(n > 1 ? "平均 " : "")\(Int(sys.rounded()))/\(Int(dia.rounded())) mmHg\(n > 1 ? "（\(n) 次）" : "")"
             guard high else { return DayLine(area: a, tone: .good, text: value) }
             // Compared with the person's own usual readings: the systolic, or a diastolic 4 higher.
-            let uSys = usual(before: d.day) { bpOn($0, c)?.sys }, uDia = usual(before: d.day) { bpOn($0, c)?.dia }
+            let uSys = usual(before: d.day) { bp[$0]?.sys }, uDia = usual(before: d.day) { bp[$0]?.dia }
             var cmp = compared(sys, usual: uSys, worseBy: 5, betterBy: 5)
-            if cmp == .same, let uDia, dia - uDia >= 4 { cmp = .worse }
             let diff = uSys.map { sys - $0 } ?? 0
-            let vs = cmp == .same ? "，和你平时差不多" : (cmp == .worse ? "，比你平时高 \(Int(diff.rounded()))" : (cmp == .better ? "，比你平时低 \(Int((-diff).rounded()))" : ""))
-            return DayLine(area: a, tone: .attention, text: "\(value)，高于 135/85\(vs)", usual: cmp)
+            var vs = cmp == .same ? "，和你平时差不多" : (cmp == .worse ? "，比你平时高 \(Int(diff.rounded()))" : (cmp == .better ? "，比你平时低 \(Int((-diff).rounded()))" : ""))
+            if cmp == .same, let uDia, dia - uDia >= 4 { cmp = .worse; vs = "，舒张压比你平时高 \(Int((dia - uDia).rounded()))" }
+            // From 145/90 at home (about 160/100 at the clinic) a usual level is no excuse.
+            let severe = sys >= 145 || dia >= 90
+            let end = standing(cmp, vs, severe: severe, on: d.day, days: "最近量的") { bp[$0].map { $0.sys >= 135 || $0.dia >= 85 } }
+            return DayLine(area: a, tone: .attention, text: "\(value)，\(severe ? "明显" : "")高于 135/85" + end.text, usual: end.usual, standing: end.standing)
         case .glucose:
             let g = c.vitals.filter { $0.kind == .glucose && $0.time >= d.day && $0.time < next }
             guard !g.isEmpty else { return DayLine(area: a, tone: .neutral, text: "这天没有血糖读数") }
             let m = GlucoseAnalyzer.metrics(g.map { ($0.time, $0.value) }, low: p.glucoseLow, high: p.glucoseHigh, now: next)
             if g.count >= 24, let tir = m.tir {
                 let lows = g.contains { $0.value < p.glucoseLow }
-                let text = "平均 \(m.mean?.oneDecimal ?? "—") mmol/L，范围内 \(Int(tir * 100))%"
+                // Under half the day in range (the aim is over 70%): a usual level is no excuse.
+                let severe = tir < 0.5
+                let text = "平均 \(m.mean?.oneDecimal ?? "—") mmol/L，范围内\(severe && !lows ? "只有" : "") \(Int(tir * 100))%"
                 // A low is always the day's news; time in range is compared with the person's usual.
                 if lows { return DayLine(area: a, tone: .attention, text: text + "，有低于 \(p.glucoseLow.oneDecimal) 的时段", usual: .worse) }
                 guard tir < 0.7 else { return DayLine(area: a, tone: .good, text: text) }
-                let u = usual(before: d.day, days: 14) { cgmOn($0, c)?.tir }
+                let tirs = cgmTIR(c)
+                let u = usual(before: d.day, days: 14) { tirs[$0] }
                 let cmp = compared(tir, usual: u, worseBy: 0.1, betterBy: 0.1, higherIsWorse: false)
                 let vs = cmp == .same ? "，和你平时差不多" : (cmp == .worse ? "，比你平时少 \(Int(((u! - tir) * 100).rounded())) 个百分点"
                     : (cmp == .better ? "，比你平时多 \(Int(((tir - u!) * 100).rounded())) 个百分点" : ""))
-                return DayLine(area: a, tone: .attention, text: text + vs, usual: cmp)
+                let end = standing(cmp, vs, severe: severe, on: d.day, days: "最近有记录的") { tirs[$0].map { $0 < 0.7 } }
+                return DayLine(area: a, tone: .attention, text: text + end.text, usual: end.usual, standing: end.standing)
             }
             let out = g.filter { $0.value < p.glucoseLow || $0.value > p.glucoseHigh }
             return DayLine(area: a, tone: out.isEmpty ? .good : .attention,
                            text: "测了 \(g.count) 次血糖\(out.isEmpty ? "，都在目标范围内" : "，\(out.count) 次不在目标范围内")")
         case .kidney:
+            // Marked swelling or less urine is the day's news, ahead of the diet.
+            if let sign = KidneySigns.lines(d).first(where: { $0.tone == .attention }) {
+                let diet = d.nutrientsLogged ? KidneyDiet.lines(d, profile: p).first { $0.tone == .attention } : nil
+                return DayLine(area: a, tone: .attention, text: sign.text + (diet.map { "；" + $0.text } ?? ""), usual: .worse)
+            }
             guard d.nutrientsLogged else { return DayLine(area: a, tone: .neutral, text: "这天没记盐、蛋白质和钾") }
             let lines = KidneyDiet.lines(d, profile: p)
             let flagged = lines.filter { $0.tone == .attention }
@@ -441,14 +489,17 @@ enum ReviewPriorities {
         let top = Array(lines.prefix(3))
         if top.allSatisfy({ $0.tone == .neutral }) { return "\(when)关于\(top.map(\.area.label).joined(separator: "、"))的记录还不多" }
         let worse = top.filter(\.worse).map(\.area.label)
-        let usual = top.filter { $0.tone == .attention && $0.usual == .same }.map(\.area.label)
+        let atUsual = top.filter { $0.tone == .attention && $0.usual == .same }
+        // Off target day after day is said as such, not as 「和平时差不多」.
+        let standing = atUsual.filter(\.standing).map(\.area.label), usual = atUsual.filter { !$0.standing }.map(\.area.label)
         let better = top.filter { $0.tone == .attention && $0.usual == .better }.map(\.area.label)
-        if worse.isEmpty && usual.isEmpty && better.isEmpty { return "\(when)你最在意的几件事都还不错" }
-        if !worse.isEmpty {
-            return "\(when)需要留意：\(worse.joined(separator: "、"))" + (usual.isEmpty ? "" : "；\(usual.joined(separator: "、"))和平时差不多")
-        }
-        if !better.isEmpty { return "\(when)\(better.joined(separator: "、"))比你平时好" + (usual.isEmpty ? "" : "，\(usual.joined(separator: "、"))和平时差不多") }
-        return "\(when)\(usual.joined(separator: "、"))和你平时差不多，仍高于目标"
+        if worse.isEmpty && atUsual.isEmpty && better.isEmpty { return "\(when)你最在意的几件事都还不错" }
+        let rest = [standing.isEmpty ? nil : "\(standing.joined(separator: "、"))连续多天没达标",
+                    usual.isEmpty ? nil : "\(usual.joined(separator: "、"))和平时差不多"].compactMap { $0 }
+        if !worse.isEmpty { return "\(when)需要留意：\(worse.joined(separator: "、"))" + rest.map { "；" + $0 }.joined() }
+        if !better.isEmpty { return "\(when)\(better.joined(separator: "、"))比你平时好" + rest.map { "，" + $0 }.joined() }
+        if standing.isEmpty { return "\(when)\(usual.joined(separator: "、"))和你平时差不多，仍高于目标" }
+        return when + rest.joined(separator: "，")
     }
 }
 

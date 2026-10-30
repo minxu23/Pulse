@@ -211,8 +211,14 @@ struct DayData: Identifiable, Equatable {
     var saltG: Double?
     var saltSources: [String] = []
     var proteinServings: Double?
+    var proteinFoods: [String] = []
     var potassiumFoods: [String] = []
     var phosphorusFoods: [String] = []
+    var edema: Int?
+    var edemaPlaces: [String] = []
+    var urineOutput: Int?
+    var urineMl: Int?
+    var foamyUrine: Bool?
     var snoring = false
     var gasping = false
     var witnessedApnea = false
@@ -294,6 +300,10 @@ struct ProfileSnapshot: Equatable {
     var phosphorusLimit = false
     var limitsPotassium: Bool { potassiumLimit || extraConditions.contains { $0.id == "hyperkalemia" } }
     var limitsPhosphorus: Bool { phosphorusLimit }
+    /// 血液透析: no training on session days, fluids limited, weight watched between sessions.
+    var onDialysis = false
+    var dialysisWeekdays: [Int] = []
+    var dryWeightKg: Double?
     var stepsTarget: Int = 8000
     var hrCap: Int?
     var clinicianCleared: Bool = false
@@ -318,7 +328,7 @@ struct ProfileSnapshot: Equatable {
     /// Kidney disease without a doctor-confirmed intensity range: moderate at most.
     var kidneyLimited: Bool { conditions.contains(.ckd) && !clinicianCleared }
     /// A quick rise in weight is worth an alert (fluid retention).
-    var watchesWeight: Bool { fluidLimited || conditions.contains(where: \.watchesFluid) }
+    var watchesWeight: Bool { fluidLimited || onDialysis || conditions.contains(where: \.watchesFluid) }
     /// Why hot days move outdoor sessions indoors: sweating is a risk, or drinking more is not allowed.
     var heatCauses: [String] { (fluidLimited ? ["限水"] : []) + extraConditions.filter(\.avoidHeat).map(\.name) }
     var heatSensitive: Bool { !heatCauses.isEmpty }

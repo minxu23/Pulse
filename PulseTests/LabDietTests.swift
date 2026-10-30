@@ -38,6 +38,18 @@ struct LabDietTests {
         #expect(LabAnalyzer.status(.hba1c, 6.8, profile: p).level == .abnormal)
     }
 
+    @Test func reportsInOtherUnitsAreConverted() {
+        // A3 starts at 30 mg/mmol = 300 mg/g, A2 at 3 mg/mmol = 30 mg/g.
+        #expect(abs(LabKind.uacr.standard(34, unit: "mg/mmol") - 300) < 1)
+        #expect(LabAnalyzer.uacrStage(LabKind.uacr.standard(5.1, unit: "mg/mmol")).code == "A2")
+        #expect(abs(LabKind.creatinine.standard(1.44, unit: "mg/dL") - 127) < 1)
+        #expect(abs(LabKind.uricAcid.standard(7, unit: "mg/dL") - 416) < 1)
+        #expect(abs(LabKind.phosphorus.standard(4.5, unit: "mg/dL") - 1.45) < 0.01)
+        #expect(abs(LabKind.hemoglobin.standard(12.7, unit: "g/dL") - 127) < 0.001)
+        #expect(abs(LabKind.hba1c.standard(53, unit: "mmol/mol") - 7.0) < 0.05, "IFCC 53 ≈ NGSP 7.0%")
+        #expect(LabKind.potassium.units == ["mmol/L"] && LabKind.allCases.allSatisfy { $0.units.first == $0.unit && $0.standard(5, unit: $0.unit) == 5 })
+    }
+
     @Test func followsTheEGFRTrendAndRaisesWhatShouldNotWait() {
         let slow = [lab(520, .egfr, 63), lab(380, .egfr, 62), lab(200, .egfr, 60), lab(100, .egfr, 58), lab(12, .egfr, 57)]
         let t = LabAnalyzer.egfrTrend(slow)
@@ -75,8 +87,19 @@ struct LabDietTests {
         #expect(lines.count == 4)
         #expect(lines[0].tone == .attention && lines[0].text.hasPrefix("偏咸"))
         #expect(lines[1].tone == .attention && lines[1].text.contains("超过医生定的 55 g"))
-        #expect(lines[2].tone == .attention && lines[2].text.hasPrefix("高钾食物 2 样"))
+        #expect(lines[2].tone == .attention && lines[2].text == "高钾食物 2 份（约 750 mg 钾）：香蕉；土豆、红薯、芋头", "\(lines[2].text)")
         #expect(lines[3].tone == .neutral && lines[3].text == "没有高磷食物")
+        // Foods counted in portions, staples included, replace the older 「肉蛋奶豆 N 份」.
+        var counted = d
+        counted.proteinFoods = ["鸡蛋", "瘦肉", "瘦肉", "米饭", "米饭", "蔬菜"]
+        counted.potassiumFoods = ["香蕉", "香蕉", "番茄"]
+        #expect(KidneyDiet.proteinG(counted) == 36 && KidneyDiet.proteinG(d) == 70)
+        let c = KidneyDiet.lines(counted, profile: p)
+        #expect(c[1].tone == .good && c[1].text == "蛋白质约 36 g（医生定的 55 g）", "\(c[1].text)")
+        #expect(c[2].text == "高钾食物 3 份（约 850 mg 钾）：香蕉 ×2；番茄", "\(c[2].text)")
+        var noTarget = p
+        noTarget.proteinTargetG = nil
+        #expect(KidneyDiet.lines(counted, profile: noTarget)[1].text == "蛋白质约 36 g（鸡蛋；瘦肉 ×2 等）")
         // Measured salt wins over the food list.
         d.saltG = 4
         #expect(KidneyDiet.lines(d, profile: p)[0].tone == .good)
@@ -93,6 +116,7 @@ struct LabDietTests {
         other.proteinServings = 6
         let w = KidneyDiet.week([d, other, DayData(day: day.startOfDay.adding(days: -2))], profile: p, now: day)
         #expect(w?.days == 2 && w?.saltyDays == 1)
+        #expect(w?.potassiumPerDay == 1 && w?.potassiumMgPerDay == 375 && w?.proteinAvgG == 31.5)
         #expect(KidneyDiet.digest([d, other], profile: p, now: day)?.contains("近 7 天记录了 2 天") == true)
     }
 

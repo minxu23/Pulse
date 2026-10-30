@@ -73,6 +73,10 @@ final class UserProfile {
     var proteinTargetG: Int? = nil
     var potassiumLimit: Bool = false
     var phosphorusLimit: Bool = false
+    /// 血液透析: the session weekdays (Calendar numbering) and the dry weight the doctor gave.
+    var dialysis: Bool = false
+    var dialysisWeekdays: [Int] = []
+    var dryWeightKg: Double? = nil
     /// 复盘的优先事项 in the user's own order; empty = Pulse's automatic order.
     var reviewPrioritiesRaw: [String] = []
     var stepsTarget: Int = 8000

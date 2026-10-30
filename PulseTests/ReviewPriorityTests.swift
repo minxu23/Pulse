@@ -131,12 +131,70 @@ struct ReviewPriorityTests {
         #expect(month.allSatisfy { $0.lines.count == pr.count })
         #expect(month.compactMap(\.level).count >= 10)
         #expect(Set(month.compactMap(\.level)).count >= 2, "a poorly controlled month is not all one colour")
-        // Blood pressure and glucose above target most days: compared with his own usual level,
-        // most days are 有起伏 rather than 需留意.
+        // Blood pressure and glucose above target most days: compared with his own usual level, at
+        // most half are 需留意 — days worse than usual, far off target, or a week-long run's one reminder.
         let levels = month.compactMap(\.level)
-        #expect(levels.filter { $0 == .watch }.count * 2 < levels.count, "\(levels)")
+        #expect(levels.filter { $0 == .watch }.count * 2 <= levels.count, "\(levels)")
+        #expect(month.contains { $0.lines.contains { $0.text.contains("值得带着记录和医生谈谈") } }, "his glucose has been under 70% for a week")
         #expect(month.contains { $0.lines.contains { $0.usual == .same && $0.text.contains("和你平时差不多") } })
         // The page names what made a day need attention.
         if let w = month.first(where: { $0.level == .watch && $0.readiness?.level != .rest }) { #expect(w.flagged.count >= 2) }
+    }
+
+    /// Someone whose blood pressure or glucose has long been off target: their usual level is no
+    /// excuse when it is far off, and a run of days off target is said once, with the doctor.
+    @Test func aStandingProblemIsNotTakenAsUsual() {
+        var p = ProfileSnapshot()
+        p.conditions = [.hypertension]
+        let today = day.startOfDay
+        func context(_ vitals: [VitalPoint]) -> AgentContext {
+            AgentContext.make(profile: p, name: "", days: [], plan: [], workouts: [], vitals: vitals, events: [], stopBang: [],
+                              baselineSetAt: nil, raceName: "", labs: [], now: day)
+        }
+        func bp(_ sys: Double, _ dia: Double, days: Int) -> [VitalPoint] {
+            (0..<days).map { VitalPoint(time: today.adding(days: -$0).adding(minutes: 450), kind: .bloodPressure, value: sys, value2: dia, context: .morning) }
+        }
+        func line(_ a: PriorityArea, _ c: AgentContext, daysAgo i: Int = 0) -> DayLine {
+            ReviewPriorities.line(for: a, DayData(day: today.adding(days: -i)), c)!
+        }
+        let calm = [DayLine(area: .glucose, tone: .good, text: ""), DayLine(area: .kidney, tone: .good, text: "")]
+
+        // Far above the line every day: not 「和你平时差不多」-and-平稳, however usual it is.
+        let severe = line(.bloodPressure, context(bp(152, 96, days: 30)))
+        #expect(severe.usual == .worse && severe.text.contains("明显高于 135/85") && severe.text.contains("最近量的 30 天都是这样"), "\(severe.text)")
+        #expect(ReviewPriorities.level(lines: [severe] + calm, readiness: nil) == .mixed)
+
+        // Just above it, day after day: said once, on the 7th measured day in a row, with the doctor…
+        let crept = context(bp(138, 86, days: 20))
+        let sixth = line(.bloodPressure, crept, daysAgo: 14), seventh = line(.bloodPressure, crept, daysAgo: 13)
+        #expect(sixth.usual == .same && sixth.text.hasSuffix("和你平时差不多"), "\(sixth.text)")
+        #expect(seventh.usual == .worse && seventh.text.contains("最近量的 7 天都是这样，值得带着记录和医生谈谈"), "\(seventh.text)")
+        #expect(ReviewPriorities.level(lines: [seventh] + calm, readiness: nil) == .mixed)
+        // …then each day says how long it has gone on, instead of 「和你平时差不多」.
+        let later = line(.bloodPressure, crept)
+        #expect(later.usual == .same && later.text.hasSuffix("最近量的 20 天都是这样") && !later.text.contains("医生"), "\(later.text)")
+        #expect(later.standing && !sixth.standing)
+        #expect(ReviewPriorities.dayHeadline([later, DayLine(area: .glucose, tone: .attention, text: "", usual: .same)], isToday: true)
+                == "今天血压连续多天没达标，血糖和平时差不多")
+        // A day back in range starts the count again.
+        let broken = context(bp(138, 86, days: 20).filter { $0.time.startOfDay != today.adding(days: -3) }
+                             + [VitalPoint(time: today.adding(days: -3).adding(minutes: 450), kind: .bloodPressure, value: 126, value2: 80, context: .morning)])
+        #expect(line(.bloodPressure, broken).text.hasSuffix("和你平时差不多"))
+        // Another run within four weeks is not reminded again.
+        let again = context(bp(138, 86, days: 30).filter { $0.time.startOfDay != today.adding(days: -9) }
+                            + [VitalPoint(time: today.adding(days: -9).adding(minutes: 450), kind: .bloodPressure, value: 126, value2: 80, context: .morning)])
+        let second = line(.bloodPressure, again, daysAgo: 2)
+        #expect(second.text.hasSuffix("最近量的 7 天都是这样") && second.usual == .same, "\(second.text)")
+        // A diastolic higher than usual says so (not 「比你平时高 -3」).
+        let dia = context(bp(138, 80, days: 10).filter { $0.time.startOfDay != today } + bp(135, 86, days: 1))
+        #expect(line(.bloodPressure, dia).text.hasSuffix("舒张压比你平时高 6"), "\(line(.bloodPressure, dia).text)")
+
+        // CGM: under half the day in range is never "usual" either.
+        var cgm: [VitalPoint] = []
+        for d in 0..<10 {
+            for k in 0..<48 { cgm.append(VitalPoint(time: today.adding(days: -d).adding(minutes: 30 * k), kind: .glucose, value: k < 19 ? 6.0 : 12.0, context: .random)) }
+        }
+        let g = line(.glucose, context(cgm))
+        #expect(g.usual == .worse && g.text.contains("范围内只有 39%") && g.text.contains("最近有记录的 10 天都是这样"), "\(g.text)")
     }
 }

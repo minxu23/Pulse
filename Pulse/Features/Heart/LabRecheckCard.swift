@@ -86,7 +86,7 @@ private struct RecheckDateSheet: View {
                 Section {
                     DatePicker("复查日期", selection: $date, in: Date.app.startOfDay..., displayedComponents: .date)
                 } footer: {
-                    Text("医生给了日期就按医生的填。到期前一周，「今日 › 饮食与指标」会提醒你；记下新的化验结果后，这项会自动完成。")
+                    Text("医生给了日期就按医生的填。到期前一周，「今日 › 饮食与指标」会提醒你\(CareReminders.enabled ? "，手机也会通知你" : "（在「我的 › 提醒」打开后，手机也会通知）")；记下新的化验结果后，这项会自动完成。")
                 }
             }
             .navigationTitle(item.title)

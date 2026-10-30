@@ -54,8 +54,16 @@ final class DailyRecord {
     var saltG: Double? = nil
     var saltSources: [String] = []
     var proteinServings: Double? = nil
+    /// Portions eaten, one entry each (「鸡蛋」「鸡蛋」「米饭」); replaces `proteinServings`.
+    var proteinFoods: [String] = []
     var potassiumFoods: [String] = []
     var phosphorusFoods: [String] = []
+    // Swelling and urine (水肿与尿量), see `KidneySigns`
+    var edema: Int? = nil
+    var edemaPlaces: [String] = []
+    var urineOutput: Int? = nil
+    var urineMl: Int? = nil
+    var foamyUrine: Bool? = nil
 
     // Sleep-breathing cues for the night ending this morning
     var snoring: Bool = false

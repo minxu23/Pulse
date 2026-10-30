@@ -85,7 +85,8 @@ struct KidneySpec {
     var loggedP: Double
     var recordDays: Int
     var saltSources: ClosedRange<Int>
-    var proteinServings: ClosedRange<Int>
+    /// Portions of meat, eggs, milk and soy a day; staples and vegetables come on top.
+    var proteinPortions: ClosedRange<Int>
     var potassiumFoods: ClosedRange<Int>
     var phosphorusFoods: ClosedRange<Int>
 }
@@ -257,7 +258,7 @@ extension PersonaSpec {
                    (12, .egfr, 57), (12, .creatinine, 127), (12, .uacr, 86), (12, .potassium, 5.4), (12, .phosphorus, 1.32),
                    (12, .hemoglobin, 127), (12, .uricAcid, 452), (12, .hba1c, 7.6)],
             proteinTargetG: 55, potassiumLimit: true, loggedP: 1.0, recordDays: 21,
-            saltSources: 0...3, proteinServings: 5...10, potassiumFoods: 0...3, phosphorusFoods: 0...2),
+            saltSources: 0...3, proteinPortions: 3...7, potassiumFoods: 0...3, phosphorusFoods: 0...2),
         // The slipped follow-up is one no lab result answers: rechecks are ticked off by the result (化验复查提醒).
         tasks: [("眼底检查", .diabetes, -18, false, "糖尿病每年一次，上次是去年秋天"),
                 ("心内科复诊", .cardio, 10, false, "带上家庭血压记录"),
@@ -535,9 +536,21 @@ enum PersonaGenerator {
             if let k = s.kidney, i > days - k.recordDays, isToday || dietRng.chance(k.loggedP * motivation) {
                 r.nutrientsLogged = true
                 r.saltSources = Self.pick(DietFoods.salt, dietRng.int(k.saltSources), &dietRng)
-                r.proteinServings = Double(dietRng.int(k.proteinServings))
+                // The day's protein as portions: rice and vegetables, then meat, eggs, milk and soy.
+                var protein = Array(repeating: "米饭", count: dietRng.int(2...3)) + ["蔬菜", "蔬菜"]
+                let sources = ["鸡蛋", "牛奶、酸奶", "瘦肉", "鱼虾", "豆腐、豆制品"]
+                for _ in 0..<dietRng.int(k.proteinPortions) { protein.append(sources[dietRng.int(0...(sources.count - 1))]) }
+                r.proteinFoods = DietFoods.proteinFoods.map(\.name).flatMap { name in protein.filter { $0 == name } }
                 r.potassiumFoods = Self.pick(Array(DietFoods.potassium.dropLast()), dietRng.int(k.potassiumFoods), &dietRng)
                 r.phosphorusFoods = Self.pick(DietFoods.phosphorus, dietRng.int(k.phosphorusFoods), &dietRng)
+                // Swelling and urine over the last two weeks: mild ankle swelling now and then, some foam.
+                if i > days - 14 {
+                    let swollen = dietRng.chance(0.3)
+                    r.edema = (swollen ? Edema.mild : Edema.none).rawValue
+                    r.edemaPlaces = swollen ? ["脚踝"] : []
+                    r.urineOutput = UrineAmount.usual.rawValue
+                    r.foamyUrine = dietRng.chance(0.25)
+                }
             }
             ctx.insert(r)
             prevAlcohol = r.alcoholUnits

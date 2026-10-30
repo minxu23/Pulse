@@ -16,7 +16,9 @@ extension UserProfile {
         s.goals = goals
         s.modules = modules
         s.journeyReached = journeyReached
-        s.availableWeekdays = availableWeekdays
+        // Training stays off dialysis days, unless every training day is one.
+        let free = availableWeekdays.filter { !dialysis || !dialysisWeekdays.contains($0) }
+        s.availableWeekdays = free.isEmpty ? availableWeekdays : free
         s.sessionMinutes = sessionMinutes
         s.weeklyTimeBudget = weeklyTimeBudget
         s.weeklyTargetMinutes = weeklyTargetMinutes
@@ -28,7 +30,11 @@ extension UserProfile {
         s.caffeineCutoffHour = caffeineCutoffHour
         s.weeklyAlcoholLimit = weeklyAlcoholLimit
         s.waterTargetMl = waterTargetMl
-        s.fluidLimited = fluidLimit
+        // Dialysis always comes with a fluid limit, and sessions are not training days.
+        s.onDialysis = dialysis
+        s.dialysisWeekdays = dialysis ? dialysisWeekdays : []
+        s.dryWeightKg = dialysis ? dryWeightKg : nil
+        s.fluidLimited = fluidLimit || dialysis
         s.tracksNutrients = nutrientTracking
         s.saltLimitG = saltLimitG
         s.proteinTargetG = proteinTargetG
@@ -111,8 +117,14 @@ enum DayBuilder {
             d.saltG = r.saltG
             d.saltSources = r.saltSources
             d.proteinServings = r.proteinServings
+            d.proteinFoods = r.proteinFoods
             d.potassiumFoods = r.potassiumFoods
             d.phosphorusFoods = r.phosphorusFoods
+            d.edema = r.edema
+            d.edemaPlaces = r.edemaPlaces
+            d.urineOutput = r.urineOutput
+            d.urineMl = r.urineMl
+            d.foamyUrine = r.foamyUrine
             d.snoring = r.snoring
             d.gasping = r.gasping
             d.witnessedApnea = r.witnessedApnea
