@@ -52,7 +52,7 @@ struct MorningCheckInView: View {
                         Text("bpm").foregroundStyle(.secondary)
                     }
                     DisclosureGroup("如何测量才可比较", isExpanded: $showGuide) {
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: Theme.Space.item) {
                             BulletText(text: "醒来后先不起身、不看手机，安静平躺 1 分钟。")
                             BulletText(text: "食指与中指轻按手腕拇指侧，数 30 秒脉搏 × 2，或数满 60 秒。")
                             BulletText(text: "每天在相同时间、相同姿势测量；起夜、闹钟惊醒后的数值会偏高。")
@@ -95,11 +95,11 @@ struct MorningCheckInView: View {
     }
 
     private func labeled<C: View>(_ title: String, @ViewBuilder _ c: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.item) {
             Text(title).font(.subheadline.weight(.medium))
             c()
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Theme.Space.tight)
     }
 
     private func load() {

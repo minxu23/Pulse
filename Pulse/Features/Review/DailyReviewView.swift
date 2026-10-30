@@ -24,19 +24,23 @@ struct DailyReviewSection: View {
             ($0, ReviewPriorities.verdict(on: $0, context: context, priorities: pr))
         })
 
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             HStack {
-                Button { month = shown.adding(months: -1) } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }
-                    .disabled(shown <= earliest).accessibilityLabel("上个月")
+                Button { month = shown.adding(months: -1) } label: {
+                    Image(systemName: "chevron.left").frame(width: Theme.Size.tap, height: Theme.Size.tap).contentShape(Rectangle())
+                }
+                .disabled(shown <= earliest).accessibilityLabel("上个月")
                 Spacer()
                 Text(shown.formatted(.dateTime.year().month(.wide))).font(.headline)
                 Spacer()
-                Button { month = shown.adding(months: 1) } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44) }
-                    .disabled(shown >= today.monthStart).accessibilityLabel("下个月")
+                Button { month = shown.adding(months: 1) } label: {
+                    Image(systemName: "chevron.right").frame(width: Theme.Size.tap, height: Theme.Size.tap).contentShape(Rectangle())
+                }
+                .disabled(shown >= today.monthStart).accessibilityLabel("下个月")
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 7), spacing: 6) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Theme.Space.item), count: 7), spacing: Theme.Space.item) {
                 ForEach(["一", "二", "三", "四", "五", "六", "日"], id: \.self) { w in
-                    Text(w).font(.footnote).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+                    Text(w).font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity)
                 }
                 ForEach(0..<PlanGenerator.order(shown.weekday), id: \.self) { _ in Color.clear.frame(height: 1) }
                 ForEach(days, id: \.self) { d in
@@ -73,15 +77,15 @@ private struct DayCell: View {
 
     var body: some View {
         let level = verdict?.level
-        VStack(spacing: 3) {
+        VStack(spacing: Theme.Space.tight) {
             Text("\(Calendar.pulse.component(.day, from: date))").font(.subheadline.weight(isToday ? .bold : .medium)).monospacedDigit()
             Image(systemName: level?.icon ?? "minus").font(.caption2.weight(.bold))
                 .foregroundStyle(level.map(DayLevelStyle.glyph) ?? Color.secondary.opacity(verdict == nil ? 0 : 0.6))
         }
         .frame(maxWidth: .infinity, minHeight: 48)
-        .background(level.map(DayLevelStyle.fill) ?? Theme.subtle.opacity(verdict == nil ? 0.5 : 1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(level.map(DayLevelStyle.fill) ?? Theme.subtle.opacity(verdict == nil ? 0.5 : 1), in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
         .overlay {
-            if isToday { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary, lineWidth: 2) }
+            if isToday { RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous).strokeBorder(Color.primary, lineWidth: 2) }
         }
         .overlay(alignment: .topTrailing) {
             if verdict?.trained == true { Circle().fill(Color.primary).frame(width: 5, height: 5).padding(5) }
@@ -121,15 +125,16 @@ enum DayLevelStyle {
 
 private struct CalendarLegend: View {
     var body: some View {
-        FlowLayout(spacing: 12) {
+        // Entries a block apart, so each swatch reads with its own word.
+        FlowLayout(spacing: Theme.Space.block) {
             ForEach(DayLevel.allCases, id: \.self) { l in
-                HStack(spacing: 5) {
-                    RoundedRectangle(cornerRadius: 4).fill(DayLevelStyle.fill(l)).frame(width: 14, height: 14)
+                HStack(spacing: Theme.Space.iconGap) {
+                    RoundedRectangle(cornerRadius: Theme.Radius.mark, style: .continuous).fill(DayLevelStyle.fill(l)).frame(width: 14, height: 14)
                         .overlay(Image(systemName: l.icon).font(.system(size: 7, weight: .bold)).foregroundStyle(DayLevelStyle.glyph(l)))
                     Text(l.label).font(.footnote)
                 }
             }
-            HStack(spacing: 5) {
+            HStack(spacing: Theme.Space.iconGap) {
                 Circle().fill(Color.primary).frame(width: 5, height: 5)
                 Text("有训练").font(.footnote)
             }
@@ -161,16 +166,16 @@ struct DayReviewPage: View {
                          canGoForward: day < today,
                          onPrev: { if day > earliest { day = day.adding(days: -1) } }, onNext: { if day < today { day = day.adding(days: 1) } })
 
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: Theme.Space.block) {
                 if let l = v.level {
                     Label(l.label, systemImage: l.icon)
                         .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .padding(.horizontal, Theme.Space.item).padding(.vertical, Theme.Space.tight)
                         .background(DayLevelStyle.fill(l), in: Capsule())
                 }
                 Text(ReviewPriorities.dayHeadline(top, isToday: offset == 0))
                     .font(.title3.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: Theme.Space.block) {
                     stat("准备度", v.readiness?.score.map(String.init) ?? "—", v.readiness?.level.label ?? "没有晨起数据")
                     stat("睡眠", d?.sleepMinutes.map { ($0 / 60).oneDecimal } ?? "—", d?.sleepMinutes == nil ? "没有记录" : "小时")
                     stat("静息心率", d?.rhr.map { $0.noDecimal } ?? "—", d?.rhr == nil ? "没有记录" : "bpm")
@@ -179,7 +184,7 @@ struct DayReviewPage: View {
             }
             .cardSurface()
 
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: Theme.Space.block) {
                 CardTitle("你最在意的几件事")
                 ForEach(top) { DayLineRow(line: $0) }
                 if !more.isEmpty {
@@ -195,10 +200,10 @@ struct DayReviewPage: View {
 
             if offset == 0 {
                 Button { onAsk("总结一下今天，明天要注意什么？", false) } label: {
-                    NavRowLabel(icon: "sparkles", color: .purple, title: "问问 Health Agent", detail: "今天的数据说明了什么、明天要注意什么")
+                    NavRowLabel(icon: "sparkles", color: .purple, title: AgentNameSettings.shared.phrase("问问"), detail: "今天的数据说明了什么、明天要注意什么")
                 }
                 .buttonStyle(.plain)
-                .cardSurface(padding: 12)
+                .cardSurface()
             }
         }
         .navigationTitle("全天回顾")
@@ -207,8 +212,8 @@ struct DayReviewPage: View {
     }
 
     private func stat(_ label: String, _ value: String, _ sub: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.footnote).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: Theme.Space.hairline) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
             Text(value).font(.system(.title3, design: .rounded).weight(.semibold)).monospacedDigit()
             Text(sub).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
         }
@@ -222,10 +227,10 @@ private struct DayLineRow: View {
     var compact = false
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Image(systemName: line.area.icon).font(.subheadline).foregroundStyle(.secondary).frame(width: 22)
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.block) {
+            Image(systemName: line.area.icon).font(.subheadline).foregroundStyle(.secondary).frame(width: Theme.Size.iconTile)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Theme.Space.tight) {
                 Text(line.area.label).font(compact ? .subheadline : .subheadline.weight(.semibold))
                 StatusLabel(status, secondaryText: true).font(.subheadline).fixedSize(horizontal: false, vertical: true)
             }
@@ -250,7 +255,7 @@ private struct DayNoteCard: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle(title: isToday ? "今天的笔记" : "这天的笔记") {
                 if record.reviewedAt != nil {
                     StatusLabel(text: "已回顾", icon: "checkmark.seal.fill", color: .green).font(.subheadline.weight(.semibold))
@@ -259,8 +264,8 @@ private struct DayNoteCard: View {
             TextField(isToday ? "今天感觉如何？有什么影响了你的状态？" : "那天发生了什么？补记一下也有用", text: $record.dayNote, axis: .vertical)
                 .focused($focused)
                 .lineLimit(3...6)
-                .padding(12)
-                .background(Theme.subtle.opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(Theme.Space.block)
+                .background(Theme.subtle.opacity(0.6), in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
             Button {
                 record.reviewedAt = .app
                 focused = false
@@ -285,15 +290,18 @@ struct PrioritiesCard: View {
         let mine = profiles.first?.reviewPriorities ?? []
         let pr = Array(ReviewPriorities.ranked(context, mine: mine).prefix(3))
         let hint = ReviewPriorities.suggestion(context, mine: mine)
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle(title: "你的优先事项") {
-                Button("调整") { editing = true }.font(.subheadline).frame(minHeight: 44)
+                Button { editing = true } label: {
+                    Text("调整").frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
+                }
+                .font(.subheadline)
             }
             ForEach(Array(pr.enumerated()), id: \.element.id) { i, p in
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.block) {
                     Text("\(i + 1)").font(.footnote.weight(.bold)).monospacedDigit()
                         .frame(width: 24, height: 24).background(Theme.subtle, in: Circle())
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         Text(p.area.label).font(.subheadline.weight(.semibold))
                         Text(p.reason).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
@@ -304,7 +312,7 @@ struct PrioritiesCard: View {
             if let h = hint, let profile = profiles.first {
                 HStack(alignment: .firstTextBaseline) {
                     StatusLabel(.attention("最近\(h.area.label)需要留意：\(h.reason)")).font(.subheadline).fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 8)
+                    Spacer(minLength: Theme.Space.item)
                     Button("加入") { profile.reviewPriorities = Array(mine.prefix(2)) + [h.area] + mine.dropFirst(2) }
                         .buttonStyle(.bordered).font(.subheadline)
                 }

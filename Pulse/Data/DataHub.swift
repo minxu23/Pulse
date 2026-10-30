@@ -325,7 +325,7 @@ enum DataHub {
                 if let d = s.newDetail { item.detail = d }
                 if old.kind != s.kind || old.intensity != s.intensity { item.guidance = PlanGenerator.guidance(s.intensity, snap) }
                 let moved = old.day != s.day ? "从\(Weekday.name(old.day.weekday))移到\(Weekday.name(s.day.weekday))。" : ""
-                item.adjustmentNote = "\(moved)与 Health Agent 对话后调整：「\(request)」"
+                item.adjustmentNote = AgentNameSettings.shared.phrase("\(moved)与", "对话后调整：「\(request)」")
                 item.adjustedAt = now
             } else if old == nil || p.generated {
                 let item = PlanItem(day: s.day, weekStart: p.weekStart, kind: s.kind, title: s.title, minutes: s.minutes, intensity: s.intensity)
@@ -336,7 +336,7 @@ enum DataHub {
                 item.minimumDetail = s.minimumDetail
                 item.isKey = s.isKey
                 if !p.generated {
-                    item.adjustmentNote = "与 Health Agent 对话后添加：「\(request)」"
+                    item.adjustmentNote = AgentNameSettings.shared.phrase("与", "对话后添加：「\(request)」")
                     item.adjustedAt = now
                 }
                 ctx.insert(item)

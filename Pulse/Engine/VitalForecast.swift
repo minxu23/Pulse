@@ -146,7 +146,8 @@ enum VitalForecaster {
 
 // Glucose from a CGM: the current rate of change, damped as it goes (a rise or fall rarely keeps its
 // pace for an hour), with a range calibrated on this person's own past: the same predictor is run on
-// the last week of readings and its errors at each horizon give the band. It is an early warning of a
+// the last week of readings, at moments changing about as fast as now, and its errors at each horizon
+// give the band — so the swings after meals do not widen a quiet hour. It is an early warning of a
 // coming low or high, as CGM "soon" alerts are — never a number to dose insulin by, which the card says.
 // Blood pressure is measured now and then, not continuously, so its next hour is what this person's
 // readings at that time of day have been, shifted part of the way toward a reading taken in the last hours.
@@ -209,12 +210,14 @@ enum NextHourForecaster {
     static func glucose(_ vitals: [VitalPoint], profile p: ProfileSnapshot, now: Date = .app) -> NextHourForecast? {
         let pts = cgm(vitals)
         guard let last = pts.last, now.timeIntervalSince(last.time) <= 20 * 60, let r = rate(pts, at: last.time) else { return nil }
-        // Calibrate the band on the last week: run the same predictor every hour and keep its errors.
+        // Calibrate the band on the last week: run the same predictor every hour and keep its errors at the
+        // moments whose rate was within 0.01/min of now's. Errors keep their sign: an unlogged meal only
+        // pushes glucose up, so it widens the band above, not below.
         var errors: [Int: [Double]] = [:]
         let byTime = Dictionary(pts.map { (Int($0.time.timeIntervalSince1970 / 300), $0.value) }, uniquingKeysWith: { a, _ in a })
         for o in pts where o.time >= last.time.adding(days: -7) && o.time <= last.time.addingTimeInterval(-3600)
             && Int(o.time.timeIntervalSince1970) % 3600 < 900 {
-            guard let ro = rate(pts, at: o.time) else { continue }
+            guard let ro = rate(pts, at: o.time), abs(ro - r) <= 0.01 else { continue }
             for h in horizons {
                 let key = Int(o.time.addingTimeInterval(Double(h) * 60).timeIntervalSince1970 / 300)
                 if let actual = byTime[key] ?? byTime[key + 1] ?? byTime[key - 1] {
@@ -224,19 +227,26 @@ enum NextHourForecaster {
         }
         let points = horizons.map { h -> NextHourForecast.Point in
             let e = errors[h] ?? []
-            // Too few past cases: a conservative band that grows with time.
-            let sd = e.count >= 20 ? max(0.3, sqrt(e.map { $0 * $0 }.reduce(0, +) / Double(e.count))) : 0.4 + 0.025 * Double(h)
+            // 80%: the 10th and 90th percentile errors, at least ±0.4. Too few past cases: a conservative
+            // band that grows with time.
+            let spread: (below: Double, above: Double) = if e.count >= 20, let q10 = Stats.quantile(e, 0.1), let q90 = Stats.quantile(e, 0.9) {
+                (max(0.4, -q10), max(0.4, q90))
+            } else {
+                (1.28 * (0.4 + 0.025 * Double(h)), 1.28 * (0.4 + 0.025 * Double(h)))
+            }
             let mid = max(2.2, last.value + carried(r, Double(h)))
-            return .init(minutes: h, mid: mid, low: max(2.2, mid - 1.28 * sd), high: mid + 1.28 * sd)
+            return .init(minutes: h, mid: mid, low: max(2.2, mid - spread.below), high: mid + spread.above)
         }
-        let lowAt = points.first { $0.low < p.glucoseLow }?.minutes
+        let steady = abs(r) < 0.03
+        // A steady reading warns only when its own line reaches the low; the lower edge counts once it falls.
+        let lowAt = points.first { $0.mid < p.glucoseLow || (!steady && r < 0 && $0.low < p.glucoseLow) }?.minutes
         let highAt = points.first { $0.mid > p.glucoseHigh }?.minutes
         // Only a coming change: a reading already out of range is the abnormal value itself.
         var alert: NextHourForecast.Alert?
         if last.value >= p.glucoseLow, let m = lowAt { alert = .lowSoon(minutes: m) }
         else if last.value <= p.glucoseHigh, let m = highAt { alert = .highSoon(minutes: m) }
         let range = "\(points.last!.low.oneDecimal)–\(points.last!.high.oneDecimal) mmol/L"
-        let move = abs(r) < 0.03 ? "基本平稳" : (r > 0 ? (r >= 0.1 ? "上升较快" : "在上升") : (r <= -0.1 ? "下降较快" : "在下降"))
+        let move = steady ? "基本平稳" : (r > 0 ? (r >= 0.1 ? "上升较快" : "在上升") : (r <= -0.1 ? "下降较快" : "在下降"))
         let message: String = switch alert {
         case .lowSoon(let m)?: "血糖\(move)，约 \(m) 分钟内可能低于 \(p.glucoseLow.oneDecimal)。留意心慌、出汗、手抖，按医生给你的低血糖处理方案做，需要时先测一次指尖血糖确认。"
         case .highSoon(let m)?: "血糖\(move)，约 \(m) 分钟后可能高于 \(p.glucoseHigh.oneDecimal)。可以回想一下这一餐吃了什么，饭后散步 10–15 分钟通常有帮助。"

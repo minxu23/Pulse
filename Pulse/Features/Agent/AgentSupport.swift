@@ -31,7 +31,7 @@ struct AgentContextReader<Content: View>: View {
         let snap = p?.snapshot(medications: meds) ?? ProfileSnapshot()
         DayClock.current = snap
         let now = Date.app
-        return AgentContext.make(
+        var c = AgentContext.make(
             profile: snap, name: p?.displayName ?? "你",
             days: DayBuilder.build(records: records, sessions: sessions),
             plan: items.map(\.snapshot), workouts: sessions.map(\.point),
@@ -40,6 +40,9 @@ struct AgentContextReader<Content: View>: View {
             stopBang: p?.stopBangAnswers ?? [], baselineSetAt: p?.baselineSetAt, raceName: p?.raceName ?? "",
             targetRHR: p?.targetRHR, weather: WeatherStore.shared.days, weatherSource: WeatherStore.shared.sourceName,
             labs: labs.map(\.point), now: now)
+        c.answerMode = CloudModelSettings.shared.effectiveMode
+        c.agentName = AgentNameSettings.shared.name
+        return c
     }
 }
 
@@ -78,7 +81,17 @@ struct AgentMessage: Identifiable, Equatable {
     /// A question the user took back (撤回): shown as a one-line notice and left out of what the
     /// model sees; its answer is removed.
     var withdrawn = false
+    /// 端云结合: answered by the cloud model as a general question, without any of the user's data.
+    var general = false
+    /// 端云结合: why this answer stayed on the device (shown with the answer).
+    var privacy: String? = nil
     let date = Date.app
+}
+
+/// How a cloud answer attempt ended.
+private enum CloudOutcome {
+    case answered, superseded
+    case failed(String)
 }
 
 /// What happened to a plan proposal shown in the conversation.
@@ -110,6 +123,8 @@ final class AgentConversation {
     var answeredForms: [String: String] = [:]
     var planOutcomes: [UUID: PlanOutcome] = [:]
     var conditionOutcomes: [UUID: ConditionOutcome] = [:]
+    /// Where a name given in the chat is saved.
+    @ObservationIgnored var names = AgentNameSettings.shared
     /// The answer being written, so that taking its question back can stop it.
     private var answering: Task<Void, Never>?
     /// Moves on whenever an answer is abandoned; an abandoned answer never writes into the conversation.
@@ -124,13 +139,14 @@ final class AgentConversation {
         speechDelegate.onFinish = { [weak self] in Task { @MainActor in self?.speakingID = nil } }
     }
 
-    /// Every answer except the fixed emergency reply is written by a language model: the cloud model
-    /// once the user has set it up, otherwise Apple Intelligence on the device. The rules engine runs
-    /// first and supplies the facts — and, for safety-relevant questions, the conclusion to keep.
+    /// Every answer except the fixed emergency reply is written by a language model, as the user's
+    /// `AnswerMode` says: Apple Intelligence on the device, the cloud model for general questions only
+    /// (端云结合), or the cloud model for everything (全部云端). The rules engine runs first and
+    /// supplies the facts — and, for safety-relevant questions, the conclusion to keep.
     var usesOnDeviceModel: Bool { OnDeviceModel.isAvailable }
     /// Why no language model can answer right now (nil when one can).
     var noModelReason: String? {
-        CloudModelSettings.shared.isActive || usesOnDeviceModel ? nil : "\(OnDeviceModel.unavailableReason)，云端模型未启用"
+        CloudModelSettings.shared.effectiveMode != .onDevice || usesOnDeviceModel ? nil : "\(OnDeviceModel.unavailableReason)，云端模型未启用"
     }
 
     /// Asks a question; the answer can be stopped by taking the question back.
@@ -140,17 +156,46 @@ final class AgentConversation {
     }
 
     func send(_ raw: String, context: AgentContext, spoken: Bool = false) async {
-        let q = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !q.isEmpty, !isResponding else { return }
+        let typed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !typed.isEmpty, !isResponding else { return }
+        // 「小安，今天能跑步吗」: the name it is addressed to is not part of the question.
+        let q = AgentName.unaddressed(typed, name: context.agentName)
         let history = modelHistory()
-        messages.append(AgentMessage(role: .user, text: q))
+        let generalHistory = generalModelHistory()
+        // 「那明天呢？」 is read with the question before it.
+        let previous = messages.last { $0.role == .user && !$0.withdrawn }.map { AgentName.unaddressed($0.text, name: context.agentName) }
+        let asked = HealthAgent.resolveFollowUp(q, previous: previous) ?? q
+        let earlier = messages.filter { $0.role == .user && !$0.withdrawn }.map(\.text)
+        let askedForName = messages.last { $0.role == .agent }?.reply?.text == AgentName.reply(to: .ask).text
+        messages.append(AgentMessage(role: .user, text: typed))
         turn += 1
         let mine = turn
         isResponding = true
         defer { if turn == mine { isResponding = false; answering = nil } }
 
-        let rule = HealthAgent.reply(to: q, context: context)
+        // 「以后叫你小安」: the new name applies at once, and the answer says how to change it back.
+        if let request = AgentName.requested(in: q, afterAsking: askedForName) {
+            switch request {
+            case .rename(let n): names.set(n)
+            case .reset: names.set(nil)
+            case .ask: break
+            }
+            var r = AgentName.reply(to: request)
+            r.followUps = AgentFollowUps.suggest(after: r, question: q, context: context, asked: earlier)
+            try? await Task.sleep(for: .milliseconds(350))
+            guard turn == mine else { return }
+            messages.append(AgentMessage(role: .agent, text: r.text, reply: r, engine: .rules))
+            if spoken || speakReplies, let last = messages.last { speak(last) }
+            return
+        }
+
+        var rule = HealthAgent.reply(to: asked, context: context)
         let context = HealthAgent.context(context, answering: rule)
+        // The questions offered under the answer follow from it and from this person.
+        rule.followUps = AgentFollowUps.suggest(after: rule, question: asked, context: context, asked: earlier)
+        // A model's answer to an open question is not the rules' 「可以试试下面这些」 reply: only questions on its topic.
+        let modelFollowUps = rule.intent == .unknown
+            ? AgentFollowUps.suggest(after: rule, question: asked, context: context, asked: earlier, fallback: false) : rule.followUps
 
         // Emergencies: the fixed reply at once, never a generated one.
         if rule.urgent {
@@ -159,80 +204,172 @@ final class AgentConversation {
             return
         }
 
+        // Explanations and schedules read best as written. General know-how goes to the cloud model
+        // when the user chose one (端云结合 / 全部云端).
+        if rule.verbatim, !(rule.intent == .knowledge && CloudModelSettings.shared.effectiveMode != .onDevice) {
+            try? await Task.sleep(for: .milliseconds(350))
+            guard turn == mine else { return }
+            messages.append(AgentMessage(role: .agent, text: rule.text, reply: rule, engine: .rules, blocks: rule.blocks))
+            if spoken || speakReplies, let last = messages.last { speak(last) }
+            return
+        }
+
+        let settings = CloudModelSettings.shared
         var fallbackNote: String? = nil
-        if CloudModelSettings.shared.isActive, let client = CloudModelSettings.shared.client() {
-            let id = append(AgentMessage(role: .agent, text: "", reply: rule, engine: .cloud, streaming: true))
-            let (system, prompt) = cloudRequest(q, rule: rule, history: history, context: context)
-            do {
-                let raw = try await client.stream(system: system, prompt: prompt, maxTokens: 1600) { [weak self] partial in
-                    self?.edit(id) { $0.text = HealthAgent.streamed(AgentUI.split(partial).text, of: rule, proposing: rule.proposesPlan || rule.intent == .planChange) }
+        // 端云结合: why this question stays on the device.
+        var privacy: String? = nil
+        switch settings.effectiveMode {
+        case .cloud:
+            if let client = settings.client() {
+                switch await answerWithRecords(asked, rule: rule, history: history, context: context, client: client, followUps: modelFollowUps,
+                                               mine: mine, spoken: spoken) {
+                case .answered, .superseded: return
+                case .failed(let note): fallbackNote = note
                 }
-                guard turn == mine else { return }
-                let parts = AgentUI.split(raw)
-                var blocks = parts.ui.map { AgentUI.blocks(fromJSON: $0, context: q) } ?? []
-                var note: String? = nil
-                if let json = parts.plan {
-                    let parsed = PlanChat.ops(fromJSON: json)
-                    let scope = parsed.scope ?? (q.contains("下周") ? .nextWeek : .thisWeek)
-                    let proposal = PlanChat.propose(parsed.ops, scope: scope, request: q, context: context,
-                                                    source: "云端 · \(CloudModelSettings.shared.model)")
-                    if proposal.hasChanges { blocks.insert(.plan(proposal), at: 0) }
-                    else { note = "云端模型给出的修改没有通过本机安全检查，下面是 Pulse 规则给出的方案。" }
-                }
-                // Keep the rules engine's components when the model offered none for a task that needs them.
-                if blocks.isEmpty, [.planChange, .device, .trainingCheck].contains(rule.intent) { blocks = rule.blocks }
-                // A condition the user mentioned is always offered by the rules, with its plan change.
-                if rule.blocks.contains(where: { $0.condition != nil }) {
-                    blocks = rule.blocks + blocks.filter { b in b.proposal == nil && !rule.blocks.contains { $0.id == b.id } }
-                }
-                edit(id) { m in
-                    m.text = HealthAgent.finalize(parts.text.isEmpty ? rule.text : parts.text, of: rule,
-                                                  proposals: blocks.prefix(AgentUI.maxBlocks).compactMap(\.proposal))
-                    m.blocks = Array(blocks.prefix(AgentUI.maxBlocks))
-                    m.note = note
-                    m.streaming = false
-                }
-                if spoken || speakReplies, let m = messages.first(where: { $0.id == id }) { speak(m) }
-                return
-            } catch {
-                guard turn == mine else { return }
-                messages.removeAll { $0.id == id }
-                fallbackNote = "云端模型暂不可用（\((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)），这次由 Apple 智能回答。"
             }
+        case .hybrid:
+            switch AgentRouting.route(asked, reply: rule, profile: context.profile, name: context.name) {
+            case .general(let text):
+                if let client = settings.client() {
+                    switch await answerGeneral(text, history: generalHistory, client: client, followUps: modelFollowUps, mine: mine, spoken: spoken) {
+                    case .answered, .superseded: return
+                    case .failed(let note): fallbackNote = note
+                    }
+                }
+            case .device(let why):
+                privacy = "在本机回答：\(why)"
+            }
+        case .onDevice:
+            break
         }
 
         if usesOnDeviceModel {
-            let id = append(AgentMessage(role: .agent, text: "", reply: rule, engine: .onDevice, streaming: true, note: fallbackNote, blocks: rule.blocks))
+            let id = append(AgentMessage(role: .agent, text: "", reply: rule, engine: .onDevice, streaming: true, note: fallbackNote,
+                                         blocks: rule.blocks, privacy: privacy))
             // The on-device context window is small: the last exchange is enough history.
-            let prompt = HealthAgent.modelPrompt(question: q, history: Array(history.suffix(2)), context: context, reply: rule, anonymous: false)
+            let prompt = HealthAgent.modelPrompt(question: asked, history: Array(history.suffix(2)), context: context, reply: rule, anonymous: false)
             do {
-                let text = try await OnDeviceModel.respond(instructions: HealthAgent.groundedInstructions, prompt: prompt) { [weak self] partial in
+                let text = try await OnDeviceModel.respond(instructions: Self.named(HealthAgent.groundedInstructions, context), prompt: prompt) { [weak self] partial in
                     self?.edit(id) { $0.text = HealthAgent.streamed(partial, of: rule) }
                 }
                 guard turn == mine else { return }
                 guard !text.isEmpty else { throw CloudModelError.empty }
-                edit(id) { $0.text = HealthAgent.finalize(text, of: rule) }
+                if HealthAgent.keepsConclusion(text, of: rule) {
+                    edit(id) { m in
+                        m.text = HealthAgent.finalize(text, of: rule)
+                        m.reply?.followUps = modelFollowUps
+                    }
+                } else {
+                    // The model lost the answer the rules worked out: show that answer as it is.
+                    edit(id) { m in
+                        m.text = rule.text
+                        m.engine = .rules
+                    }
+                }
             } catch {
                 guard turn == mine else { return }
                 edit(id) { m in
                     m.text = rule.text
                     m.engine = .rules
-                    m.note = "Apple 智能这次没能回答（\(error.localizedDescription)），以下为 Pulse 规则分析，没有经过大模型。"
+                    m.note = "Apple 智能这次没能回答（\(OnDeviceModel.describe(error))），以下为 Pulse 规则分析，没有经过大模型。"
                 }
             }
             edit(id) { $0.streaming = false }
         } else {
             try? await Task.sleep(for: .milliseconds(350))
             guard turn == mine else { return }
-            messages.append(AgentMessage(role: .agent, text: rule.text, reply: rule, engine: .rules,
-                                         note: "当前没有可用的大模型（\(noModelReason ?? "")），以下为 Pulse 规则分析。", blocks: rule.blocks))
+            let note = privacy != nil
+                ? "本机没有可用的 Apple 智能（\(OnDeviceModel.unavailableReason)），这个问题要用到你的记录，所以没有发到云端，以下为 Pulse 规则分析。"
+                : (fallbackNote ?? "当前没有可用的大模型（\(noModelReason ?? OnDeviceModel.unavailableReason)），以下为 Pulse 规则分析。")
+            messages.append(AgentMessage(role: .agent, text: rule.text, reply: rule, engine: .rules, note: note, blocks: rule.blocks, privacy: privacy))
         }
         if spoken || speakReplies, let last = messages.last { speak(last) }
     }
 
+    /// 全部云端: the question with the anonymous data digest and the rules analysis.
+    private func answerWithRecords(_ q: String, rule: AgentReply, history: [String], context: AgentContext,
+                                   client: CloudModelClient, followUps: [String], mine: Int, spoken: Bool) async -> CloudOutcome {
+        let id = append(AgentMessage(role: .agent, text: "", reply: rule, engine: .cloud, streaming: true))
+        let (system, prompt) = cloudRequest(q, rule: rule, history: history, context: context)
+        do {
+            let raw = try await client.stream(system: system, prompt: prompt, maxTokens: 1600) { [weak self] partial in
+                self?.edit(id) { $0.text = HealthAgent.streamed(AgentUI.split(partial).text, of: rule, proposing: rule.proposesPlan || rule.intent == .planChange) }
+            }
+            guard turn == mine else { return .superseded }
+            let parts = AgentUI.split(raw)
+            var blocks = parts.ui.map { AgentUI.blocks(fromJSON: $0, context: q) } ?? []
+            var note: String? = nil
+            if let json = parts.plan {
+                let parsed = PlanChat.ops(fromJSON: json)
+                let scope = parsed.scope ?? (q.contains("下周") ? .nextWeek : .thisWeek)
+                let proposal = PlanChat.propose(parsed.ops, scope: scope, request: q, context: context,
+                                                source: "云端 · \(CloudModelSettings.shared.model)")
+                if proposal.hasChanges { blocks.insert(.plan(proposal), at: 0) }
+                else { note = "云端模型给出的修改没有通过本机安全检查，下面是 Pulse 规则给出的方案。" }
+            }
+            // Keep the rules engine's components when the model offered none for a task that needs them.
+            if blocks.isEmpty, [.planChange, .device, .trainingCheck, .symptom, .reading].contains(rule.intent) { blocks = rule.blocks }
+            // A condition the user mentioned is always offered by the rules, with its plan change.
+            if rule.blocks.contains(where: { $0.condition != nil }) {
+                blocks = rule.blocks + blocks.filter { b in b.proposal == nil && !rule.blocks.contains { $0.id == b.id } }
+            }
+            edit(id) { m in
+                m.text = HealthAgent.finalize(parts.text.isEmpty ? rule.text : parts.text, of: rule,
+                                              proposals: blocks.prefix(AgentUI.maxBlocks).compactMap(\.proposal), strict: false)
+                m.blocks = Array(blocks.prefix(AgentUI.maxBlocks))
+                m.reply?.followUps = followUps
+                m.note = note
+                m.streaming = false
+            }
+            if spoken || speakReplies, let m = messages.first(where: { $0.id == id }) { speak(m) }
+            return .answered
+        } catch {
+            guard turn == mine else { return .superseded }
+            messages.removeAll { $0.id == id }
+            return .failed("云端模型暂不可用（\(Self.describe(error))），这次\(usesOnDeviceModel ? "由 Apple 智能" : "以 Pulse 规则")在本机回答。")
+        }
+    }
+
+    /// 端云结合: a general question goes out as its text alone — no digest, no records, no rules analysis.
+    private func answerGeneral(_ q: String, history: [String], client: CloudModelClient, followUps: [String], mine: Int, spoken: Bool) async -> CloudOutcome {
+        let shown = AgentReply(text: "", sources: ["通用问题 · 没有发送你的数据"], followUps: followUps, intent: .unknown)
+        let id = append(AgentMessage(role: .agent, text: "", reply: shown, engine: .cloud, streaming: true, general: true))
+        do {
+            let raw = try await client.stream(system: HealthAgent.generalCloudInstructions,
+                                              prompt: HealthAgent.generalPrompt(question: q, history: history), maxTokens: 900) { [weak self] partial in
+                self?.edit(id) { $0.text = HealthAgent.stripLabels(partial, streaming: true) }
+            }
+            guard turn == mine else { return .superseded }
+            edit(id) { m in
+                m.text = HealthAgent.finalize(raw, of: shown, strict: false)
+                m.reply = AgentReply(text: m.text, sources: shown.sources, followUps: shown.followUps, intent: .unknown)
+                m.streaming = false
+            }
+            if spoken || speakReplies, let m = messages.first(where: { $0.id == id }) { speak(m) }
+            return .answered
+        } catch {
+            guard turn == mine else { return .superseded }
+            messages.removeAll { $0.id == id }
+            return .failed("云端模型暂不可用（\(Self.describe(error))），这次在本机回答。")
+        }
+    }
+
+    private static func describe(_ error: Error) -> String { (error as? LocalizedError)?.errorDescription ?? error.localizedDescription }
+
     /// The recent exchange the model sees; questions taken back are left out.
     func modelHistory() -> [String] {
         messages.filter { !$0.withdrawn }.suffix(4).map { ($0.role == .user ? "用户：" : "助手：") + String($0.text.prefix(200)) }
+    }
+
+    /// 端云结合: only earlier general exchanges go with a general question — never an answer made from
+    /// the user's records, or the question that led to it.
+    func generalModelHistory() -> [String] {
+        var out: [String] = []
+        for (i, m) in messages.enumerated() where m.role == .agent && m.general && !m.streaming {
+            guard let qi = messages[..<i].lastIndex(where: { $0.role == .user }), !messages[qi].withdrawn else { continue }
+            out += ["用户：" + AgentRouting.redacted(String(messages[qi].text.prefix(200))), "助手：" + String(m.text.prefix(200))]
+        }
+        return Array(out.suffix(4))
     }
 
     private func append(_ m: AgentMessage) -> UUID {
@@ -306,7 +443,17 @@ final class AgentConversation {
     }
 
     /// Instructions and prompt for the cloud model, by what the question is about.
+    /// The model's instructions with the name the user gave it, so 「小安」 in a question means the model.
+    private static func named(_ instructions: String, _ c: AgentContext) -> String {
+        AgentName.introduction(c.agentName).map { instructions + "\n\n" + $0 } ?? instructions
+    }
+
     private func cloudRequest(_ q: String, rule: AgentReply, history: [String], context: AgentContext) -> (system: String, prompt: String) {
+        let (system, prompt) = recordsRequest(q, rule: rule, history: history, context: context)
+        return (Self.named(system, context), prompt)
+    }
+
+    private func recordsRequest(_ q: String, rule: AgentReply, history: [String], context: AgentContext) -> (system: String, prompt: String) {
         let past = history.isEmpty ? "" : "之前的对话：\n" + history.joined(separator: "\n") + "\n\n"
         switch rule.intent {
         case .planChange:
@@ -380,6 +527,15 @@ enum OnDeviceModel {
     }
 
     /// Why Apple Intelligence can't answer on this device right now.
+    /// A model error in words a user can read.
+    static func describe(_ error: Error) -> String {
+        let raw = "\(error)".lowercased()
+        if raw.contains("guardrail") || raw.contains("unsafe") || raw.contains("sensitive") { return "这个问题触发了 Apple 智能的内容限制" }
+        if raw.contains("context") { return "这次的内容太长" }
+        if raw.contains("rate") || raw.contains("concurrent") { return "Apple 智能正忙" }
+        return "暂时出错了"
+    }
+
     static var unavailableReason: String {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {

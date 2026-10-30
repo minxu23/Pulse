@@ -36,7 +36,10 @@ struct SleepCareView: View {
     private func summaryCard(_ s: SleepSummary, _ a: Analytics) -> some View {
         Card {
             CardHeader(title: "近 14 晚", subtitle: s.regularityText, icon: "bed.double.fill", color: Theme.sleep) {
-                Button("补记睡眠") { logSleep = true }.font(.subheadline).frame(minHeight: 44)
+                Button { logSleep = true } label: {
+                    Text("补记睡眠").frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
+                }
+                .font(.subheadline)
             }
             MetricRow {
                 MetricTile(label: "平均睡眠", value: s.avgMinutes.map { ($0 / 60).oneDecimal } ?? "—", unit: "小时", icon: "moon", color: Theme.sleep,
@@ -92,7 +95,7 @@ struct SleepCareView: View {
             CardHeader(title: "睡眠呼吸", subtitle: p.apneaStatus.label, icon: "lungs.fill", color: Theme.respiratory) {
                 Chip(text: c.level.label, color: color)
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Theme.Space.item), count: 3), spacing: Theme.Space.item) {
                 cueTile("打鼾", c.snoring, "zzz")
                 cueTile("憋醒", c.gasping, "exclamationmark.bubble")
                 cueTile("被观察到暂停", c.witnessed, "eye")
@@ -110,6 +113,8 @@ struct SleepCareView: View {
                         Image(systemName: "chevron.right").foregroundStyle(.tertiary)
                     }
                     .font(.subheadline)
+                    .frame(minHeight: Theme.Size.tap)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 if c.level == .notable || p.apneaStatus == .suspected || (p.stopBangAnswers.count == 8 && SleepAnalyzer.stopBang(p.stopBangAnswers).score >= 3) {
@@ -125,7 +130,11 @@ struct SleepCareView: View {
                             .buttonStyle(.bordered)
                     }
                     if let url = exportURL {
-                        ShareLink(item: url) { Label("分享 / 保存摘要", systemImage: "square.and.arrow.up") }.font(.subheadline).frame(minHeight: 44)
+                        ShareLink(item: url) {
+                            Label("分享 / 保存摘要", systemImage: "square.and.arrow.up")
+                                .frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
+                        }
+                        .font(.subheadline)
                     }
                 }
             }
@@ -138,14 +147,14 @@ struct SleepCareView: View {
     }
 
     private func cueTile(_ title: String, _ count: Int, _ icon: String) -> some View {
-        VStack(spacing: 4) {
+        VStack(spacing: Theme.Space.tight) {
             Image(systemName: icon).font(.caption).foregroundStyle(count > 0 ? .orange : .secondary)
             Text("\(count)").font(.headline).monospacedDigit()
             Text(title).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-        .background(Theme.subtle.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
+        .padding(Theme.Space.block)
+        .background(Theme.subtle.opacity(0.6), in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
     }
 
     private func treatmentCard(_ p: UserProfile, _ a: Analytics) -> some View {
@@ -172,9 +181,9 @@ struct SleepCareView: View {
                     .frame(height: 110)
                 }
                 Text("在晨起感受中记录每晚使用时长。面罩不适、漏气、口干等问题，请与睡眠医生或设备服务方沟通调整，而不是自行停用。")
-                    .font(.footnote).foregroundStyle(.secondary)
+                    .font(.subheadline).foregroundStyle(.secondary)
             }
-            Text("持续治疗后，可留意白天精力、血压与静息心率是否有变化，并在复诊时与医生讨论。").font(.footnote).foregroundStyle(.secondary)
+            Text("持续治疗后，可留意白天精力、血压与静息心率是否有变化，并在复诊时与医生讨论。").font(.subheadline).foregroundStyle(.secondary)
         }
     }
 
@@ -182,8 +191,11 @@ struct SleepCareView: View {
         let list = tasks.filter { $0.area == .sleep }
         return Card {
             CardHeader(title: "睡眠照护事项", subtitle: "复诊、检查、设备耗材更换等", icon: "list.clipboard") {
-                Button { addTask = true } label: { Image(systemName: "plus.circle").font(.title3).frame(width: 44, height: 44) }
-                    .accessibilityLabel("添加睡眠照护事项")
+                Button { addTask = true } label: {
+                    Image(systemName: "plus.circle").font(.title3)
+                        .frame(width: Theme.Size.tap, height: Theme.Size.tap).contentShape(Rectangle())
+                }
+                .accessibilityLabel("添加睡眠照护事项")
             }
             if list.isEmpty { Text("暂无事项").font(.subheadline).foregroundStyle(.secondary) }
             ForEach(list) { CareTaskRow(task: $0) }
@@ -203,9 +215,9 @@ struct StopBangView: View {
                 ForEach(SleepAnalyzer.stopBangQuestions) { q in
                     if q.id < answers.count {
                         Toggle(isOn: $answers[q.id]) {
-                            HStack(alignment: .top, spacing: 8) {
+                            HStack(alignment: .top, spacing: Theme.Space.item) {
                                 Text(q.letter).font(.headline).foregroundStyle(.secondary).frame(width: 18)
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                                     Text(q.text).font(.subheadline)
                                     if q.autoDerived { Text("已根据档案预填").font(.caption).foregroundStyle(.secondary) }
                                 }

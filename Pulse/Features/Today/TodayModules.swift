@@ -62,7 +62,7 @@ struct TodayModuleCard: View {
         .contextMenu {
             if let (r, a) = pending {
                 Button("记下可能的原因", systemImage: "square.and.pencil") { noting = r }
-                Button("问问 Health Agent", systemImage: "sparkles") { agentQuestion = a.question(at: r.time, causes: [], text: "") }
+                Button(AgentNameSettings.shared.phrase("问问"), systemImage: "sparkles") { agentQuestion = a.question(at: r.time, causes: [], text: "") }
                 Divider()
             }
             Button("从首页移除", systemImage: "minus.circle", role: .destructive, action: onRemove)
@@ -127,13 +127,13 @@ struct TodayModuleCard: View {
         let w = MarathonPlanner.week(profile: data.p, race: race, weekStart: data.day.weekStart)
         return ModuleCard(title: race.name.isEmpty ? "专项运动" : race.name, icon: "flag.checkered", color: Theme.activity,
                        subtitle: w.weeksToRace > 0 ? "距比赛 \(w.weeksToRace) 周 · \(w.phase.label)" : w.phase.label) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                     Text(w.weeklyKm.noDecimal).font(.system(.title, design: .rounded).weight(.semibold)).monospacedDigit()
                     Text("公里 · 本周跑量").font(.subheadline).foregroundStyle(.secondary)
-                    Spacer(minLength: 8)
+                    Spacer(minLength: Theme.Space.item)
                     Text("最长 \(w.longRunKm.noDecimal) 公里").font(.subheadline).foregroundStyle(.secondary)
                 }
-                Text(w.phase.focus).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                Text(w.phase.focus).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             } prompt: { EmptyView() } destination: { MarathonView() }
     }
 
@@ -159,16 +159,16 @@ struct ModuleTile: View {
             HStack(alignment: .top) {
                 Image(systemName: icon)
                     .font(.headline).foregroundStyle(.white)
-                    .frame(width: 40, height: 40)
-                    .background(color.gradient, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .frame(width: Theme.Size.tileIcon, height: Theme.Size.tileIcon)
+                    .background(color.gradient, in: RoundedRectangle(cornerRadius: Theme.Radius.tile(Theme.Size.tileIcon), style: .continuous))
                 Spacer()
                 if let flag {
                     StatusLabel(text: flag.text, icon: "exclamationmark.circle.fill", color: flag.color).font(.caption.weight(.semibold))
                 }
             }
-            Spacer(minLength: 10)
+            Spacer(minLength: Theme.Space.block)
             Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                 Text(metric).font(.system(.title2, design: .rounded).weight(.bold)).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.7)
                 Text(unit).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -178,12 +178,13 @@ struct ModuleTile: View {
                         .accessibilityLabel(abs(r) < 0.03 ? "平稳" : (r > 0 ? "上升" : "下降"))
                 }
             }
-            .padding(.top, 2)
-            Text(caption).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.85).padding(.top, 2)
+            .padding(.top, Theme.Space.hairline)
+            Text(caption).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+                .padding(.top, Theme.Space.hairline)
         }
-        .padding(14)
+        .padding(Theme.Space.cardPadding)
         .frame(maxWidth: .infinity, minHeight: 156, alignment: .topLeading)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 }
@@ -200,16 +201,17 @@ struct GlucoseOutlookCard: View {
         let now = Date.app
         let points = vitals.filter { $0.time > now.adding(days: -15) }.map(\.point)
         if let o = GlucoseOutlook.make(vitals: points, meals: meals, profile: p, now: now) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: Theme.Space.block) {
                 CardTitle("未来 1 小时", detail: "按最近的变化\(o.meal != nil ? "和这一餐" : "")推算")
                 GlucoseHourChart(history: NextHourForecaster.cgm(points).filter { $0.time > o.forecast.from.addingTimeInterval(-3 * 3600) },
                                  forecast: o.forecast, low: p.glucoseLow, high: p.glucoseHigh)
                 Label {
-                    Text(o.forecast.message).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                    Text(o.forecast.message).fixedSize(horizontal: false, vertical: true)
                 } icon: {
                     Image(systemName: o.forecast.alert != nil ? "exclamationmark.triangle.fill" : "clock.arrow.circlepath")
                         .foregroundStyle(o.forecast.alert != nil ? Color.orange : Color.secondary)
                 }
+                .font(.subheadline)
                 Text(NextHourForecaster.caveat).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             .cardSurface()
@@ -233,24 +235,28 @@ struct AbnormalRecallCard: View {
         let readings = vitals.filter { $0.kind == kind && $0.time > now.adding(days: -2) }
         Group {
             if let (r, a) = AbnormalRecall.pending(readings, profile: p, now: now) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Theme.Space.block) {
                     StatusLabel(text: "\(TodayModuleCard.when(r.time)) \(a.title) \(a.valueText)", icon: "exclamationmark.circle.fill",
                                 color: a.severe ? .red : .orange)
                         .font(.headline)
                     Text(a.firstLine ?? "回想一下之前发生了什么，记下来，下次更容易找到规律。")
                         .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    HStack(spacing: 12) {
+                    HStack(spacing: Theme.Space.item) {
                         Button("记下可能的原因") { noting = r }.buttonStyle(.bordered)
-                        Button("问问 Health Agent") { agentQuestion = a.question(at: r.time, causes: [], text: "") }.buttonStyle(.borderless)
+                        Button { agentQuestion = a.question(at: r.time, causes: [], text: "") } label: {
+                            Text(AgentNameSettings.shared.phrase("问问")).frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.borderless)
                         Spacer(minLength: 0)
                     }
                     .font(.subheadline.weight(.semibold))
                 }
                 .cardSurface()
             } else if let r = AbnormalRecall.noted(readings, profile: p, now: now) {
+                // The user's own note, of any length: a two-line preview.
                 Label("\(TodayModuleCard.when(r.time)) 已记下：\(r.note)", systemImage: "note.text")
                     .font(.footnote).foregroundStyle(.secondary).lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, Theme.Space.tight)
             }
         }
         .sheet(item: $noting) { r in
@@ -285,14 +291,17 @@ private struct ModuleCard<Content: View, Prompt: View, Destination: View>: View 
     @ViewBuilder var destination: Destination
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             NavigationLink { destination } label: {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 10) {
-                        Image(systemName: icon).font(.subheadline.weight(.semibold)).foregroundStyle(color).frame(width: 22)
-                        Text(title).font(.headline)
+                VStack(alignment: .leading, spacing: Theme.Space.block) {
+                    HStack(spacing: Theme.Space.item) {
+                        HStack(spacing: Theme.Space.iconGap) {
+                            Image(systemName: icon).imageScale(.small).foregroundStyle(color)
+                            Text(title)
+                        }
+                        .font(.headline)
                         Text(subtitle).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
-                        Spacer(minLength: 4)
+                        Spacer(minLength: Theme.Space.tight)
                         Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
                     }
                     content
@@ -368,7 +377,7 @@ struct AbnormalNoteForm: View {
                     Button {
                         if on { picked.removeAll { $0 == c } } else { picked.append(c) }
                     } label: {
-                        HStack(spacing: 12) {
+                        HStack(spacing: Theme.Space.block) {
                             Image(systemName: on ? "checkmark.circle.fill" : "circle").font(.title3)
                                 .foregroundStyle(on ? Theme.accent : Color.secondary.opacity(0.5))
                             Text(c).foregroundStyle(.primary)
@@ -383,7 +392,7 @@ struct AbnormalNoteForm: View {
             } header: {
                 Text("之前发生了什么？")
             } footer: {
-                Text("记下来的原因会作为这次读数的备注，复盘和 Health Agent 都能参考。只是你的回想，不代表确定的原因。")
+                Text(AgentNameSettings.shared.phrase("记下来的原因会作为这次读数的备注，复盘和", "都能参考。只是你的回想，不代表确定的原因。"))
             }
             Section {
                 Button {
@@ -401,7 +410,7 @@ struct AbnormalNoteForm: View {
                         if !note.isEmpty { reading.note = note; try? ctx.save() }
                         onAsk(abnormal.question(at: reading.time, causes: picked, text: text))
                     } label: {
-                        Label("和 Health Agent 一起分析", systemImage: "sparkles").frame(maxWidth: .infinity)
+                        Label(AgentNameSettings.shared.phrase("和", "一起分析"), systemImage: "sparkles").frame(maxWidth: .infinity)
                     }
                 }
             }

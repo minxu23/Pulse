@@ -114,7 +114,7 @@ struct WeatherPlanCard: View {
         let advice = WeatherPlanner.advice(plan: context.plan, forecast: store.days, now: context.now, profile: context.profile)
         let signature = context.plan.filter { $0.day >= context.now.startOfDay }.map { "\($0.day.timeIntervalSince1970)\($0.title)\($0.minutes)\($0.intensity)" }.joined()
             + "|\(store.days.count)"
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("天气", detail: store.sourceName.isEmpty ? nil : store.sourceName)
             if days.isEmpty {
                 Text(store.unavailable ?? "正在获取天气预报…").font(.subheadline).foregroundStyle(.secondary)
@@ -122,7 +122,7 @@ struct WeatherPlanCard: View {
                 HStack(spacing: 0) {
                     ForEach(days) { d in
                         let training = context.plan.contains { $0.day == d.day && WeatherPlanner.isOutdoor($0) }
-                        VStack(spacing: 4) {
+                        VStack(spacing: Theme.Space.tight) {
                             Text(d.day.isSameDay(context.now) ? "今天" : Weekday.name(d.day.weekday))
                                 .font(.caption.weight(training ? .semibold : .regular))
                                 .foregroundStyle(training ? Color.primary : Color.secondary)
@@ -143,8 +143,10 @@ struct WeatherPlanCard: View {
                 } else if !advice.notes.isEmpty {
                     Divider()
                     ForEach(advice.notes, id: \.self) { n in
-                        Label { Text(n).font(.subheadline).fixedSize(horizontal: false, vertical: true) }
+                        // The glyph takes the sentence's size (the inline label style makes it a little smaller).
+                        Label { Text(n).fixedSize(horizontal: false, vertical: true) }
                             icon: { Image(systemName: "cloud.sun").foregroundStyle(.secondary) }
+                            .font(.subheadline)
                     }
                 } else {
                     Text("这周的户外训练日天气都合适，计划不用调整。").font(.subheadline).foregroundStyle(.secondary)

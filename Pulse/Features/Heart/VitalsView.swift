@@ -18,7 +18,7 @@ struct VitalsView: View {
         let bp = points.filter { $0.kind == .bloodPressure }
         let glucose = points.filter { $0.kind == .glucose }
         ScreenScroll {
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Space.item) {
                 addButton("血压", "gauge.with.dots.needle.33percent") { logKind = .bloodPressure }
                 addButton("血糖", "drop.fill") { logKind = .glucose }
                 addButton("其他", "plus") { logKind = .vital }
@@ -46,9 +46,10 @@ struct VitalsView: View {
         Button(action: action) {
             Label("记录\(title)", systemImage: icon)
                 .font(.subheadline.weight(.medium))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(.vertical, Theme.Space.item)
+                .frame(maxWidth: .infinity, minHeight: Theme.Size.tap)
+                .contentShape(Rectangle())
+                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
                 .foregroundStyle(Theme.accent)
         }
         .buttonStyle(.plain)
@@ -113,7 +114,7 @@ struct VitalsView: View {
                         Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
                     }
                     if let v = last {
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                             Text(v.value.oneDecimal).font(.system(.title, design: .rounded).weight(.semibold)).monospacedDigit()
                             Text("mmol/L").font(.subheadline).foregroundStyle(.secondary)
                             Text(v.time.isSameDay(.app) ? Clock.text(v.time.minutesOfDay) : v.time.formatted(.dateTime.month().day()))
@@ -158,7 +159,7 @@ struct VitalsView: View {
                                          forecast: f, low: p.glucoseLow, high: p.glucoseHigh)
                         Label("未来 1 小时：" + f.message, systemImage: f.alert != nil ? "exclamationmark.triangle.fill" : "clock.arrow.circlepath")
                             .font(.footnote).foregroundStyle(f.alert != nil ? Color.primary : Color.secondary)
-                        Text(NextHourForecaster.caveat).font(.caption).foregroundStyle(.secondary)
+                        Text(NextHourForecaster.caveat).font(.footnote).foregroundStyle(.secondary)
                     }
                     MetricRow {
                         MetricTile(label: "14 天平均", value: m.mean.map { $0.oneDecimal } ?? "—", unit: "mmol/L", icon: "equal.circle", color: Theme.glucose)
@@ -223,7 +224,9 @@ struct VitalsView: View {
         let shown = vitals.filter { $0.source != .cgm && !($0.source == .demo && $0.kind == .glucose) }.prefix(8)
         return Card {
             CardHeader(title: "最近记录", icon: "list.bullet", color: .secondary) {
-                NavigationLink("全部") { VitalsHistoryView() }.font(.subheadline).frame(minHeight: 44)
+                NavigationLink { VitalsHistoryView() } label: {
+                    Text("全部").font(.subheadline).frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
+                }
             }
             if shown.isEmpty { Text("暂无记录").foregroundStyle(.secondary).font(.subheadline) }
             ForEach(Array(shown)) { v in VitalRow(v: v) }
@@ -234,10 +237,10 @@ struct VitalsView: View {
 struct VitalRow: View {
     let v: VitalReading
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: v.kind.icon).foregroundStyle(.secondary).frame(width: 24)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
+        HStack(spacing: Theme.Space.iconGap) {
+            Image(systemName: v.kind.icon).font(.subheadline).imageScale(.small).foregroundStyle(.secondary).frame(width: 24)
+            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
+                HStack(spacing: Theme.Space.tight) {
                     Text(v.kind.label).font(.subheadline)
                     Text(v.valueText).font(.subheadline.weight(.semibold)).monospacedDigit()
                     Text(v.kind.unit).font(.caption).foregroundStyle(.secondary)
@@ -245,7 +248,7 @@ struct VitalRow: View {
                 Text([v.time.formatted(.dateTime.month().day().hour().minute()), v.context.label,
                       v.medsTaken.map { $0 ? "已服药" : "未服药" } ?? "", v.note]
                     .filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    .font(.footnote).foregroundStyle(.secondary).lineLimit(2)
             }
             Spacer()
             Text(v.source.label).font(.caption).foregroundStyle(.secondary)
@@ -295,11 +298,11 @@ private struct ForecastSection: View {
         let ahead = [forecast.latest] + forecast.weeks.filter(\.projected)
         let values = forecast.weeks.flatMap { [$0.low, $0.high] } + [target].compactMap { $0 }
         let lo = (values.min() ?? 0), hi = (values.max() ?? 1), pad = max(1, (hi - lo) * 0.15)
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+        VStack(alignment: .leading, spacing: Theme.Space.item) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.item) {
                 Text("趋势预测").font(.subheadline.weight(.semibold))
                 Text("到 \(forecast.end.start.formatted(.dateTime.month().day())) 那周").font(.footnote).foregroundStyle(.secondary)
-                Spacer(minLength: 8)
+                Spacer(minLength: Theme.Space.item)
                 direction.font(.footnote)
             }
             Chart {

@@ -112,7 +112,7 @@ struct AlcoholLogForm: View {
             DatePicker("日期", selection: $date, in: ...Date.app, displayedComponents: .date)
             Section {
                 Stepper("当天合计 \(units.oneDecimal) 单位", value: $units, in: 0...20, step: 0.5)
-                FlowLayout(spacing: 8) {
+                FlowLayout(spacing: Theme.Space.item) {
                     ForEach([("啤酒 330ml", 1.3), ("葡萄酒 150ml", 1.5), ("白酒 50ml", 2.0), ("烈酒 30ml", 1.0)], id: \.0) { item in
                         Button("+ \(item.0)") { units += item.1 }.buttonStyle(.bordered)
                     }
@@ -183,13 +183,13 @@ struct WaterLogForm: View {
         Form {
             DatePicker("日期", selection: $date, in: ...Date.app, displayedComponents: .date)
             Section {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: Theme.Space.block) {
+                    HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                         Text("\(ml)").font(.largeTitle.bold()).monospacedDigit()
                         Text("/ \(limited ? "上限 " : "")\(target) ml").foregroundStyle(.secondary)
                     }
                     ProgressBar(value: Double(ml) / Double(target), color: limited && ml > target ? .orange : .cyan)
-                    HStack {
+                    HStack(spacing: Theme.Space.item) {
                         ForEach([150, 250, 500], id: \.self) { v in
                             Button("+\(v)") { ml += v }.buttonStyle(.bordered).tint(Theme.accent)
                         }
@@ -197,7 +197,7 @@ struct WaterLogForm: View {
                         Button("撤销") { ml = max(0, ml - 250) }.buttonStyle(.borderless)
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, Theme.Space.tight)
             } footer: {
                 Text(limited ? (ml > target ? "已超过医生定的 \(target) ml 上限，今天不再额外喝水；留意脚踝是否浮肿，明早称一下体重。" : "限水中：汤、粥、水果里的水分也算在内。")
                              : "运动日、炎热天气需要更多水分；睡前 1 小时少量饮水即可，减少夜醒。")
@@ -348,13 +348,13 @@ extension DietLogForm {
     }
 
     private func foodChips(_ foods: [String], _ chosen: Binding<Set<String>>) -> some View {
-        FlowLayout(spacing: 8) {
+        FlowLayout(spacing: Theme.Space.item) {
             ForEach(foods, id: \.self) { f in
                 ToggleChip(text: f, isOn: Binding(get: { chosen.wrappedValue.contains(f) },
                                                   set: { on in if on { chosen.wrappedValue.insert(f) } else { chosen.wrappedValue.remove(f) } }))
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Theme.Space.tight)
     }
 }
 
@@ -404,9 +404,9 @@ struct LabLogForm: View {
     }
 
     private func row(_ k: LabKind, _ p: ProfileSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                     Text(k.label)
                     Text(k.unit).font(.footnote).foregroundStyle(.secondary)
                 }
@@ -484,14 +484,14 @@ struct ContextLogForm: View {
         Form {
             DatePicker("日期", selection: $date, in: ...Date.app, displayedComponents: .date)
             Section {
-                FlowLayout(spacing: 8) {
+                FlowLayout(spacing: Theme.Space.item) {
                     ForEach(ContextTag.pickable) { t in
                         ToggleChip(text: t.label, icon: t.icon, isOn: Binding(
                             get: { tags.contains(t) },
                             set: { if $0 { tags.insert(t) } else { tags.remove(t) } }))
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, Theme.Space.tight)
             } header: {
                 Text("当天的特殊状况")
             } footer: {
@@ -704,12 +704,12 @@ struct VitalLogForm: View {
                     Label(r.note, systemImage: "note.text").foregroundStyle(.secondary)
                 }
                 Button { agentQuestion = a.question(at: r.time, causes: [], text: r.note) } label: {
-                    Label("问问 Health Agent 可能的原因", systemImage: "sparkles")
+                    Label(AgentNameSettings.shared.phrase("问问", "可能的原因"), systemImage: "sparkles")
                 }
             } header: {
                 Text("\(a.title)，回想一下原因")
             } footer: {
-                Text("记下当时的情况，复盘和 Health Agent 会参考，更容易找到规律。")
+                Text(AgentNameSettings.shared.phrase("记下当时的情况，复盘和", "会参考，更容易找到规律。"))
             }
             .sheet(item: Binding(get: { agentQuestion.map(AgentPrompt.init) }, set: { agentQuestion = $0?.text })) { q in
                 HealthAgentChatView(initialQuestion: q.text)
@@ -868,17 +868,17 @@ struct WorkoutLogForm: View {
                 Text("用力程度 × 时长用于估算训练负荷，进而影响准备度判断。")
             }
             Section {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.item) {
                     ForEach(WorkoutFeeling.allCases) { f in
                         let on = feeling == f
                         Button { feeling = on ? nil : f } label: {
-                            VStack(spacing: 4) {
+                            VStack(spacing: Theme.Space.tight) {
                                 Image(systemName: f.icon)
                                 Text(f.label).font(.caption)
                             }
-                            .frame(maxWidth: .infinity, minHeight: 50)
+                            .frame(maxWidth: .infinity, minHeight: Theme.Size.tap + Theme.Space.item)
                             .foregroundStyle(on ? Color.white : .primary)
-                            .background(on ? (f == .unwell ? Color.red : Color.accentColor) : Theme.subtle, in: RoundedRectangle(cornerRadius: 10))
+                            .background(on ? (f == .unwell ? Color.red : Color.accentColor) : Theme.subtle, in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
                         }
                         .buttonStyle(.plain)
                     }

@@ -7,18 +7,33 @@ struct HealthAgentChatView: View {
     var startListening = false
     @Environment(\.dismiss) private var dismiss
     @State private var convo = AgentConversation.shared
+    @State private var cloud = CloudModelSettings.shared
     @State private var confirmClear = false
+    @State private var showModelSettings = false
+    @State private var renaming = false
+    private var names: AgentNameSettings { .shared }
 
     var body: some View {
         CalmNavigationStack {
             AgentContextReader { ctx in
                 AgentChatContent(context: ctx, initialQuestion: initialQuestion, startListening: startListening)
             }
-            .navigationTitle("Health Agent")
+            .navigationTitle(names.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Menu {
+                        // 回答方式: switch here; setting up the cloud model is on its own page.
+                        Section("回答方式") {
+                            ForEach(AnswerMode.allCases) { m in
+                                Button { cloud.mode = m } label: {
+                                    Label(m.label + (cloud.canChoose(m) ? "" : "（需先设置）"), systemImage: cloud.mode == m ? "checkmark" : m.icon)
+                                }
+                                .disabled(!cloud.canChoose(m))
+                            }
+                            Button { showModelSettings = true } label: { Label("设置云端模型…", systemImage: "gearshape") }
+                        }
+                        Button { renaming = true } label: { Label(names.custom == nil ? "取个名字…" : "改名字…", systemImage: "pencil") }
                         Toggle(isOn: $convo.speakReplies) { Label("朗读回复", systemImage: "speaker.wave.2") }
                         Button(role: .destructive) { confirmClear = true } label: { Label("清空对话", systemImage: "trash") }
                             .disabled(convo.messages.isEmpty)
@@ -29,6 +44,8 @@ struct HealthAgentChatView: View {
                     Button("完成") { convo.stopSpeaking(); dismiss() }.fontWeight(.semibold)
                 }
             }
+            .navigationDestination(isPresented: $showModelSettings) { CloudModelSettingsView() }
+            .agentRenameAlert(isPresented: $renaming)
             .confirmationDialog("清空当前对话？", isPresented: $confirmClear, titleVisibility: .visible) {
                 Button("清空对话", role: .destructive) { convo.clear() }
             }
@@ -54,7 +71,7 @@ private struct AgentChatContent: View {
         ScrollViewReader { proxy in
             ScrollView {
                 // Not lazy: adopting a plan re-renders the context, and a lazy stack would lose its place.
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: Theme.Space.cardGap) {
                     AgentIntro(context: context, compact: convo.messages.contains { !$0.withdrawn }, onAsk: { ask($0) })
                     ForEach(convo.messages) { m in
                         AgentMessageView(message: m, context: context, isLast: m.id == convo.messages.last?.id,
@@ -68,7 +85,9 @@ private struct AgentChatContent: View {
                     }
                     Color.clear.frame(height: 1).id("bottom")
                 }
-                .padding(16)
+                // Side margins come from the app's page margins; only the vertical inset is set here.
+                .padding(.vertical, Theme.Space.block)
+                .labelStyle(.inline)
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Theme.page)
@@ -97,7 +116,7 @@ private struct AgentChatContent: View {
             Button("撤回，保留调整") { withAnimation { convo.withdraw(m.id) } }
             Button("取消", role: .cancel) {}
         } message: { _ in
-            Text("撤回后，问题和回答都从对话中移除，Health Agent 也不再参考它们。")
+            Text(AgentNameSettings.shared.phrase("撤回后，问题和回答都从对话中移除，", "也不再参考它们。"))
         }
     }
 
@@ -141,22 +160,22 @@ private struct AgentChatContent: View {
     }
 
     private var inputBar: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: Theme.Space.tight) {
             if speech.isRecording {
-                HStack(spacing: 8) {
+                HStack(spacing: Theme.Space.iconGap) {
                     Image(systemName: "waveform").symbolEffect(.variableColor.iterative, options: .repeating)
+                        .font(.footnote).imageScale(.small)
                         .foregroundStyle(.red)
                     Text("正在听…说完后轻点发送").font(.footnote).foregroundStyle(.secondary)
                     Spacer()
                     if speech.onDevice { Text("设备端识别").font(.caption).foregroundStyle(.secondary) }
                 }
-                .padding(.horizontal, 6)
                 .accessibilityElement(children: .combine)
             }
             if let err = speech.errorMessage {
-                Text(err).font(.footnote).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 6)
+                Text(err).font(.footnote).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
             }
-            HStack(alignment: .bottom, spacing: 8) {
+            HStack(alignment: .bottom, spacing: Theme.Space.item) {
                 Button {
                     focused = false
                     usedVoice = true
@@ -165,8 +184,9 @@ private struct AgentChatContent: View {
                     Image(systemName: speech.isRecording ? "stop.fill" : "mic.fill")
                         .font(.body.weight(.semibold))
                         .foregroundStyle(speech.isRecording ? Color.white : Theme.accent)
-                        .frame(width: 44, height: 44)
+                        .frame(width: Theme.Size.tap, height: Theme.Size.tap)
                         .background(speech.isRecording ? Color.red : Theme.accent.opacity(0.12), in: Circle())
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(speech.isRecording ? "停止听写" : "语音提问")
@@ -176,22 +196,24 @@ private struct AgentChatContent: View {
                     .focused($focused)
                     .submitLabel(.send)
                     .onSubmit(submit)
-                    .padding(.horizontal, 14).padding(.vertical, 11)
-                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .padding(.horizontal, Theme.Space.block).padding(.vertical, Theme.Space.item)
+                    .frame(minHeight: Theme.Size.tap)
+                    // Half the tap height: a pill on one line, level with the round buttons beside it.
+                    .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.Size.tap / 2, style: .continuous))
 
                 Button(action: submit) {
                     Image(systemName: "arrow.up.circle.fill").font(.largeTitle)
                         .foregroundStyle(canSend ? Theme.accent : Color.gray.opacity(0.4))
-                        .frame(width: 44, height: 44)
+                        .frame(width: Theme.Size.tap, height: Theme.Size.tap)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
                 .accessibilityLabel("发送")
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
+        .padding(.horizontal, Theme.Space.gutter)
+        .padding(.vertical, Theme.Space.item)
         .background(.bar)
     }
 
@@ -207,28 +229,41 @@ private struct AgentIntro: View {
     let compact: Bool
     var onAsk: (String) -> Void
 
+    /// Who answers, by the 回答方式 in effect.
+    private var modeLine: String {
+        let s = CloudModelSettings.shared
+        let model = OpenRouterModels.name(for: s.model) ?? s.model
+        let line: String
+        switch s.effectiveMode {
+        case .cloud: line = "全部云端 · 由云端模型 \(model) 根据你的数据回答，提问时发送数据摘要"
+        case .hybrid: line = "端云结合 · 涉及你记录的问题在本机回答；通用问题由 \(model) 回答，不发送你的数据"
+        case .onDevice:
+            line = AgentConversation.shared.usesOnDeviceModel ? "仅本机 · 由设备端 Apple 智能根据你的数据回答，数据不离开本机"
+                : "大模型不可用（\(AgentConversation.shared.noModelReason ?? "")）· 目前为规则分析"
+        }
+        return s.mode == s.effectiveMode ? line : line + "（「\(s.mode.label)」需要先在设置里完成连接测试）"
+    }
+
     var body: some View {
         let a = HealthAgent.assess(context)
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                AgentAvatar(size: compact ? 32 : 44)
-                VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
+            HStack(spacing: Theme.Space.block) {
+                AgentAvatar(size: compact ? Theme.Size.iconTile : Theme.Size.tileIcon)
+                VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                     Text("你好\(context.name == "你" ? "" : "，\(context.name)")").font(compact ? .headline : .title3.weight(.semibold))
-                    Text(CloudModelSettings.shared.isActive ? "由云端模型 \(CloudModelSettings.shared.model) 根据你的数据回答 · 提问时发送数据摘要"
-                         : (AgentConversation.shared.usesOnDeviceModel ? "由设备端 Apple 智能根据你的数据回答 · 数据不离开本机"
-                            : "大模型不可用（\(AgentConversation.shared.noModelReason ?? "")）· 目前为规则分析"))
-                        .font(.footnote).foregroundStyle(.secondary)
+                    Text(modeLine).font(.footnote).foregroundStyle(.secondary)
                 }
             }
             if !compact {
                 Text("\(a.headline)。我可以解释你的数据变化、回答疑问、按你的情况调整训练计划，也可以指导手表和 CGM 的使用。可以打字，也可以按麦克风说话。")
                     .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                FlowLayout(spacing: 8) {
+                FlowLayout(spacing: Theme.Space.item) {
                     ForEach(a.questions, id: \.self) { q in
-                        Button(q) { onAsk(q) }.buttonStyle(.bordered)
+                        Button { onAsk(q) } label: { Text(q).frame(minHeight: Theme.Size.borderedLabel) }
+                            .buttonStyle(.bordered)
                     }
                 }
-                Text("Health Agent 不做诊断，也不提供用药建议；紧急情况请拨打 120。")
+                Text(AgentNameSettings.shared.phrase("", "不做诊断，也不提供用药建议；紧急情况请拨打 120。"))
                     .font(.footnote).foregroundStyle(.secondary)
             }
         }
@@ -256,9 +291,9 @@ private struct AgentMessageView: View {
                 Spacer(minLength: 48)
                 Text(message.text)
                     .font(.body).foregroundStyle(.white)
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(Theme.accent, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .padding(.horizontal, Theme.Space.block).padding(.vertical, Theme.Space.item)
+                    .background(Theme.accent, in: RoundedRectangle(cornerRadius: Theme.Radius.bubble, style: .continuous))
+                    .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: Theme.Radius.bubble, style: .continuous))
                     .contextMenu {
                         Button { UIPasteboard.general.string = message.text } label: { Label("复制", systemImage: "doc.on.doc") }
                         Button(action: onWithdraw) {
@@ -272,10 +307,10 @@ private struct AgentMessageView: View {
             .accessibilityAction(named: "撤回", onWithdraw)
         } else {
             let hasBlocks = !message.blocks.isEmpty && !message.streaming
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 10) {
-                    AgentAvatar(size: 28)
-                    VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: Theme.Space.block) {
+                HStack(alignment: .top, spacing: Theme.Space.block) {
+                    AgentAvatar(size: Theme.Size.iconTile)
+                    VStack(alignment: .leading, spacing: Theme.Space.block) {
                         if message.text.isEmpty && message.streaming {
                             TypingDots()
                         } else {
@@ -287,15 +322,16 @@ private struct AgentMessageView: View {
                         }
                         if !hasBlocks { footer }
                     }
-                    .padding(14)
+                    .padding(Theme.Space.block)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.Radius.bubble, style: .continuous))
                 }
                 // Generated components get the full width; the actions follow them.
                 if hasBlocks {
                     AgentBlocksView(blocks: message.blocks, messageID: message.id, context: context, onSubmit: onFollowUp)
-                    VStack(alignment: .leading, spacing: 12) { footer }
-                        .padding(.leading, 38)
+                    // Under the bubble: the avatar's width plus its gap.
+                    VStack(alignment: .leading, spacing: Theme.Space.block) { footer }
+                        .padding(.leading, Theme.Size.iconTile + Theme.Space.block)
                 }
             }
         }
@@ -321,22 +357,24 @@ private struct AgentMessageView: View {
                 }
                 .buttonStyle(.bordered)
             }
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Space.item) {
                 Text(([message.engine == .onDevice ? "Apple 智能" : (message.engine == .cloud ? "云端 · \(CloudModelSettings.shared.model)"
-                        : (r.urgent ? "固定急救提示（不经过模型）" : "Pulse 规则分析（未经大模型）"))] + r.sources).joined(separator: " · "))
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                Spacer(minLength: 4)
+                        : (r.urgent ? "固定急救提示（不经过模型）" : "Pulse 规则分析（未经大模型）"))] + [message.privacy].compactMap { $0 } + r.sources).joined(separator: " · "))
+                    .font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                Spacer(minLength: Theme.Space.tight)
                 Button(action: onSpeak) {
                     Image(systemName: speaking ? "speaker.wave.2.fill" : "speaker.wave.2")
-                        .font(.subheadline).frame(width: 44, height: 44)
+                        .font(.subheadline).frame(width: Theme.Size.tap, height: Theme.Size.tap)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain).foregroundStyle(Theme.accent)
                 .accessibilityLabel(speaking ? "停止朗读" : "朗读这条回复")
             }
             if isLast && !r.followUps.isEmpty {
-                FlowLayout(spacing: 8) {
+                FlowLayout(spacing: Theme.Space.item) {
                     ForEach(r.followUps, id: \.self) { q in
-                        Button(q) { onFollowUp(q) }.buttonStyle(.bordered)
+                        Button { onFollowUp(q) } label: { Text(q).frame(minHeight: Theme.Size.borderedLabel) }
+                            .buttonStyle(.bordered)
                     }
                 }
             }
@@ -354,13 +392,15 @@ private struct WithdrawnNotice: View {
     var onEdit: () -> Void
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Space.tight) {
             Text("你撤回了一个问题").foregroundStyle(.secondary)
-            Button("重新编辑", action: onEdit).foregroundStyle(Theme.accent)
+            Button(action: onEdit) {
+                Text("重新编辑").frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
+            }
+            .foregroundStyle(Theme.accent)
         }
         .font(.footnote)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("你撤回了一个问题")
         .accessibilityAction(named: "重新编辑", onEdit)
@@ -369,11 +409,11 @@ private struct WithdrawnNotice: View {
 
 private struct TypingBubble: View {
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            AgentAvatar(size: 28)
+        HStack(alignment: .top, spacing: Theme.Space.block) {
+            AgentAvatar(size: Theme.Size.iconTile)
             TypingDots()
-                .padding(14)
-                .background(Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .padding(Theme.Space.block)
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.Radius.bubble, style: .continuous))
             Spacer()
         }
         .accessibilityLabel("正在分析")
@@ -391,7 +431,7 @@ private struct TypingDots: View {
 
 /// The agent's identity mark (decorative; not a status or interaction colour).
 struct AgentAvatar: View {
-    var size: CGFloat = 32
+    var size: CGFloat = Theme.Size.iconTile
     var body: some View {
         Image(systemName: "sparkles")
             .font(.system(size: size * 0.46, weight: .semibold)).foregroundStyle(.white)

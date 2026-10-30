@@ -43,17 +43,19 @@ struct AdjustPlanView: View {
                     Picker("可用时间", selection: $available) {
                         ForEach(timeOptions, id: \.self) { v in Text(v.map { "约 \($0) 分钟" } ?? "按计划").tag(v) }
                     }
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: Theme.Space.item) {
                         Text("肌肉酸痛").font(.subheadline)
                         RatingPicker(value: $soreness, range: 0...3, labels: ["无", "轻微", "明显", "严重"])
                     }
+                    .padding(.vertical, Theme.Space.tight)
                     if (soreness ?? 0) >= 2 {
                         Picker("部位", selection: $area) { ForEach(SorenessArea.allCases) { Text($0.label).tag($0) } }
                     }
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: Theme.Space.item) {
                         Text("此刻的精力").font(.subheadline)
                         RatingPicker(value: $energy, lowLabel: "很疲惫", highLabel: "充沛")
                     }
+                    .padding(.vertical, Theme.Space.tight)
                     Toggle("身体不适 / 生病", isOn: $ill)
                 }
 
@@ -62,13 +64,14 @@ struct AdjustPlanView: View {
                         Text("今天没有待完成的训练。").foregroundStyle(.secondary)
                     }
                     ForEach(result.proposals) { p in
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: Theme.Space.tight) {
                             if p.changed {
                                 Text(p.original.title).font(.caption).strikethrough().foregroundStyle(.secondary)
-                                HStack(alignment: .firstTextBaseline) {
-                                    Image(systemName: "arrow.turn.down.right").foregroundStyle(.secondary)
-                                    Text(p.countsAsDone ? "\(p.original.title)（已完成）" : p.title).font(.subheadline.weight(.semibold))
+                                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.iconGap) {
+                                    Image(systemName: "arrow.turn.down.right").imageScale(.small).foregroundStyle(.secondary)
+                                    Text(p.countsAsDone ? "\(p.original.title)（已完成）" : p.title)
                                 }
+                                .font(.subheadline.weight(.semibold))
                                 Text(p.countsAsDone ? "计为完成" : "\(p.minutes) 分钟 · \(p.intensity.label)")
                                     .font(.footnote).foregroundStyle(.secondary)
                                 ForEach(p.reasons, id: \.self) { r in
@@ -76,10 +79,10 @@ struct AdjustPlanView: View {
                                 }
                             } else {
                                 Text(p.title).font(.subheadline.weight(.semibold))
-                                Text("\(p.minutes) 分钟 · \(p.intensity.label) · 保持原计划").font(.caption).foregroundStyle(.secondary)
+                                Text("\(p.minutes) 分钟 · \(p.intensity.label) · 保持原计划").font(.footnote).foregroundStyle(.secondary)
                             }
                         }
-                        .padding(.vertical, 4)
+                        .padding(.vertical, Theme.Space.tight)
                     }
                     if let swap = result.swapSuggestion { Callout(kind: .insight, text: swap) }
                     ForEach(result.notes, id: \.self) { Callout(kind: .info, text: $0) }

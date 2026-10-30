@@ -29,14 +29,14 @@ struct ReviewView: View {
                     case .week: WeeklyReviewSection(context: ctx, onAsk: ask)
                     case .longTerm: LongTermReviewSection(context: ctx, onAsk: ask)
                     }
-                    Disclaimer(text: "复盘中的关联来自你的记录，可能受其他因素影响；只有经过个人验证或专业确认的才标记为「已确认」。Health Agent 不做诊断。")
+                    Disclaimer(text: AgentNameSettings.shared.phrase("复盘中的关联来自你的记录，可能受其他因素影响；只有经过个人验证或专业确认的才标记为「已确认」。", "不做诊断。"))
                 }
             }
             .safeAreaInset(edge: .top, spacing: 0) {
                 Picker("复盘范围", selection: $segment) { ForEach(Segment.allCases) { Text($0.rawValue).tag($0) } }
                     .pickerStyle(.segmented)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
+                    .padding(.horizontal, Theme.Space.gutter)
+                    .padding(.bottom, Theme.Space.item)
                     .background(.bar)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -60,33 +60,36 @@ struct ReviewView: View {
 struct AskAgentBar: View {
     let placeholder: String
     var onAsk: (String?, Bool) -> Void
+    /// The avatar with an item's space around it, so it sits concentric in the capsule's round end.
+    private let barHeight = Theme.Size.iconTile + 2 * Theme.Space.item
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Theme.Space.item) {
             Button { onAsk(nil, false) } label: {
-                HStack(spacing: 10) {
-                    AgentAvatar(size: 28)
+                HStack(spacing: Theme.Space.block) {
+                    AgentAvatar(size: Theme.Size.iconTile)
                     Text(placeholder).font(.body).foregroundStyle(.secondary).lineLimit(1)
                     Spacer(minLength: 0)
                 }
-                .padding(.leading, 8).padding(.trailing, 14)
-                .frame(minHeight: 48)
+                .padding(.leading, Theme.Space.item).padding(.trailing, Theme.Space.block)
+                .frame(minHeight: barHeight)
                 .background(Theme.card, in: Capsule())
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("问问 Health Agent")
+            .accessibilityLabel(AgentNameSettings.shared.phrase("问问"))
             Button { onAsk(nil, true) } label: {
                 Image(systemName: "mic.fill").font(.body.weight(.semibold)).foregroundStyle(Theme.accent)
-                    .frame(width: 48, height: 48)
+                    .frame(width: barHeight, height: barHeight)
                     .background(Theme.card, in: Circle())
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("语音提问")
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 14)
-        .padding(.bottom, 8)
+        .padding(.horizontal, Theme.Space.gutter)
+        .padding(.top, Theme.Space.block)
+        .padding(.bottom, Theme.Space.item)
         .background(LinearGradient(stops: [.init(color: Theme.page.opacity(0), location: 0), .init(color: Theme.page, location: 0.35)],
                                    startPoint: .top, endPoint: .bottom))
     }
@@ -98,33 +101,33 @@ struct ReviewByline: View {
     var onRetry: () -> Void
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Space.iconGap) {
             switch state {
             case .written(_, let by)?:
-                Image(systemName: "sparkles").foregroundStyle(.secondary).accessibilityHidden(true)
+                Image(systemName: "sparkles").imageScale(.small).foregroundStyle(.secondary).accessibilityHidden(true)
                 Text(by).foregroundStyle(.secondary)
-                Spacer(minLength: 8)
+                Spacer(minLength: Theme.Space.item)
                 retry("重写")
             case .rules(let reason)?:
-                Image(systemName: "doc.text").foregroundStyle(.secondary).accessibilityHidden(true)
+                Image(systemName: "doc.text").imageScale(.small).foregroundStyle(.secondary).accessibilityHidden(true)
                 Text(reason).foregroundStyle(.secondary)
-                Spacer(minLength: 8)
+                Spacer(minLength: Theme.Space.item)
                 retry("重试")
             default:
                 ProgressView().controlSize(.small)
-                Text("Health Agent 正在根据你的记录撰写…").foregroundStyle(.secondary)
+                Text(AgentNameSettings.shared.phrase("", "正在根据你的记录撰写…")).foregroundStyle(.secondary)
                 Spacer(minLength: 0)
             }
         }
         .font(.footnote)
-        .frame(minHeight: 32)
+        // As tall as the retry button in every state, so the card does not jump when the text is written.
+        .frame(minHeight: Theme.Size.tap)
     }
 
     private func retry(_ title: String) -> some View {
-        Button(title, action: onRetry)
+        Button(action: onRetry) { textLink(title, minWidth: Theme.Size.tap) }
             .buttonStyle(.borderless)
             .font(.footnote.weight(.semibold))
-            .frame(minWidth: 44, minHeight: 44)
     }
 }
 
@@ -140,11 +143,14 @@ struct ReviewSummaryCard: View {
 
     var body: some View {
         let writing = byline == nil || byline == .writing
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.item) {
             Text(eyebrow).font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    if let glyph { Image(systemName: glyph.icon).foregroundStyle(glyph.color).accessibilityHidden(true) }
+            VStack(alignment: .leading, spacing: Theme.Space.item) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.iconGap) {
+                    if let glyph {
+                        Image(systemName: glyph.icon).font(.title3.weight(.semibold)).imageScale(.small)
+                            .foregroundStyle(glyph.color).accessibilityHidden(true)
+                    }
                     Text(headline).font(.title3.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
                 }
                 if !summary.isEmpty {
@@ -154,7 +160,7 @@ struct ReviewSummaryCard: View {
             .opacity(writing ? 0.4 : 1)
             .animation(.easeInOut(duration: 0.3), value: writing)
             .accessibilityElement(children: .combine)
-            Divider().padding(.top, 6)
+            Divider().padding(.top, Theme.Space.tight)
             // The retry button's 44 pt target reaches into the card's bottom padding.
             ReviewByline(state: byline, onRetry: onRetry).padding(.bottom, -10)
         }
@@ -173,6 +179,11 @@ enum CoachLedger {
         d["\(Int(week.timeIntervalSince1970))|\(id)"] = value
         UserDefaults.standard.set(d, forKey: key)
     }
+}
+
+/// Label of a text-only (borderless) action: the whole row height is its tap target.
+private func textLink(_ title: String, minWidth: CGFloat? = nil) -> some View {
+    Text(title).frame(minWidth: minWidth, minHeight: Theme.Size.tap).contentShape(Rectangle())
 }
 
 /// Category colour for a data glyph (Apple Health conventions).
@@ -248,22 +259,23 @@ struct WeeklyReviewSection: View {
             SectionTitle(title: "建议调整", subtitle: "采纳后立即生效")
             VStack(spacing: 0) {
                 ForEach(adopted) { p in
-                    if p.id != adopted.first?.id { Divider().padding(.leading, 40) }
+                    if p.id != adopted.first?.id { Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block) }
                     StatusLabel(.good("已采纳：\(p.title)")).font(.subheadline)
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .frame(maxWidth: .infinity, minHeight: Theme.Size.tap, alignment: .leading)
                 }
                 if proposals.isEmpty && adopted.isEmpty {
                     StatusLabel(.good("这周没有需要调整的地方，按现在的节奏继续。")).font(.subheadline)
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .frame(maxWidth: .infinity, minHeight: Theme.Size.tap, alignment: .leading)
                 }
                 ForEach(Array(proposals.enumerated()), id: \.element.id) { i, p in
-                    if i > 0 || !adopted.isEmpty { Divider().padding(.leading, 40) }
+                    if i > 0 || !adopted.isEmpty { Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block) }
                     ProposalRow(proposal: p, rationale: copy.items[safe: i], writing: writing,
                                 onAdopt: { apply(p, week: ws) },
                                 onDismiss: { CoachLedger.set(p.id, week: ws, "dismissed"); ledgerTick += 1 })
                 }
             }
-            .padding(.vertical, -4)
+            // The rows' own padding takes the place of the card's, so a row's text sits a card padding in.
+            .padding(.vertical, -Theme.Space.item)
             .cardSurface()
         }
 
@@ -296,7 +308,11 @@ struct WeeklyReviewSection: View {
         }
 
         let past = entries.filter { $0.periodStart < ws }
-        if !past.isEmpty { PastReviewsCard(entries: Array(past.prefix(3))) }
+        if !past.isEmpty {
+            // Past weeks are a group of their own, after this week's.
+            PastReviewsCard(entries: Array(past.prefix(3)))
+                .padding(.top, Theme.Space.section - Theme.Space.cardGap)
+        }
     }
 
     private func weekRange(_ ws: Date) -> String {
@@ -350,18 +366,22 @@ struct WeekSwitcher: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            Button(action: onPrev) { Image(systemName: "chevron.left").frame(width: 44, height: 44) }
-                .accessibilityLabel("上一周")
-            Spacer(minLength: 8)
-            VStack(spacing: 1) {
+            Button(action: onPrev) {
+                Image(systemName: "chevron.left").frame(width: Theme.Size.tap, height: Theme.Size.tap).contentShape(Rectangle())
+            }
+            .accessibilityLabel("上一周")
+            Spacer(minLength: Theme.Space.item)
+            VStack(spacing: Theme.Space.hairline) {
                 Text(title).font(.headline)
                 Text(subtitle).font(.footnote).foregroundStyle(.secondary)
             }
             .accessibilityElement(children: .combine)
-            Spacer(minLength: 8)
-            Button(action: onNext) { Image(systemName: "chevron.right").frame(width: 44, height: 44) }
-                .disabled(!canGoForward)
-                .accessibilityLabel("下一周")
+            Spacer(minLength: Theme.Space.item)
+            Button(action: onNext) {
+                Image(systemName: "chevron.right").frame(width: Theme.Size.tap, height: Theme.Size.tap).contentShape(Rectangle())
+            }
+            .disabled(!canGoForward)
+            .accessibilityLabel("下一周")
         }
         .font(.body.weight(.semibold))
     }
@@ -374,20 +394,22 @@ struct WeekNumbersCard: View {
 
     var body: some View {
         let rows = stride(from: 0, to: metrics.count, by: 2).map { Array(metrics[$0..<min($0 + 2, metrics.count)]) }
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
             CardTitle("关键数据", detail: "与上周同期比")
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
                     if i > 0 { Divider() }
-                    HStack(alignment: .top, spacing: 16) {
+                    // No tile behind the cells, so the columns sit a block apart.
+                    HStack(alignment: .top, spacing: Theme.Space.block) {
                         ForEach(row) { WeekMetricCell(metric: $0) }
                         if row.count == 1 { Color.clear.frame(maxWidth: .infinity, maxHeight: 1) }
                     }
-                    .padding(.vertical, 12)
+                    .padding(.vertical, Theme.Space.item)
                 }
             }
         }
-        .padding(.bottom, -8)
+        // The last row's padding stands in for the card's.
+        .padding(.bottom, -Theme.Space.item)
         .cardSurface()
     }
 }
@@ -397,17 +419,17 @@ struct WeekMetricCell: View {
 
     var body: some View {
         let m = metric
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
             Label {
                 Text(m.name).foregroundStyle(.secondary)
             } icon: {
                 Image(systemName: m.icon).foregroundStyle(dataColor(m.icon))
             }
-            .font(.footnote).lineLimit(1)
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
+            .font(.caption).lineLimit(1)
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                 Text(m.value).font(.system(.title2, design: .rounded).weight(.semibold)).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.7)
-                Text(m.unit).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                Text(m.unit).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             change.font(.footnote).lineLimit(1).minimumScaleFactor(0.85)
         }
@@ -454,15 +476,15 @@ struct WeekDaysCard: View {
         let shown = picked.flatMap { days.contains($0) ? $0 : nil } ?? (days.contains(today) ? today : days[6])
         let data = Dictionary(context.days.filter { days.contains($0.day) }.map { ($0.day, $0) }, uniquingKeysWith: { a, _ in a })
         let scale = Scale(days: days.filter { $0 <= today }.compactMap { data[$0] })
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("每一天", detail: name(shown, today: today))
             values(shown, today: today, day: data[shown])
             ZStack {
                 // The chosen day, behind the rows.
                 lane(days) { d in
-                    RoundedRectangle(cornerRadius: 10, style: .continuous).fill(d == shown ? Theme.subtle : Color.clear)
+                    RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous).fill(d == shown ? Theme.subtle : Color.clear)
                 }
-                VStack(spacing: 6) {
+                VStack(spacing: Theme.Space.item) {
                     row("训练", "checklist", Theme.activity, days) { d in training(d, today: today) }
                     row("睡眠", "bed.double.fill", Theme.sleep, days, bars: true) { d in
                         bar(d > today ? nil : data[d]?.sleepMinutes.map { $0 / 60 }, of: scale.sleepMax, color: Theme.sleep, future: d > today)
@@ -478,7 +500,7 @@ struct WeekDaysCard: View {
                             .lineLimit(1).minimumScaleFactor(0.8)
                     }
                 }
-                .padding(.vertical, 6)
+                .padding(.vertical, Theme.Space.item)
                 .accessibilityHidden(true)
                 // Tap a day to see its values.
                 lane(days) { d in
@@ -509,7 +531,7 @@ struct WeekDaysCard: View {
 
     /// Seven day cells after the label column.
     private func lane<Cell: View>(_ days: [Date], @ViewBuilder cell: @escaping (Date) -> Cell) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: Theme.Space.tight) {
             Color.clear.frame(width: labelWidth)
             ForEach(days, id: \.self) { d in cell(d).frame(maxWidth: .infinity) }
         }
@@ -520,10 +542,11 @@ struct WeekDaysCard: View {
                                  @ViewBuilder cell: @escaping (Date) -> Cell) -> some View {
         ZStack(alignment: bars ? .bottomLeading : .leading) {
             lane(days) { d in cell(d) }
-            HStack(spacing: 4) {
-                Image(systemName: icon).font(.caption).foregroundStyle(color)
-                Text(title).font(.footnote).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+            HStack(spacing: Theme.Space.iconGap) {
+                Image(systemName: icon).imageScale(.small).foregroundStyle(color)
+                Text(title).foregroundStyle(.secondary).lineLimit(1).fixedSize()
             }
+            .font(.footnote)
             .frame(width: labelWidth, alignment: .leading)
         }
         .frame(height: rowHeight)
@@ -570,9 +593,9 @@ struct WeekDaysCard: View {
             Text(items.map { $0.0 + $0.1 }.joined(separator: "；")).font(.subheadline).foregroundStyle(.secondary)
                 .frame(minHeight: 40, alignment: .topLeading)
         } else {
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: Theme.Space.item) {
                 ForEach(items, id: \.0) { label, value in
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         Text(label).font(.caption).foregroundStyle(.secondary)
                         Text(value).font(.subheadline.weight(.semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
                     }
@@ -608,7 +631,7 @@ struct WatchCard: View {
     let points: [AgentPoint]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
             CardTitle("需要关注")
             ForEach(points) { w in
                 if let d = w.destination {
@@ -618,20 +641,22 @@ struct WatchCard: View {
                 }
             }
         }
+        // The last row's padding stands in for the card's.
+        .padding(.bottom, -Theme.Space.item)
         .cardSurface()
     }
 
     private func row(_ w: AgentPoint, chevron: Bool) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange).frame(width: 28).accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .top, spacing: Theme.Space.block) {
+            Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange).frame(width: Theme.Size.iconTile).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 Text(w.title).font(.subheadline.weight(.semibold))
-                Text(w.detail).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text(w.detail).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            Spacer(minLength: 4)
+            Spacer(minLength: Theme.Space.tight)
             if chevron { Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary).padding(.top, 3) }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, Theme.Space.item)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
@@ -647,23 +672,23 @@ struct ProposalRow: View {
     var onDismiss: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Theme.Space.block) {
             Image(systemName: proposal.icon).font(.body.weight(.semibold)).foregroundStyle(.secondary)
-                .frame(width: 28).accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(proposal.title).font(.body.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+                .frame(width: Theme.Size.iconTile).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: Theme.Space.tight) {
+                Text(proposal.title).font(.subheadline.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
                 Text(rationale ?? proposal.rationale).font(.subheadline).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .opacity(writing ? 0.5 : 1)
-                HStack(spacing: 4) {
+                HStack(spacing: Theme.Space.item) {
                     Button(proposal.adoptLabel, action: onAdopt).buttonStyle(.bordered)
-                    Button("暂不", action: onDismiss).buttonStyle(.borderless).foregroundStyle(.secondary)
-                        .frame(minWidth: 56, minHeight: 44)
+                    Button(action: onDismiss) { textLink("暂不", minWidth: 56) }
+                        .buttonStyle(.borderless).foregroundStyle(.secondary)
                 }
                 .font(.subheadline.weight(.semibold))
             }
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, Theme.Space.item)
     }
 }
 
@@ -689,7 +714,7 @@ struct GuidedReflectionCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             // Each step replaces the last as a whole, so one question's rows never morph into the next one's.
             Group {
                 if index < steps.count {
@@ -706,10 +731,10 @@ struct GuidedReflectionCard: View {
     }
 
     @ViewBuilder private func question(_ step: ReflectionStep) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
             HStack(alignment: .firstTextBaseline) {
                 Text(step.question).font(.headline)
-                Spacer(minLength: 8)
+                Spacer(minLength: Theme.Space.item)
                 Text("\(index + 1)/\(steps.count)").font(.footnote).foregroundStyle(.secondary).monospacedDigit()
                     .accessibilityLabel("第 \(index + 1) 题，共 \(steps.count) 题")
             }
@@ -723,60 +748,61 @@ struct GuidedReflectionCard: View {
                 Button {
                     if on { answers[step.id, default: []].removeAll { $0 == o } } else { answers[step.id, default: []].append(o) }
                 } label: {
-                    HStack(spacing: 12) {
+                    HStack(spacing: Theme.Space.block) {
                         Image(systemName: on ? "checkmark.circle.fill" : "circle")
                             .font(.title3).foregroundStyle(on ? Theme.accent : Color.secondary.opacity(0.5))
+                            .frame(width: Theme.Size.iconTile)
                         Text(o).font(.body).foregroundStyle(.primary)
                         Spacer(minLength: 0)
                     }
-                    .frame(minHeight: 44)
+                    .frame(minHeight: Theme.Size.tap)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(on ? .isSelected : [])
-                Divider().padding(.leading, 36)
+                Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block)
             }
-            HStack(spacing: 12) {
-                Image(systemName: "pencil").font(.body).foregroundStyle(.secondary).frame(width: 24)
+            HStack(spacing: Theme.Space.block) {
+                Image(systemName: "pencil").font(.body).foregroundStyle(.secondary).frame(width: Theme.Size.iconTile)
                 TextField(step.id == "change" ? "其他，或说说原因（可选）" : "其他（可选）",
                           text: Binding(get: { own[step.id] ?? (step.id == "change" ? note : "") },
                                         set: { if step.id == "change" { note = $0 } else { own[step.id] = $0 } }),
                           axis: .vertical)
                     .lineLimit(1...3)
             }
-            .frame(minHeight: 44)
+            .frame(minHeight: Theme.Size.tap)
         }
-        HStack(spacing: 12) {
+        HStack(spacing: Theme.Space.item) {
             if index > 0 {
-                Button("上一步") { index -= 1 }.buttonStyle(.borderless)
+                Button { index -= 1 } label: { textLink("上一步") }.buttonStyle(.borderless)
             }
             Spacer()
             let answered = !collected[step.id, default: []].isEmpty || (step.id == "change" && !note.trimmingCharacters(in: .whitespaces).isEmpty)
             if answered {
                 Button(index == steps.count - 1 ? "完成" : "下一步") { index += 1 }.buttonStyle(.borderedProminent)
             } else {
-                Button("跳过") { index += 1 }.buttonStyle(.borderless).foregroundStyle(.secondary)
+                Button { index += 1 } label: { textLink("跳过") }.buttonStyle(.borderless).foregroundStyle(.secondary)
             }
         }
         .font(.subheadline.weight(.semibold))
-        .frame(minHeight: 44)
+        .frame(minHeight: Theme.Size.tap)
     }
 
     @ViewBuilder private var summary: some View {
         let draft = ReviewCoach.draft(brief: brief, answers: collected, note: note)
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
             Text("这周的复盘").font(.headline)
             Text("保存后，下周计划会参考你的回答。").font(.footnote).foregroundStyle(.secondary)
         }
         ReviewNotesView(summary: draft.summary, keep: draft.keep, change: draft.change, focus: draft.focus)
-        HStack(spacing: 12) {
-            Button("修改") { index = 0 }.buttonStyle(.borderless)
+        HStack(spacing: Theme.Space.item) {
+            Button { index = 0 } label: { textLink("修改") }.buttonStyle(.borderless)
             Spacer()
             Button { onSave(draft) } label: { Label("保存复盘", systemImage: "checkmark") }
                 .buttonStyle(.borderedProminent)
         }
         .font(.subheadline.weight(.semibold))
-        .frame(minHeight: 44)
+        .frame(minHeight: Theme.Size.tap)
     }
 }
 
@@ -788,9 +814,9 @@ private struct ReviewNotesView: View {
     let focus: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Space.item) {
             ForEach([("总结", summary), ("想保留", keep), ("想改变", change), ("下周重点", focus)].filter { !$0.1.isEmpty }, id: \.0) { item in
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                     Text(item.0).font(.footnote).foregroundStyle(.secondary)
                     Text(item.1).font(.subheadline).fixedSize(horizontal: false, vertical: true)
                 }
@@ -806,9 +832,9 @@ struct SavedReviewCard: View {
     var onRedo: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle(title: "这周的复盘", detail: "已保存") {
-                Button("重新复盘", action: onRedo).buttonStyle(.borderless).font(.subheadline).frame(minHeight: 44)
+                Button(action: onRedo) { textLink("重新复盘") }.buttonStyle(.borderless).font(.subheadline)
             }
             ReviewNotesView(summary: entry.summary, keep: entry.keep, change: entry.change, focus: entry.nextFocus)
         }
@@ -828,8 +854,8 @@ struct NextWeekPlanCard: View {
 
     var body: some View {
         let trainings = plan.sessions.filter { $0.kind.isTraining }
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
+            HStack(alignment: .top, spacing: Theme.Space.item) {
                 stat("训练", "\(trainings.count) 次")
                 stat("总时长", "\(trainings.map(\.minutes).reduce(0, +)) 分钟")
                 stat("有氧目标", plan.targetMinutes == currentTarget ? "\(plan.targetMinutes) 分钟" : "\(currentTarget) → \(plan.targetMinutes) 分钟")
@@ -839,19 +865,19 @@ struct NextWeekPlanCard: View {
                     Divider()
                     ForEach(Array(trainings.enumerated()), id: \.offset) { i, s in
                         session(s)
-                        if i < trainings.count - 1 { Divider().padding(.leading, 80) }
+                        if i < trainings.count - 1 { Divider().padding(.leading, dayColumn + iconColumn + 2 * Theme.Space.item) }
                     }
                     Divider()
                 }
             }
             if !plan.changes.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: Theme.Space.item) {
                     Text("有哪些变化").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
                     ForEach(plan.changes) { c in
-                        HStack(alignment: .top, spacing: 10) {
+                        HStack(alignment: .top, spacing: Theme.Space.item) {
                             Image(systemName: c.icon).font(.footnote).foregroundStyle(.secondary).frame(width: 20).padding(.top, 2)
                                 .accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                                 Text(c.title).font(.subheadline.weight(.semibold))
                                 Text(c.detail).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                             }
@@ -861,17 +887,17 @@ struct NextWeekPlanCard: View {
                 }
             }
             if applied {
-                HStack(spacing: 10) {
+                HStack(spacing: Theme.Space.item) {
                     StatusLabel(.good("已应用到下周计划")).font(.subheadline)
                     Spacer()
-                    Button("重新生成", action: onApply).buttonStyle(.borderless).font(.subheadline).frame(minHeight: 44)
+                    Button(action: onApply) { textLink("重新生成") }.buttonStyle(.borderless).font(.subheadline)
                 }
                 NavigationLink { WeeklyPlanView(startOnNextWeek: true).navigationTitle("运动计划").navigationBarTitleDisplayMode(.inline).calmStyle() } label: {
                     NavRowLabel(icon: "calendar", title: "在计划中查看下周")
                 }
                 .buttonStyle(.plain)
             } else {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Theme.Space.item) {
                     Button("应用到下周计划", action: onApply)
                         .buttonStyle(.borderedProminent)
                         .font(.subheadline.weight(.semibold))
@@ -883,29 +909,34 @@ struct NextWeekPlanCard: View {
         .cardSurface()
     }
 
+    /// Columns of a session row: the weekday and the kind glyph, so titles line up down the list.
+    private let dayColumn: CGFloat = 36
+    private let iconColumn: CGFloat = 24
+
     /// One session: the day, what it is, and how long and hard on the right where the eye can run down them.
     private func session(_ s: PlannedSession) -> some View {
-        HStack(spacing: 10) {
-            Text(Weekday.name(s.weekday)).font(.subheadline.weight(.semibold)).frame(width: 36, alignment: .leading)
-            Image(systemName: s.kind.icon).foregroundStyle(Theme.activity).frame(width: 24).accessibilityHidden(true)
-            HStack(spacing: 4) {
+        HStack(spacing: Theme.Space.item) {
+            Text(Weekday.name(s.weekday)).font(.subheadline.weight(.semibold)).frame(width: dayColumn, alignment: .leading)
+            Image(systemName: s.kind.icon).font(.subheadline).imageScale(.small).foregroundStyle(Theme.activity)
+                .frame(width: iconColumn).accessibilityHidden(true)
+            HStack(spacing: Theme.Space.iconGap) {
                 Text(s.title).font(.subheadline).fixedSize(horizontal: false, vertical: true)
                 if s.isKey {
                     Image(systemName: "star.fill").font(.caption).foregroundStyle(.yellow).accessibilityLabel("重点")
                 }
             }
-            Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 1) {
+            Spacer(minLength: Theme.Space.item)
+            VStack(alignment: .trailing, spacing: Theme.Space.hairline) {
                 Text("\(s.minutes) 分钟").font(.subheadline).monospacedDigit()
                 Text(s.intensity.label).font(.caption).foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 9)
+        .padding(.vertical, Theme.Space.item)
         .accessibilityElement(children: .combine)
     }
 
     private func stat(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Theme.Space.hairline) {
             Text(label).font(.caption).foregroundStyle(.secondary)
             Text(value).font(.subheadline.weight(.semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
         }
@@ -917,10 +948,10 @@ struct NextWeekPlanCard: View {
 struct PastReviewsCard: View {
     let entries: [ReviewEntry]
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("过往复盘")
             ForEach(entries) { e in
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Theme.Space.tight) {
                     Text("\(e.periodStart.formatted(.dateTime.month().day())) 那周").font(.subheadline.weight(.semibold))
                     if !e.summary.isEmpty { Text(e.summary).font(.subheadline).foregroundStyle(.secondary) }
                     if !e.nextFocus.isEmpty { Text("重点：\(e.nextFocus)").font(.footnote).foregroundStyle(.secondary) }
@@ -986,11 +1017,11 @@ struct JourneyCard: View {
 
     var body: some View {
         let path = paths.first { $0.id == chosen } ?? paths[0]
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("所处阶段", detail: path.isComplete ? "已完成全部阶段" : "第 \(path.current + 1)/\(path.stages.count) 阶段")
             if paths.count > 1 {
                 // Every goal stays in view; a long list wraps instead of scrolling off the card.
-                FlowLayout(spacing: 8) {
+                FlowLayout(spacing: Theme.Space.item) {
                     ForEach(paths) { p in GoalChip(path: p, selected: p.id == path.id) { chosen = p.id } }
                 }
             }
@@ -998,26 +1029,27 @@ struct JourneyCard: View {
                 let done = path.stages.prefix(path.current)
                 // Finished stages fold into one step; what matters is the stage you are in.
                 if !done.isEmpty {
-                    step(glyph: "checkmark.circle.fill", color: .green, line: .green, bottom: 12) {
+                    step(glyph: "checkmark.circle.fill", color: .green, line: .green, bottom: Theme.Space.block) {
                         Text("已完成 \(done.count) 个阶段").font(.subheadline).foregroundStyle(.secondary)
                         Text(done.map(\.title).joined(separator: " · ")).font(.footnote).foregroundStyle(.secondary)
                     }
                 }
                 if path.isComplete {
                     step(glyph: "flag.checkered.circle.fill", color: .green, line: nil, bottom: 0) {
-                        Text("已达成").font(.body.weight(.semibold))
+                        Text("已达成").font(.subheadline.weight(.semibold))
                         opened(path.standing, focus: nil)
                     }
                 } else {
                     ForEach(path.stages.indices.dropFirst(path.current), id: \.self) { i in
                         let s = path.stages[i], last = i == path.stages.count - 1
                         if i == path.current {
-                            step(glyph: "\(i + 1).circle.fill", color: .green, line: last ? nil : Theme.subtle, bottom: last ? 0 : 16) {
-                                Text(s.title).font(.body.weight(.semibold))
+                            // The open stage is a block of its own; the stages after it are one-line items.
+                            step(glyph: "\(i + 1).circle.fill", color: .green, line: last ? nil : Theme.subtle, bottom: last ? 0 : Theme.Space.block) {
+                                Text(s.title).font(.subheadline.weight(.semibold))
                                 opened(path.standing, focus: s.focus)
                             }
                         } else {
-                            step(glyph: "\(i + 1).circle", color: .secondary, line: last ? nil : Theme.subtle, bottom: last ? 0 : 10) {
+                            step(glyph: "\(i + 1).circle", color: .secondary, line: last ? nil : Theme.subtle, bottom: last ? 0 : Theme.Space.item) {
                                 Text(s.title).font(.subheadline).foregroundStyle(.secondary)
                             }
                         }
@@ -1033,13 +1065,13 @@ struct JourneyCard: View {
     /// One step of the timeline: its glyph with the line down to the next step, and its text.
     private func step<Content: View>(glyph: String, color: Color, line: Color?, bottom: CGFloat,
                                      @ViewBuilder content: () -> Content) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(spacing: 4) {
+        HStack(alignment: .top, spacing: Theme.Space.block) {
+            VStack(spacing: Theme.Space.tight) {
                 Image(systemName: glyph).font(.title3).foregroundStyle(color)
                 if let line { Capsule().fill(line).frame(width: 2).frame(maxHeight: .infinity) }
             }
-            .frame(width: 28)
-            VStack(alignment: .leading, spacing: 4) { content() }
+            .frame(width: Theme.Size.iconTile)
+            VStack(alignment: .leading, spacing: Theme.Space.tight) { content() }
                 .padding(.top, 2)
                 .padding(.bottom, bottom)
             Spacer(minLength: 0)
@@ -1051,11 +1083,11 @@ struct JourneyCard: View {
     @ViewBuilder private func opened(_ st: GoalJourney.Standing, focus: String?) -> some View {
         Text(st.met ? st.status : "进行中 · \(st.status)").font(.footnote).foregroundStyle(.secondary)
         if let p = st.progress, !st.met {
-            ProgressBar(value: p, color: .green, height: 6).padding(.vertical, 4)
+            ProgressBar(value: p, color: .green, height: 6).padding(.vertical, Theme.Space.tight)
         }
         if let focus { Text(focus).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
         if let pass = st.toPass, !st.met {
-            labelled("进入下一阶段", pass).padding(.top, 6)
+            labelled("进入下一阶段", pass).padding(.top, Theme.Space.tight)
         }
     }
 
@@ -1087,9 +1119,9 @@ private struct GoalChip: View {
             Text(path.short)
                 .font(.subheadline.weight(selected ? .semibold : .regular))
                 .foregroundStyle(selected ? Theme.accent : Color.primary)
-                .padding(.horizontal, 12).padding(.vertical, 7)
+                .padding(.horizontal, Theme.Space.block).padding(.vertical, Theme.Space.item)
                 .background(selected ? Theme.accent.opacity(0.14) : Theme.subtle, in: Capsule())
-                .frame(minHeight: 44)
+                .frame(minHeight: Theme.Size.tap)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -1105,16 +1137,17 @@ struct DimensionsCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            CardTitle("多维进展", detail: "起始 4 周 → 最近 4 周").padding(.bottom, 4)
+            CardTitle("多维进展", detail: "起始 4 周 → 最近 4 周").padding(.bottom, Theme.Space.tight)
             ForEach(dimensions) { d in
-                if d.id != dimensions.first?.id { Divider().padding(.leading, 40) }
+                if d.id != dimensions.first?.id { Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block) }
                 DimensionRow(dimension: d)
                     .contextMenu {
-                        Button("问问 Health Agent", systemImage: "sparkles") { onAsk(ReviewCoach.question(for: d), false) }
+                        Button(AgentNameSettings.shared.phrase("问问"), systemImage: "sparkles") { onAsk(ReviewCoach.question(for: d), false) }
                     }
             }
         }
-        .padding(.bottom, -8)
+        // The last row's padding stands in for the card's.
+        .padding(.bottom, -Theme.Space.item)
         .cardSurface()
     }
 }
@@ -1124,17 +1157,17 @@ struct DimensionRow: View {
 
     var body: some View {
         let d = dimension
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Theme.Space.block) {
             Image(systemName: d.icon).font(.body.weight(.semibold)).foregroundStyle(dataColor(d.icon))
-                .frame(width: 28).accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
+                .frame(width: Theme.Size.iconTile).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: Theme.Space.tight) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(d.name).font(.body.weight(.semibold))
-                    Spacer(minLength: 8)
+                    Text(d.name).font(.subheadline.weight(.semibold))
+                    Spacer(minLength: Theme.Space.item)
                     StatusLabel(text: d.status.label, icon: icon, color: Theme.progress(d.status), secondaryText: true).font(.subheadline)
                 }
                 if let f = d.from, let t = d.to {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: Theme.Space.iconGap) {
                         Text(f).foregroundStyle(.secondary)
                         Image(systemName: "arrow.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
                         Text(t).fontWeight(.semibold)
@@ -1146,7 +1179,7 @@ struct DimensionRow: View {
                 Text(d.detail).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, Theme.Space.item)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
@@ -1198,10 +1231,10 @@ struct HabitsAdherenceCard: View {
     let adherence: [HabitAdherence]
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            CardTitle("哪些习惯能坚持", detail: "近 4 周").padding(.bottom, 4)
+            CardTitle("哪些习惯能坚持", detail: "近 4 周").padding(.bottom, Theme.Space.tight)
             ForEach(adherence) { h in
                 if h.id != adherence.first?.id { Divider() }
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Theme.Space.tight) {
                     HStack(alignment: .firstTextBaseline) {
                         Text(h.name).font(.subheadline.weight(.semibold))
                         Spacer()
@@ -1216,11 +1249,12 @@ struct HabitsAdherenceCard: View {
                         Text(h.suggestion).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                .padding(.vertical, 12)
+                .padding(.vertical, Theme.Space.item)
                 .accessibilityElement(children: .combine)
             }
         }
-        .padding(.bottom, -8)
+        // The last row's padding stands in for the card's.
+        .padding(.bottom, -Theme.Space.item)
         .cardSurface()
     }
 
@@ -1243,16 +1277,18 @@ struct AssociationsCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            CardTitle("发现的关联", detail: "关联 ≠ 已确认的原因").padding(.bottom, 4)
+            CardTitle("发现的关联", detail: "关联 ≠ 已确认的原因").padding(.bottom, Theme.Space.tight)
             if associations.isEmpty {
                 Text("还没有足够数据发现稳定的关联。持续记录饮酒、睡眠、压力等背景后会逐步出现。")
-                    .font(.subheadline).foregroundStyle(.secondary).padding(.vertical, 8)
+                    .font(.subheadline).foregroundStyle(.secondary).padding(.vertical, Theme.Space.item)
             }
             ForEach(associations) { a in
-                if a.id != associations.first?.id { Divider().padding(.leading, 40) }
+                if a.id != associations.first?.id { Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block) }
                 AssociationRow(association: a, record: insights.first { $0.key == a.id }, days: days, onAsk: onAsk)
             }
         }
+        // The last row's padding stands in for the card's.
+        .padding(.bottom, -Theme.Space.item)
         .cardSurface()
     }
 }
@@ -1267,37 +1303,39 @@ struct AssociationRow: View {
     var body: some View {
         let a = association
         let status = record?.status ?? .observed
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: a.icon).font(.body.weight(.semibold)).foregroundStyle(.secondary).frame(width: 28).accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Theme.Space.item) {
+            HStack(alignment: .top, spacing: Theme.Space.block) {
+                Image(systemName: a.icon).font(.body.weight(.semibold)).foregroundStyle(.secondary).frame(width: Theme.Size.iconTile).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: Theme.Space.tight) {
                     Text(a.sentence).font(.subheadline).fixedSize(horizontal: false, vertical: true)
                     StatusLabel(text: "\(status.label) · 关联\(a.strength.label)", icon: statusIcon(status), color: statusColor(status), secondaryText: true)
                         .font(.footnote)
                 }
             }
             .accessibilityElement(children: .combine)
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Theme.Space.item) {
                 if status == .testing, let r = record, let start = r.experimentStart { experimentProgress(r, start) }
-                HStack(spacing: 4) {
+                HStack(spacing: Theme.Space.item) {
                     switch status {
                     case .observed:
                         Button("开始 2 周验证") { startExperiment() }.buttonStyle(.bordered)
                     case .testing:
                         Button("对我有效") { set(.confirmed) }.buttonStyle(.bordered)
-                        Button("未得到支持") { set(.notSupported) }.buttonStyle(.borderless).foregroundStyle(.secondary).frame(minHeight: 44)
+                        Button { set(.notSupported) } label: { textLink("未得到支持") }
+                            .buttonStyle(.borderless).foregroundStyle(.secondary)
                     case .confirmed, .notSupported:
-                        Button("重新观察") { set(.observed) }.buttonStyle(.borderless).frame(minHeight: 44)
+                        Button { set(.observed) } label: { textLink("重新观察") }.buttonStyle(.borderless)
                     }
                 }
                 .font(.subheadline.weight(.semibold))
             }
-            .padding(.leading, 40)
+            // Under the sentence, past the glyph column.
+            .padding(.leading, Theme.Size.iconTile + Theme.Space.block)
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, Theme.Space.item)
         .contentShape(Rectangle())
         .contextMenu {
-            Button("问问 Health Agent", systemImage: "sparkles") { onAsk(question, false) }
+            Button(AgentNameSettings.shared.phrase("问问"), systemImage: "sparkles") { onAsk(question, false) }
         }
     }
 
@@ -1336,7 +1374,7 @@ struct AssociationRow: View {
         let before = days.filter { $0.day < start && $0.day >= start.adding(days: -28) }
         let metric: (DayData) -> Double? = association.metric == "HRV" ? { $0.hrv } : (association.metric == "醒后精力" ? { $0.energy.map(Double.init) } : (association.metric == "睡眠时长" ? { $0.sleepMinutes.map { $0 / 60 } } : { $0.rhr }))
         let m1 = Stats.mean(during.compactMap(metric)), m0 = Stats.mean(before.compactMap(metric))
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
             HStack(alignment: .firstTextBaseline) {
                 Text(r.note.isEmpty ? "验证中" : r.note).font(.footnote.weight(.medium)).fixedSize(horizontal: false, vertical: true)
                 Spacer()
@@ -1380,9 +1418,9 @@ struct StrategyCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            CardTitle("下一阶段", detail: "Health Agent 的建议").padding(.bottom, 4)
+            CardTitle("下一阶段", detail: AgentNameSettings.shared.phrase("", "的建议")).padding(.bottom, Theme.Space.tight)
             ForEach(Array(points.enumerated()), id: \.element.id) { i, p in
-                if i > 0 { Divider().padding(.leading, 40) }
+                if i > 0 { Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block) }
                 if let d = p.destination {
                     NavigationLink { d.view } label: { row(p, detail: details[safe: i] ?? p.detail, chevron: true) }
                         .buttonStyle(.plain)
@@ -1391,22 +1429,23 @@ struct StrategyCard: View {
                 }
             }
         }
-        .padding(.bottom, -8)
+        // The last row's padding stands in for the card's.
+        .padding(.bottom, -Theme.Space.item)
         .cardSurface()
     }
 
     private func row(_ p: AgentPoint, detail: String, chevron: Bool) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: p.icon).font(.body.weight(.semibold)).foregroundStyle(.secondary).frame(width: 28).accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(p.title).font(.body.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+        HStack(alignment: .top, spacing: Theme.Space.block) {
+            Image(systemName: p.icon).font(.body.weight(.semibold)).foregroundStyle(.secondary).frame(width: Theme.Size.iconTile).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
+                Text(p.title).font(.subheadline.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
                 Text(detail).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     .opacity(writing ? 0.5 : 1)
             }
-            Spacer(minLength: 4)
-            if chevron { Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary).padding(.top, 4) }
+            Spacer(minLength: Theme.Space.tight)
+            if chevron { Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary).padding(.top, 3) }
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, Theme.Space.item)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }

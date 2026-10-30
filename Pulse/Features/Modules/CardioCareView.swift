@@ -27,8 +27,9 @@ struct CardioCareView: View {
                 todayCard(snap, points)
                 AbnormalRecallCard(kind: .bloodPressure)
                 if let n = NextHourForecaster.bloodPressure(points) {
-                    Label { Text("未来 1 小时：" + n.message).font(.subheadline).fixedSize(horizontal: false, vertical: true) }
+                    Label { Text("未来 1 小时：" + n.message).fixedSize(horizontal: false, vertical: true) }
                         icon: { Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary) }
+                        .font(.subheadline)
                         .cardSurface()
                 }
                 SectionTitle(title: "家庭血压监测", subtitle: "近 7 天")
@@ -69,7 +70,7 @@ struct CardioCareView: View {
             let text = "\(Int(last.value))/\(Int(last.value2 ?? 0)) mmHg · \(Clock.text(last.time.minutesOfDay))"
             return last.value > Double(p.bpTargetSys) || (last.value2 ?? 0) > Double(p.bpTargetDia) ? .attention(text + " · 高于目标") : .good(text + " · 在目标内")
         }()
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("今天")
             StatusLabel(bpStatus).font(.subheadline)
             StatusLabel(text: "晨起 \(morning ? "已测" : "未测") · 睡前 \(evening ? "已测" : "未测")", icon: morning && evening ? "checkmark.circle.fill" : "clock",
@@ -84,7 +85,7 @@ struct CardioCareView: View {
                 }
                 .pickerStyle(.segmented)
             }
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.Space.item) {
                 Button { log = .bloodPressure } label: { Label("测量血压", systemImage: "plus").frame(maxWidth: .infinity) }
                     .buttonStyle(.borderedProminent).controlSize(.large)
                 Button { log = .symptom } label: { Label("记录症状", systemImage: "person.fill.questionmark").frame(maxWidth: .infinity) }
@@ -144,7 +145,7 @@ struct CardioCareView: View {
     }
 
     private func exerciseCard(_ p: ProfileSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("运动处方")
             ForEach(CardioAnalyzer.exerciseGuidance(profile: p), id: \.self) { line in
                 let stop = line.contains("立即停止")
@@ -161,23 +162,23 @@ struct CardioCareView: View {
 
     private func medsCard(_ p: ProfileSnapshot) -> some View {
         let active = meds.filter(\.isActive)
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: Theme.Space.item) {
             CardTitle("用药")
             if active.isEmpty { EmptyLine("未记录用药。") }
             ForEach(active) { m in
-                HStack(spacing: 12) {
+                HStack(spacing: Theme.Space.block) {
                     IconTile(icon: "pills.fill")
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         Text(m.name).font(.body)
                         Text([m.dose, m.category.label, m.category.hrEffect.label].filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 0)
                 }
-                .frame(minHeight: 44)
+                .frame(minHeight: Theme.Size.tap)
                 .accessibilityElement(children: .combine)
             }
-            Divider().padding(.leading, 44)
+            Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block)
             NavigationLink { Form { MedicationsSection() }.navigationTitle("用药").calmStyle() } label: {
                 NavRowLabel(icon: "list.bullet", title: "管理用药", detail: "用药调整请遵医嘱，Pulse 仅记录背景")
             }
@@ -189,13 +190,13 @@ struct CardioCareView: View {
     private var eventsCard: some View {
         let kinds: [EventKind] = [.bpCrisis, .bpHigh, .bpLow, .irregularRhythm, .rhrHigh, .rhrLow, .rhrSustainedRise, .symptom, .deviceHRAlert]
         let related = Array(events.filter { kinds.contains($0.kind) }.prefix(5))
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: Theme.Space.item) {
             CardTitle("相关事件")
             if related.isEmpty { EmptyLine("近期没有相关事件。") }
             ForEach(related) { e in
                 NavigationLink { HealthEventDetailView(event: e) } label: {
                     HStack { EventRow(event: e); Spacer(); Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary) }
-                        .frame(minHeight: 44).contentShape(Rectangle())
+                        .frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -204,20 +205,24 @@ struct CardioCareView: View {
     }
 
     private var followUpCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.item) {
             CardTitle(title: "随访") {
                 Button { addTask = true } label: { Label("添加", systemImage: "plus") }.buttonStyle(.bordered)
             }
             let list = tasks.filter { $0.area == .cardio }
             if list.isEmpty { EmptyLine("暂无随访事项。") }
-            ForEach(list) { CareTaskRow(task: $0).frame(minHeight: 44) }
+            ForEach(list) { CareTaskRow(task: $0).frame(minHeight: Theme.Size.tap) }
             Divider()
             Button {
                 exported = try? DataExporter.clinicianSummary(ctx, categories: [.profile, .heart, .vitals, .medications, .events])
             } label: { Label("生成复诊摘要", systemImage: "doc.text") }
                 .buttonStyle(.bordered)
             if let url = exported {
-                ShareLink(item: url) { Label("分享 / 保存摘要", systemImage: "square.and.arrow.up") }.font(.subheadline.weight(.semibold))
+                ShareLink(item: url) {
+                    Label("分享 / 保存摘要", systemImage: "square.and.arrow.up")
+                        .frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
+                }
+                .font(.subheadline.weight(.semibold))
             }
         }
         .cardSurface()
@@ -228,18 +233,18 @@ struct CardioCareView: View {
 struct EmergencyStrip: View {
     var text = "胸痛或胸闷不缓解、晕厥、严重气短、一侧肢体无力或言语不清时"
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: "cross.case.fill").font(.title3).foregroundStyle(.red).accessibilityHidden(true)
+        HStack(alignment: .center, spacing: Theme.Space.iconGap) {
+            Image(systemName: "cross.case.fill").font(.subheadline).imageScale(.small).foregroundStyle(.red).accessibilityHidden(true)
             Text(text).font(.footnote).fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 4)
+            Spacer(minLength: Theme.Space.tight)
             Link(destination: URL(string: "tel://120")!) {
                 Text("拨打 120").font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 14).frame(minHeight: 44)
+                    .padding(.horizontal, Theme.Space.block).frame(minHeight: Theme.Size.tap)
                     .background(Color.red.opacity(0.12), in: Capsule())
             }
             .foregroundStyle(.red)
         }
-        .cardSurface(padding: 14)
+        .cardSurface()
     }
 }
 
@@ -254,8 +259,8 @@ struct HomeBPCard: View {
         let recent = readings.filter { $0.kind == .bloodPressure && $0.time > Date.app.adding(days: -14) }
         let morning = recent.filter { (4..<12).contains($0.time.hour) }
         let evening = recent.filter { $0.time.hour >= 17 }
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                 Text(status.overallAvg.map { "\(Int($0.sys))/\(Int($0.dia))" } ?? "—")
                     .font(.system(.title, design: .rounded).weight(.semibold)).monospacedDigit()
                 Text("mmHg 平均").font(.subheadline).foregroundStyle(.secondary)
@@ -297,7 +302,7 @@ struct HomeBPCard: View {
     }
 
     private func fact(_ label: String, _ v: (sys: Double, dia: Double)?, _ n: Int) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
             Text("\(label) · \(n) 次").font(.caption).foregroundStyle(.secondary)
             Text(v.map { "\(Int($0.sys))/\(Int($0.dia))" } ?? "—").font(.headline).monospacedDigit()
         }

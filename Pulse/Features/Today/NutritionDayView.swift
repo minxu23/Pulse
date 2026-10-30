@@ -139,13 +139,13 @@ struct KidneyDietCard: View {
         let p = data.p
         let today = data.analytics.today ?? DayData(day: data.day)
         let lines = KidneyDiet.lines(today, profile: p)
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("盐、蛋白质、钾和磷")
             if lines.isEmpty {
                 Text("记下今天吃过的高盐、高钾、高磷食物和肉蛋奶豆的份数，Pulse 按医生给的量帮你对照。")
                     .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             } else {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Theme.Space.item) {
                     ForEach(Array(lines.enumerated()), id: \.offset) { _, l in
                         StatusLabel(l.metric).font(.subheadline).fixedSize(horizontal: false, vertical: true)
                     }
@@ -183,9 +183,9 @@ struct IntakeHeroCard: View {
     var body: some View {
         let p = data.p
         let water = data.record?.waterMl ?? 0
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("今天的饮食与饮水")
-            HStack(spacing: 18) {
+            HStack(spacing: Theme.Space.block) {
                 ScoreRing(progress: Double(water) / Double(max(1, p.waterTargetMl)),
                           color: p.fluidLimited && water > p.waterTargetMl ? .orange : Theme.nutrition, lineWidth: 10) {
                     VStack(spacing: 0) {
@@ -198,13 +198,13 @@ struct IntakeHeroCard: View {
                 .frame(width: 88, height: 88)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("饮水 \(water) 毫升，\(p.fluidLimited ? "上限" : "目标") \(p.waterTargetMl) 毫升")
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Theme.Space.item) {
                     ForEach(Array(statuses.enumerated()), id: \.offset) { _, s in
                         StatusLabel(s).font(.subheadline).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.Space.item) {
                 Button {
                     data.record?.waterMl += 250
                 } label: { Label("饮水 250 ml", systemImage: "plus").frame(maxWidth: .infinity) }
@@ -265,7 +265,7 @@ struct MealsCard: View {
     var onLog: (QuickLogKind) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Space.item) {
             CardTitle(title: "饮食记录") {
                 Button { onLog(.diet) } label: { Label("记录", systemImage: "plus") }
                     .buttonStyle(.bordered)
@@ -274,19 +274,19 @@ struct MealsCard: View {
                 EmptyLine("还没有记录。简单记下整体情况即可，例如「午餐比较均衡」。")
             }
             ForEach(meals) { m in
-                HStack(spacing: 12) {
+                HStack(spacing: Theme.Space.block) {
                     IconTile(icon: m.kind.icon, color: Theme.nutrition)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         Text(m.kind.label).font(.body)
                         Text([Clock.text(m.time.minutesOfDay), m.note].filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(.footnote).foregroundStyle(.secondary).lineLimit(2)
                     }
-                    Spacer(minLength: 4)
+                    Spacer(minLength: Theme.Space.tight)
                     if let c = m.carbsG {
                         Text("\(Int(c)) g 碳水").font(.subheadline).foregroundStyle(.secondary).monospacedDigit()
                     }
                 }
-                .frame(minHeight: 44)
+                .frame(minHeight: Theme.Size.tap)
                 .accessibilityElement(children: .combine)
             }
             if let tip = fuelTip {
@@ -299,7 +299,8 @@ struct MealsCard: View {
                 .init(title: "饮酒", icon: "wineglass", action: { onLog(.alcohol) }),
                 .init(title: "压力", icon: "brain.head.profile", action: { onLog(.stress) }),
             ])
-            .padding(.top, 2)
+            // The logging shortcuts are their own block below the rows.
+            .padding(.top, Theme.Space.block - Theme.Space.item)
         }
         .cardSurface()
     }
@@ -341,7 +342,7 @@ struct GlucoseDayCard: View {
             .chartYScale(domain: 2.5...max(11, (points.map(\.value).max() ?? 8) + 1))
             .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 3)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()) } }
             .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) }
-            .padding(.top, 14)
+            .padding(.top, Theme.Space.block)
             .frame(height: 140)
             .accessibilityLabel("今天的血糖曲线")
             .accessibilityValue("目标范围内 \(Int(inRange * 100))%")
@@ -360,16 +361,19 @@ struct ReadingsCard: View {
 
     var body: some View {
         let list = readings.sorted { $0.time > $1.time }
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Space.item) {
             CardTitle(title: "测量记录") {
-                NavigationLink { VitalsHistoryView() } label: { Text("全部").font(.subheadline).frame(minHeight: 44) }
+                NavigationLink { VitalsHistoryView() } label: {
+                    Text("全部").font(.subheadline)
+                        .frame(minWidth: Theme.Size.tap, minHeight: Theme.Size.tap, alignment: .trailing).contentShape(Rectangle())
+                }
             }
             if list.isEmpty { EmptyLine("今天还没有测量记录。") }
             ForEach(Array(list.prefix(6).enumerated()), id: \.offset) { i, v in
-                HStack(spacing: 12) {
+                HStack(spacing: Theme.Space.block) {
                     IconTile(icon: v.kind.icon, color: v.kind == .glucose ? Theme.glucose : (v.kind == .weight ? Theme.body : Theme.heartData))
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
+                        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                             Text(v.kind.label).font(.body)
                             Text(valueText(v)).font(.body.weight(.semibold)).monospacedDigit()
                             Text(v.kind.unit).font(.footnote).foregroundStyle(.secondary)
@@ -378,9 +382,9 @@ struct ReadingsCard: View {
                     }
                     Spacer(minLength: 0)
                 }
-                .frame(minHeight: 44)
+                .frame(minHeight: Theme.Size.tap)
                 .accessibilityElement(children: .combine)
-                if i < min(list.count, 6) - 1 { Divider().padding(.leading, 44) }
+                if i < min(list.count, 6) - 1 { Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block) }
             }
             LogActionBar(items: [
                 .init(title: "血压", icon: "heart.text.square", action: { onLog(.bloodPressure) }),
@@ -388,7 +392,8 @@ struct ReadingsCard: View {
                 .init(title: "其他指标", icon: "waveform.path.ecg", action: { onLog(.vital) }),
                 .init(title: "症状", icon: "person.fill.questionmark", action: { onLog(.symptom) }),
             ])
-            .padding(.top, 2)
+            // The logging shortcuts are their own block below the rows.
+            .padding(.top, Theme.Space.block - Theme.Space.item)
         }
         .cardSurface()
     }
@@ -424,7 +429,7 @@ struct CareTodayCard: View {
 
     var body: some View {
         let today = DayClock.logicalToday(.app, DayClock.current)
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.item) {
             CardTitle("照护事项", detail: "与你的照护计划保持一致")
             if profile.modules.contains(.cardioCare) {
                 let bpToday = readings.filter { $0.kind == .bloodPressure && $0.time >= today }.count
@@ -440,13 +445,13 @@ struct CareTodayCard: View {
                         Text("有漏服").tag(Bool?.some(false))
                     }
                     .pickerStyle(.segmented)
-                    .padding(.leading, 44)
+                    .padding(.leading, Theme.Size.iconTile + Theme.Space.block)
                 }
             }
             if profile.modules.contains(.diabetesCare) {
                 let g = readings.filter { $0.kind == .glucose && $0.time >= today }
                 let inRange = g.isEmpty ? nil : Double(g.filter { $0.value >= profile.glucoseLow && $0.value <= profile.glucoseHigh }.count) / Double(g.count)
-                if profile.modules.contains(.cardioCare) { Divider().padding(.leading, 44) }
+                if profile.modules.contains(.cardioCare) { Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block) }
                 NavigationLink { DiabetesCareView() } label: {
                     NavRowLabel(icon: "drop.fill", color: Theme.glucose, title: "血糖管理",
                                 detail: inRange.map { "今日目标范围内 \(Int($0 * 100))%" } ?? "今天还没有血糖数据")
@@ -454,7 +459,7 @@ struct CareTodayCard: View {
                 .buttonStyle(.plain)
             }
             if let next = tasks.first(where: { $0.due != nil && [.cardio, .diabetes, .sleep].contains($0.area) }) {
-                Divider().padding(.leading, 44)
+                Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block)
                 let overdue = next.due! < .app
                 IconTextRow(icon: "calendar.badge.clock", color: overdue ? .orange : .secondary, title: next.title,
                             text: "\(overdue ? "已到期" : "日期") \(next.due!.formatted(.dateTime.month().day()))")

@@ -18,6 +18,7 @@ struct PulseApp: App {
         WindowGroup {
             RootView()
                 .tint(Theme.accent)
+                .pageMargins()
         }
         .modelContainer(container)
     }

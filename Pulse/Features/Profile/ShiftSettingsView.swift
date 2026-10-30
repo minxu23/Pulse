@@ -18,7 +18,7 @@ struct ShiftSettingsView: View {
                     changed = true
                 }))
             } footer: {
-                Text("开启后，Pulse 按你的睡眠划分一天：夜班后白天补觉醒来，才算新的一天开始。晨起评估、睡前提醒、运动计划和 Health Agent 都会按班次安排。")
+                Text(AgentNameSettings.shared.phrase("开启后，Pulse 按你的睡眠划分一天：夜班后白天补觉醒来，才算新的一天开始。晨起评估、睡前提醒、运动计划和", "都会按班次安排。"))
             }
 
             if profile.shiftWork {
@@ -29,7 +29,7 @@ struct ShiftSettingsView: View {
                             Button(preset.name) { apply(preset.pattern, todayIndex: 0) }
                         }
                     } label: {
-                        Label("使用常见排班", systemImage: "list.bullet").frame(minHeight: 44)
+                        Label("使用常见排班", systemImage: "list.bullet").frame(minHeight: Theme.Size.tap)
                     }
                     Picker("今天是", selection: Binding(get: { todayIndex }, set: { apply(profile.shiftPattern, todayIndex: $0) })) {
                         ForEach(Array(profile.shiftPattern.enumerated()), id: \.offset) { i, k in
@@ -83,22 +83,22 @@ struct ShiftSettingsView: View {
     }
 
     private var patternEditor: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.item) {
                     ForEach(Array(profile.shiftPattern.enumerated()), id: \.offset) { i, k in
                         Button {
                             var p = profile.shiftPattern
                             p[i] = ShiftKind.allCases[(ShiftKind.allCases.firstIndex(of: k)! + 1) % ShiftKind.allCases.count]
                             apply(p, todayIndex: todayIndex)
                         } label: {
-                            VStack(spacing: 2) {
+                            VStack(spacing: Theme.Space.hairline) {
                                 Text("\(i + 1)").font(.caption).foregroundStyle(i == todayIndex ? Color.white : .secondary)
                                 Text(k.short).font(.headline)
                             }
                             .foregroundStyle(i == todayIndex ? Color.white : Color.primary)
-                            .frame(width: 44, height: 52)
-                            .background(i == todayIndex ? Theme.accent : Theme.subtle, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .frame(width: Theme.Size.tap, height: 52)
+                            .background(i == todayIndex ? Theme.accent : Theme.subtle, in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("第 \(i + 1) 天，\(k.label)\(i == todayIndex ? "，今天" : "")")
@@ -106,19 +106,23 @@ struct ShiftSettingsView: View {
                     }
                 }
             }
+            // The cells sit flush with the row; the page margin is for page-level scroll content only.
+            .contentMargins(.horizontal, 0, for: .scrollContent)
             HStack {
-                Button { apply(profile.shiftPattern + [.off], todayIndex: todayIndex) } label: { Label("加一天", systemImage: "plus") }
-                    .disabled(profile.shiftPattern.count >= 14)
+                // The 44 pt frame is on each label, so the whole height is tappable.
+                Button { apply(profile.shiftPattern + [.off], todayIndex: todayIndex) } label: {
+                    Label("加一天", systemImage: "plus").frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
+                }
+                .disabled(profile.shiftPattern.count >= 14)
                 Spacer()
                 Button(role: .destructive) { apply(Array(profile.shiftPattern.dropLast()), todayIndex: min(todayIndex, profile.shiftPattern.count - 2)) } label: {
-                    Label("减一天", systemImage: "minus")
+                    Label("减一天", systemImage: "minus").frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
                 }
                 .disabled(profile.shiftPattern.count <= 2)
             }
             .buttonStyle(.borderless)
-            .frame(minHeight: 44)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Theme.Space.tight)
     }
 
     private func timeRow(_ title: String, _ key: ReferenceWritableKeyPath<UserProfile, Int>) -> some View {
@@ -136,24 +140,24 @@ struct ShiftSettingsView: View {
         let w = DayClock.window(for: day, profile: snap)
         let k = w.kind ?? .off
         let bedDay = w.bed.startOfDay == day ? "" : "次日 "
-        return HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 1) {
+        return HStack(spacing: Theme.Space.block) {
+            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 Text(day.formatted(.dateTime.month().day())).font(.subheadline.weight(.semibold)).monospacedDigit()
                 Text(Weekday.name(day.weekday)).font(.caption).foregroundStyle(.secondary)
             }
             .frame(width: 52, alignment: .leading)
-            HStack(spacing: 4) {
-                Image(systemName: k.icon).foregroundStyle(k == .night ? Color.indigo : (k == .day ? Color.orange : Color.secondary))
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.iconGap) {
+                Image(systemName: k.icon).imageScale(.small).foregroundStyle(k == .night ? Color.indigo : (k == .day ? Color.orange : Color.secondary))
                 Text(k.label)
             }
             .font(.subheadline)
             .frame(width: 72, alignment: .leading)
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 Text("\(Clock.text(w.wake.minutesOfDay)) 起床 · \(bedDay)\(Clock.text(w.bed.minutesOfDay)) 入睡").font(.subheadline).monospacedDigit()
                 if let nap = w.nap {
-                    Text("上班前 \(Clock.text(nap.start.minutesOfDay)) 小睡 90 分钟").font(.caption).foregroundStyle(.secondary)
+                    Text("上班前 \(Clock.text(nap.start.minutesOfDay)) 小睡 90 分钟").font(.footnote).foregroundStyle(.secondary)
                 } else if w.afterNightShift {
-                    Text(k == .night ? "夜班后白天补觉" : "夜班后补觉，晚上按时睡").font(.caption).foregroundStyle(.secondary)
+                    Text(k == .night ? "夜班后白天补觉" : "夜班后补觉，晚上按时睡").font(.footnote).foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: 0)

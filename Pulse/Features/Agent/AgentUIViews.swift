@@ -13,7 +13,7 @@ struct AgentBlocksView: View {
     var onSubmit: (String) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             ForEach(blocks) { b in
                 Group {
                     switch b {
@@ -25,10 +25,8 @@ struct AgentBlocksView: View {
                     case .condition(let c): ConditionCard(proposal: c)
                     }
                 }
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.primary.opacity(0.06)))
+                .cardSurface()
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous).strokeBorder(Color.primary.opacity(0.06)))
             }
         }
     }
@@ -42,8 +40,8 @@ private struct BlockHeader: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             Label(title, systemImage: icon).font(.headline)
-            Spacer(minLength: 8)
-            if let trailing { Text(trailing).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+            Spacer(minLength: Theme.Space.item)
+            if let trailing { Text(trailing).font(.footnote).foregroundStyle(.secondary).lineLimit(1) }
         }
     }
 }
@@ -61,7 +59,7 @@ struct AgentFormView: View {
     @State private var toggles: [String: Bool] = [:]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             BlockHeader(title: form.title, icon: "hand.tap")
             if let sent = convo.answeredForms[key] {
                 StatusLabel(.good("已发送：\(sent)")).font(.subheadline)
@@ -69,7 +67,7 @@ struct AgentFormView: View {
                 ForEach(form.fields) { field($0) }
                 if !form.submitsOnTap {
                     Button(action: submit) {
-                        Text(form.submitLabel).fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: 32)
+                        Text(form.submitLabel).fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel)
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(!canSubmit || convo.isResponding)
@@ -82,9 +80,9 @@ struct AgentFormView: View {
     private func field(_ f: AgentFormField) -> some View {
         switch f.kind {
         case .choice(let options, let multiple):
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Theme.Space.item) {
                 if !form.submitsOnTap { Text(f.label).font(.subheadline).foregroundStyle(.secondary) }
-                FlowLayout(spacing: 8) {
+                FlowLayout(spacing: Theme.Space.item) {
                     ForEach(options, id: \.self) { o in
                         let on = choices[f.id, default: []].contains(o)
                         Button {
@@ -93,12 +91,12 @@ struct AgentFormView: View {
                             if multiple { if on { cur.removeAll { $0 == o } } else { cur.append(o) } } else { cur = [o] }
                             choices[f.id] = cur
                         } label: {
-                            HStack(spacing: 4) {
-                                if on { Image(systemName: "checkmark").font(.footnote.weight(.semibold)) }
+                            HStack(spacing: Theme.Space.iconGap) {
+                                if on { Image(systemName: "checkmark").fontWeight(.semibold).imageScale(.small) }
                                 Text(o)
                             }
                             .font(.subheadline)
-                            .frame(minHeight: 32)
+                            .frame(minHeight: Theme.Size.borderedLabel)
                         }
                         .buttonStyle(.bordered)
                         .tint(on ? Theme.accent : nil)
@@ -108,9 +106,10 @@ struct AgentFormView: View {
                 }
             }
         case .weekdays:
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Theme.Space.item) {
                 Text(f.label).font(.subheadline).foregroundStyle(.secondary)
-                HStack(spacing: 4) {
+                // Tight, so seven day circles stay close to the 44 pt tap width on a phone.
+                HStack(spacing: Theme.Space.tight) {
                     ForEach(Weekday.mondayFirst, id: \.self) { wd in
                         let on = days[f.id, default: []].contains(wd)
                         Button {
@@ -120,9 +119,9 @@ struct AgentFormView: View {
                         } label: {
                             Text(Weekday.name(wd)).font(.subheadline.weight(on ? .semibold : .regular)).lineLimit(1).minimumScaleFactor(0.8)
                                 .foregroundStyle(on ? Color.white : Color.primary)
-                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .frame(maxWidth: .infinity, minHeight: Theme.Size.tap)
                                 .background(on ? Theme.accent : Theme.subtle, in: Circle())
-                                .contentShape(Circle())
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(Weekday.name(wd))
@@ -139,7 +138,7 @@ struct AgentFormView: View {
                     Text("\(v) \(unit)").font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
                 }
             }
-            .frame(minHeight: 44)
+            .frame(minHeight: Theme.Size.tap)
         case .toggle:
             Toggle(f.label, isOn: Binding(get: { toggles[f.id] ?? false }, set: { toggles[f.id] = $0 })).font(.subheadline)
         }
@@ -185,13 +184,13 @@ struct PlanProposalCard: View {
 
     var body: some View {
         let p = proposal
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             BlockHeader(title: "\(p.scope.label)计划调整", icon: "calendar.badge.clock", trailing: p.source)
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: Theme.Space.item) {
                 ForEach(p.lines) { line in
-                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    HStack(alignment: .firstTextBaseline, spacing: Theme.Space.block) {
                         Text(Weekday.name(line.weekday)).font(.subheadline.weight(.semibold)).frame(width: 34, alignment: .leading)
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                             Text(line.before).font(.footnote).foregroundStyle(.secondary).strikethrough()
                             Text(line.after).font(.subheadline).fixedSize(horizontal: false, vertical: true)
                         }
@@ -204,7 +203,7 @@ struct PlanProposalCard: View {
                 Text(n).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Divider()
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Theme.Space.item) {
                 Label("Pulse 本机安全检查", systemImage: "checkmark.shield").font(.subheadline.weight(.semibold))
                 ForEach(p.checks, id: \.self) { c in
                     Text("• " + c).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -218,27 +217,27 @@ struct PlanProposalCard: View {
         let p = proposal
         switch convo.planOutcomes[p.id] {
         case nil:
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.Space.item) {
                 Button {
                     let undo = DataHub.applyPlanChange(p, in: ctx)
                     convo.planOutcomes[p.id] = .applied(undo)
-                } label: { Text("采纳").fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: 32) }
+                } label: { Text("采纳").fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel) }
                 .buttonStyle(.borderedProminent)
-                Button { convo.planOutcomes[p.id] = .dismissed } label: { Text("不用了").frame(maxWidth: .infinity, minHeight: 32) }
+                Button { convo.planOutcomes[p.id] = .dismissed } label: { Text("不用了").frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel) }
                     .buttonStyle(.bordered)
             }
         case .applied(let undo):
             StatusLabel(.good("已更新到「计划 › \(p.scope.label)」")).font(.subheadline)
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.Space.item) {
                 NavigationLink {
                     WeeklyPlanView(startOnNextWeek: p.scope == .nextWeek)
                         .navigationTitle("运动计划").navigationBarTitleDisplayMode(.inline).calmStyle()
-                } label: { Label("查看计划", systemImage: "calendar").frame(maxWidth: .infinity, minHeight: 32) }
+                } label: { Label("查看计划", systemImage: "calendar").frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel) }
                 .buttonStyle(.bordered)
                 Button {
                     DataHub.revertPlanChange(p, undo: undo, in: ctx)
                     convo.planOutcomes[p.id] = .undone
-                } label: { Label("撤销", systemImage: "arrow.uturn.backward").frame(maxWidth: .infinity, minHeight: 32) }
+                } label: { Label("撤销", systemImage: "arrow.uturn.backward").frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel) }
                 .buttonStyle(.bordered)
             }
         case .dismissed:
@@ -259,15 +258,15 @@ struct ConditionCard: View {
 
     var body: some View {
         let x = proposal.info
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             BlockHeader(title: "记下健康情况", icon: "cross.case", trailing: x.native != nil ? "Pulse 内置" : (x.known ? "Pulse 资料库" : "资料库未收录"))
-            VStack(alignment: .leading, spacing: 4) {
-                Text(x.name).font(.headline)
+            VStack(alignment: .leading, spacing: Theme.Space.tight) {
+                Text(x.name).font(.subheadline.weight(.semibold))
                 if !x.summary.isEmpty {
                     Text(x.summary).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Theme.Space.item) {
                 Text("记下后 Pulse 会").font(.subheadline.weight(.semibold))
                 ForEach(x.changes, id: \.self) { line in
                     Text("• " + line).font(.subheadline).fixedSize(horizontal: false, vertical: true)
@@ -286,12 +285,12 @@ struct ConditionCard: View {
         let c = proposal
         switch convo.conditionOutcomes[c.id] {
         case nil:
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.Space.item) {
                 Button {
                     convo.conditionOutcomes[c.id] = .recorded(added: DataHub.recordCondition(c.info, in: ctx))
-                } label: { Text("记下").fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: 32) }
+                } label: { Text("记下").fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel) }
                 .buttonStyle(.borderedProminent)
-                Button { convo.conditionOutcomes[c.id] = .dismissed } label: { Text("不用了").frame(maxWidth: .infinity, minHeight: 32) }
+                Button { convo.conditionOutcomes[c.id] = .dismissed } label: { Text("不用了").frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel) }
                     .buttonStyle(.bordered)
             }
         case .recorded(let added):
@@ -300,7 +299,7 @@ struct ConditionCard: View {
                 Button {
                     DataHub.forgetCondition(c.info, in: ctx)
                     convo.conditionOutcomes[c.id] = .undone
-                } label: { Label("撤销", systemImage: "arrow.uturn.backward").frame(maxWidth: .infinity, minHeight: 32) }
+                } label: { Label("撤销", systemImage: "arrow.uturn.backward").frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel) }
                 .buttonStyle(.bordered)
             }
         case .dismissed:
@@ -322,7 +321,7 @@ struct AgentChartBlock: View {
     var body: some View {
         let c = context
         let start = c.now.startOfDay.adding(days: -(days - 1))
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             BlockHeader(title: metric.title, icon: icon, trailing: metric == .glucose ? "近 \(days * 24) 小时" : "近 \(days) 天")
             switch metric {
             case .rhr:
@@ -367,11 +366,11 @@ struct AgentChartBlock: View {
                         }
                         ForEach(Array(c.workouts.filter { $0.start > c.now.addingTimeInterval(-Double(days) * 86400) }.enumerated()), id: \.offset) { _, w in
                             RuleMark(x: .value("训练", w.start)).foregroundStyle(Theme.activity.opacity(0.6))
-                                .annotation(position: .top, spacing: 2) { Image(systemName: "figure.run").font(.caption).foregroundStyle(Theme.activity) }
+                                .annotation(position: .top, spacing: Theme.Space.hairline) { Image(systemName: "figure.run").font(.caption).foregroundStyle(Theme.activity) }
                         }
                     }
                     .frame(height: 150)
-                    .padding(.top, 12)
+                    .padding(.top, Theme.Space.block)
                     .accessibilityLabel("CGM 血糖曲线，虚线为目标范围 \(c.profile.glucoseLow.oneDecimal) 到 \(c.profile.glucoseHigh.oneDecimal)")
                     Text("虚线为目标范围，\(Image(systemName: "figure.run")) 为训练开始。").font(.footnote).foregroundStyle(.secondary)
                 }
@@ -429,12 +428,14 @@ struct AgentChecklistView: View {
     @State private var done: Set<String> = []
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             BlockHeader(title: list.title, icon: "checklist", trailing: "\(done.count)/\(list.items.count) 已完成")
-            ForEach(list.items) { item in
-                ChecklistRow(done: done.contains(item.id), title: item.title, detail: item.detail) {
-                    if done.contains(item.id) { done.remove(item.id) } else { done.insert(item.id) }
-                    UserDefaults.standard.set(Array(done), forKey: storeKey)
+            VStack(alignment: .leading, spacing: Theme.Space.item) {
+                ForEach(list.items) { item in
+                    ChecklistRow(done: done.contains(item.id), title: item.title, detail: item.detail) {
+                        if done.contains(item.id) { done.remove(item.id) } else { done.insert(item.id) }
+                        UserDefaults.standard.set(Array(done), forKey: storeKey)
+                    }
                 }
             }
         }
@@ -447,13 +448,13 @@ struct AgentChecklistView: View {
 struct AgentStepsView: View {
     let steps: AgentSteps
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             BlockHeader(title: steps.title, icon: "list.number")
             ForEach(steps.steps) { s in
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: Theme.Space.block) {
                     Image(systemName: s.icon).font(.title3).foregroundStyle(Theme.accent).frame(width: 28)
                         .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         Text(s.title).font(.subheadline.weight(.semibold))
                         Text(s.detail).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
@@ -475,11 +476,11 @@ struct AgentAskButton: View {
     var body: some View {
         Button { open = true } label: {
             Label(title, systemImage: "sparkles").font(.subheadline.weight(.semibold))
-                .frame(maxWidth: .infinity, minHeight: 32)
+                .frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel)
         }
         .buttonStyle(.bordered)
         .tint(Theme.accent)
-        .accessibilityHint("向 Health Agent 提问：\(question)")
+        .accessibilityHint(AgentNameSettings.shared.phrase("向", "提问：\(question)"))
         .sheet(isPresented: $open) { HealthAgentChatView(initialQuestion: question) }
     }
 }

@@ -24,16 +24,24 @@ build_app() {
   cp -R "$dd/Build/Products/Release-iphonesimulator/Pulse.app" "$APP"
 }
 
+# The newest installed iOS (e.g. "iOS 27.2"). Older runtimes can stay installed; the demo uses this one.
+newest_ios() {
+  xcrun simctl list runtimes available | grep -E "^iOS [0-9]" | sed -E 's/^(iOS [0-9.]+).*/\1/' | sort -V | tail -1
+}
+
 pick_device() {
-  local udid
-  udid=$(xcrun simctl list devices booted | grep -E "iPhone" | grep -Eo "[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}" | head -1)
+  local udid ios name
+  ios=$(newest_ios)
+  # An iPhone already open on the newest iOS, then any open iPhone, then boot one on the newest iOS.
+  udid=$(xcrun simctl list devices booted "$ios" | grep -E "iPhone" | grep -Eo "[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}" | head -1)
+  [ -z "$udid" ] && udid=$(booted_iphones | head -1)
   if [ -z "$udid" ]; then
-    for name in "iPhone 17" "iPhone 17 Pro" "iPhone 16" "iPhone"; do
-      udid=$(xcrun simctl list devices available | grep -F "$name" | grep -Eo "[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}" | head -1)
+    for name in "iPhone 17" "iPhone 17 Pro" "iPhone 18 Pro" "iPhone 16" "iPhone[^(]*"; do
+      udid=$(xcrun simctl list devices available "$ios" | grep -E "^ +$name \(" | grep -Eo "[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}" | head -1)
       [ -n "$udid" ] && break
     done
     [ -z "$udid" ] && fail "没有可用的 iPhone 模拟器。请在 Xcode › Window › Devices and Simulators 中添加一台 iPhone。"
-    say "正在启动模拟器…"
+    say "正在启动模拟器（$ios）…"
     xcrun simctl boot "$udid" >/dev/null 2>&1 || true
   fi
   echo "$udid"
@@ -92,6 +100,25 @@ choose_persona() {
   case "$c" in 2) echo chenjie ;; 3) echo linyue ;; 4) echo wangjianguo ;; *) echo xiaolin ;; esac
 }
 
+booted_iphones() {
+  xcrun simctl list devices booted | grep -E "iPhone" | grep -Eo "[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}" || true
+}
+
+device_name() {
+  xcrun simctl list devices | grep "$1" | sed -E 's/^ *([^(]*[^ (]) *\(.*/\1/' | head -1
+}
+
+# Installs this build on one simulator and (re)starts Pulse there; the cloud keys go to this run only.
+install_and_launch() {
+  local udid="$1"; shift
+  xcrun simctl install "$udid" "$APP" || return 1
+  xcrun simctl terminate "$udid" "$BUNDLE_ID" >/dev/null 2>&1 || true
+  SIMCTL_CHILD_PULSE_OPENROUTER_KEY="$CLOUD_OPENROUTER" \
+  SIMCTL_CHILD_PULSE_ANTHROPIC_KEY="$CLOUD_ANTHROPIC" \
+  SIMCTL_CHILD_PULSE_KEY_SOURCE="~/.spark/keys" \
+    xcrun simctl launch "$udid" "$BUNDLE_ID" "$@" >/dev/null
+}
+
 run_demo() {
   local reset="$1"
   [ -d "$APP" ] || build_app
@@ -100,9 +127,6 @@ run_demo() {
   [[ "$udid" =~ ^[0-9A-F-]{36}$ ]] || exit 1
   open_simulator_window "$udid"
   xcrun simctl bootstatus "$udid" -b >/dev/null 2>&1 || true
-  say "正在安装 Pulse…"
-  xcrun simctl install "$udid" "$APP" || fail "安装失败。可以删除 Demo/Pulse.app 后重试，脚本会从源代码重新构建。"
-  xcrun simctl terminate "$udid" "$BUNDLE_ID" >/dev/null 2>&1 || true
   load_cloud_keys
   local args=(-PulseDemo)
   # PULSE_TIME="07:40" (or "2026-10-23 07:40") opens the demo at that moment; 我的 › 演示时间 changes it later.
@@ -111,14 +135,30 @@ run_demo() {
     local persona
     persona=$(choose_persona)
     args+=(-PulseReset -PulsePersona "$persona")
-    say "正在打开 Pulse（载入示例用户「$(persona_name "$persona")」的 120 天数据）…"
+    say "正在安装并打开 Pulse（载入示例用户「$(persona_name "$persona")」的 120 天数据）…"
   else
-    say "正在打开 Pulse（保留上次的数据）…"
+    say "正在安装并打开 Pulse（保留上次的数据）…"
   fi
-  SIMCTL_CHILD_PULSE_OPENROUTER_KEY="$CLOUD_OPENROUTER" \
-  SIMCTL_CHILD_PULSE_ANTHROPIC_KEY="$CLOUD_ANTHROPIC" \
-  SIMCTL_CHILD_PULSE_KEY_SOURCE="~/.spark/keys" \
-    xcrun simctl launch "$udid" "$BUNDLE_ID" "${args[@]}" >/dev/null
+  # Every booted iPhone gets this build and the same start, so whichever one the simulator window
+  # shows is the current demo — an older copy left on another simulator looks like an old version.
+  local devices=() d
+  while read -r d; do [ -n "$d" ] && devices+=("$d"); done < <(booted_iphones)
+  [[ " ${devices[*]} " == *" $udid "* ]] || devices+=("$udid")
+  for d in "${devices[@]}"; do
+    install_and_launch "$d" "${args[@]}" || fail "安装失败。可以删除 Demo/Pulse.app 后重试，脚本会从源代码重新构建。"
+  done
+  # The first start of the day can restart the simulator service, which shuts the device down
+  # again a few seconds later: if that happens, boot it once more and reopen Pulse.
+  local i
+  for i in 1 2 3 4 5; do
+    sleep 2
+    booted_iphones | grep -q "$udid" && continue
+    say "模拟器刚被系统重启，正在重新打开…"
+    xcrun simctl boot "$udid" >/dev/null 2>&1 || true
+    xcrun simctl bootstatus "$udid" -b >/dev/null 2>&1 || true
+    install_and_launch "$udid" "${args[@]}" || fail "安装失败。可以删除 Demo/Pulse.app 后重试，脚本会从源代码重新构建。"
+    break
+  done
   local found=()
   [ -n "$CLOUD_OPENROUTER" ] && found+=("OpenRouter")
   [ -n "$CLOUD_ANTHROPIC" ] && found+=("Anthropic")
@@ -126,15 +166,15 @@ run_demo() {
     say "已带上 ~/.spark/keys 中的 $(IFS=/; echo "${found[*]}") 密钥（只在本次运行中使用，未写入任何文件）。
   在 App「我的 › 云端模型（测试）」中测试连接、同意发送数据摘要后即可启用。"
   fi
-  local name
-  name=$(xcrun simctl list devices | grep "$udid" | sed -E 's/^ *([^(]*[^ (]) *\(.*/\1/')
+  local name=""
+  for d in "${devices[@]}"; do name+="${name:+、}「$(device_name "$d")」"; done
   if [ "$SIM_APP" = "DeviceHub" ]; then
     osascript -e 'tell application id "com.apple.dt.Devices" to activate' >/dev/null 2>&1 || true
-    printf "\n✓ Pulse 已在模拟器「%s」中打开。\n  在 DeviceHub 窗口左侧选择「%s」即可看到并操作 App。这个窗口可以关闭。\n" "$name" "$name"
+    printf "\n✓ Pulse 已在模拟器%s中打开（都是这次的版本）。\n  在 DeviceHub 窗口左侧选择其中一台即可看到并操作 App。这个窗口可以关闭。\n" "$name"
   elif [ "$SIM_APP" = "Simulator" ]; then
     osascript -e 'tell application id "com.apple.iphonesimulator" to activate' >/dev/null 2>&1 || true
-    printf "\n✓ Pulse 已在模拟器「%s」中打开。这个窗口可以关闭。\n" "$name"
+    printf "\n✓ Pulse 已在模拟器%s中打开（都是这次的版本）。这个窗口可以关闭。\n" "$name"
   else
-    printf "\n✓ Pulse 已在模拟器「%s」中运行，但没有找到模拟器窗口程序（Simulator 或 DeviceHub）。请在 Xcode › Window 中打开。\n" "$name"
+    printf "\n✓ Pulse 已在模拟器%s中运行，但没有找到模拟器窗口程序（Simulator 或 DeviceHub）。请在 Xcode › Window 中打开。\n" "$name"
   fi
 }

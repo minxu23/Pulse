@@ -27,8 +27,8 @@ struct HeartView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+                .padding(.horizontal, Theme.Space.gutter)
+                .padding(.bottom, Theme.Space.item)
                 .background(.bar)
             }
             .navigationTitle("趋势")
@@ -72,18 +72,18 @@ struct RHRTrendView: View {
     private func summaryCard(_ t: RHRTrend) -> some View {
         Card {
             HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                     Text("最近一次").font(.caption).foregroundStyle(.secondary)
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                         Text(t.latest.map { $0.value.noDecimal } ?? "—").font(.system(.largeTitle, design: .rounded).weight(.bold)).monospacedDigit()
                         Text("bpm").foregroundStyle(.secondary)
                     }
                     if let l = t.latest {
-                        Text("\(l.day.formatted(.dateTime.month().day())) · \(l.source.label)").font(.caption).foregroundStyle(.secondary)
+                        Text("\(l.day.formatted(.dateTime.month().day())) · \(l.source.label)").font(.footnote).foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
-                VStack(alignment: .trailing, spacing: 6) {
+                VStack(alignment: .trailing, spacing: Theme.Space.item) {
                     statusChip(t)
                     if let c = t.changeFromBaseline {
                         StatusLabel(text: "较基线 \(c.signedText) bpm", icon: c <= -1 ? "arrow.down.circle.fill" : (c >= 2 ? "arrow.up.circle.fill" : "equal.circle.fill"),
@@ -168,12 +168,12 @@ struct RHRTrendView: View {
                         RuleMark(x: .value("选中", s.day, unit: .day))
                             .foregroundStyle(Color.gray.opacity(0.4))
                             .annotation(position: .top, overflowResolution: .init(x: .fit, y: .disabled)) {
-                                VStack(spacing: 1) {
+                                VStack(spacing: Theme.Space.hairline) {
                                     Text("\(s.value.noDecimal) bpm").font(.caption.bold())
                                     Text(s.day.formatted(.dateTime.month().day())).font(.caption2).foregroundStyle(.secondary)
                                 }
-                                .padding(6)
-                                .background(Theme.card, in: RoundedRectangle(cornerRadius: 8))
+                                .padding(Theme.Space.item)
+                                .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
                                 .shadow(radius: 2)
                             }
                     }
@@ -187,7 +187,7 @@ struct RHRTrendView: View {
                 if let s = sel, let d = a.day(s.day) {
                     let tags = d.tags.union(a.day(s.day.adding(days: -1))?.tags.filter(\.actsOnNextMorning) ?? [])
                     if !tags.isEmpty {
-                        FlowLayout(spacing: 6) {
+                        FlowLayout(spacing: Theme.Space.item) {
                             ForEach(Array(tags).sorted { $0.rawValue < $1.rawValue }) { Chip(text: $0.label, icon: $0.icon, color: .orange) }
                         }
                     }
@@ -207,20 +207,20 @@ struct RHRTrendView: View {
         Card {
             CardHeader(title: "偏高的日子与可能背景", subtitle: "近 3 周高于 4 周均值的早晨", icon: "list.bullet.rectangle", color: .orange)
             ForEach(t.elevatedDays.prefix(6)) { d in
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Theme.Space.item) {
                     HStack {
                         Text(d.day.formatted(.dateTime.month().day().weekday())).font(.subheadline.weight(.medium))
                         Spacer()
                         StatusLabel(text: "\(d.value.noDecimal) bpm（+\(d.delta.noDecimal)）", icon: "arrow.up.circle.fill", color: .orange).font(.subheadline).monospacedDigit()
                     }
                     if d.hasExplanation {
-                        FlowLayout(spacing: 6) {
+                        FlowLayout(spacing: Theme.Space.item) {
                             ForEach(d.tags) { Chip(text: $0.label, icon: $0.icon, color: .orange) }
                             ForEach(d.inferred, id: \.self) { Chip(text: $0, icon: "info.circle", color: .secondary) }
                         }
                     } else {
                         HStack {
-                            Text("没有记录到相关背景").font(.caption).foregroundStyle(.secondary)
+                            Text("没有记录到相关背景").font(.footnote).foregroundStyle(.secondary)
                             Spacer()
                             Button("补充背景") { contextDay = d.day }.buttonStyle(.bordered)
                         }

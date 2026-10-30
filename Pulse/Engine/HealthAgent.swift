@@ -54,6 +54,10 @@ struct AgentContext {
     /// The forecast from today on, and where it comes from ("示例天气", "Apple 天气"); empty without one.
     var weather: [DayWeather] = []
     var weatherSource = ""
+    /// How answers are produced right now (for questions about privacy).
+    var answerMode: AnswerMode = .onDevice
+    /// What the user calls the agent (「Health Agent」 until they name it).
+    var agentName = AgentName.standard
     var medications: [MedicationInfo] { profile.medications.filter { $0.isActive(on: now) } }
     func weather(on day: Date) -> DayWeather? { weather.first { $0.day == day.startOfDay } }
 
@@ -225,6 +229,10 @@ struct AgentReply: Equatable {
     /// A safety-relevant conclusion (e.g. "不建议明天做大重量力量训练。") the language model must keep
     /// as its first sentence.
     var conclusion: String? = nil
+    /// Shown as written, without a language model: explanations and schedules a rewrite only blurs.
+    var verbatim = false
+    /// When to see a doctor or call 120: kept in the answer whatever a model writes.
+    var safety: String? = nil
 
     /// Plan changes for the user to adopt (none is adopted while the answer is shown).
     var proposals: [PlanChangeProposal] { blocks.compactMap(\.proposal) }
@@ -233,15 +241,23 @@ struct AgentReply: Equatable {
 
 enum AgentIntent: String, CaseIterable {
     case emergency, daySummary, meds, device, planChange, trainingCheck, labs, weather, glucose, bp, breathing, marathon, alcohol, caffeine, stress, diet, hrv, rhr
-    case readiness, sleep, exercise, events, doctor, next, overall, greeting, condition, unknown
+    case readiness, sleep, exercise, events, doctor, next, overall, greeting, condition
+    /// Answers chosen from what the question names rather than by keyword (see `AgentQuestion`).
+    case food, reading, symptom
+    /// About Pulse itself: where data goes, what answers are based on.
+    case about
+    /// General know-how (拉伸、跑鞋…), the same for everyone.
+    case knowledge, unknown
 
     /// Keywords in priority order (earlier intents win when several match).
     var keywords: [String] {
         switch self {
-        case .emergency: ["胸痛", "胸口痛", "胸闷", "喘不上气", "呼吸困难", "憋得慌", "晕倒", "晕厥", "昏倒", "昏迷", "意识不清", "一侧无力", "半边", "口角歪", "说话不清", "言语不清", "抽搐", "心跳很快停不下来", "严重低血糖", "想自杀", "不想活"]
+        case .emergency: ["想死", "轻生", "伤害自己", "活着没意思", "chest pain", "Chest pain", "can't breathe", "cannot breathe", "suicide", "kill myself",
+                          "胸痛", "胸口痛", "胸闷", "喘不上气", "呼吸困难", "憋得慌", "晕倒", "晕厥", "昏倒", "昏迷", "意识不清", "一侧无力", "半边", "口角歪", "说话不清", "言语不清", "抽搐", "心跳很快停不下来", "严重低血糖", "想自杀", "不想活"]
         case .daySummary: ["总结一下今天", "今天总结", "今天的总结", "今天怎么样", "今天的数据", "明天要注意", "明天注意", "今晚该注意", "今晚注意", "今晚要注意", "睡前注意"]
-        case .meds: ["药", "剂量", "胰岛素", "停药", "减药", "加药"]
-        case .device, .planChange, .trainingCheck, .condition: []
+        case .meds: ["药", "剂量", "胰岛素", "停药", "减药", "加药", "二甲双胍", "格列", "地平", "沙坦", "普利", "洛尔", "他汀", "阿司匹林",
+                     "利尿剂", "呋塞米", "华法林", "司美格鲁肽", "利拉鲁肽"]
+        case .device, .planChange, .trainingCheck, .condition, .food, .reading, .symptom, .about, .knowledge: []
         case .labs: ["化验", "检验", "验血", "抽血", "肌酐", "eGFR", "egfr", "肾小球滤过率", "肾功能", "血钾", "尿蛋白", "尿白蛋白", "UACR", "血磷", "血红蛋白", "尿酸", "糖化血红蛋白", "HbA1c"]
         case .weather: ["天气", "下雨", "雨天", "雷阵雨", "雷雨", "高温", "太热", "天热", "下雪", "雾霾", "空气质量", "空气污染", "AQI", "台风", "降温"]
         case .glucose: ["血糖", "CGM", "cgm", "低血糖", "高血糖", "糖尿病", "糖化", "TIR", "餐后"]
@@ -259,8 +275,8 @@ enum AgentIntent: String, CaseIterable {
         case .exercise: ["运动", "训练", "计划", "锻炼", "跑步", "有氧", "力量", "步数", "下周"]
         case .events: ["异常", "提醒", "警告", "事件"]
         case .doctor: ["医生", "就医", "看病", "复诊", "医院", "门诊", "检查"]
-        case .next: ["接下来", "下一步", "关注", "注意什么", "重点", "建议", "怎么做", "该做"]
-        case .overall: ["总体", "整体", "怎么样", "评价", "总结", "进展", "效果", "状态"]
+        case .next: ["接下来", "下一步", "关注", "注意什么", "重点", "建议", "该做"]
+        case .overall: ["总体", "整体", "怎么样", "评价", "总结", "进展", "进步", "变好", "改善", "效果", "状态"]
         case .greeting: ["你好", "您好", "hi", "Hi", "你是谁", "能做什么", "怎么用"]
         case .unknown: []
         }
@@ -277,6 +293,9 @@ enum AgentIntent: String, CaseIterable {
         case .planChange: PlanChat.isRequest(q)
         // "明天下雨能跑吗" is a training question that weighs the weather; "这几天天气适合户外训练吗" asks about the weather.
         case .trainingCheck: TrainingCheck.isRequest(q) && !Self.asksWeatherOverview(q)
+        case .overall:
+            keywords.filter { $0 != "怎么样" }.contains { q.contains($0) }
+                || (q.contains("怎么样") && ["我", "最近", "身体", "这段时间", "这个月", "这周", "近况"].contains { q.contains($0) })
         default: keywords.contains { q.contains($0) }
         }
     }
@@ -286,6 +305,39 @@ enum AgentIntent: String, CaseIterable {
 
 enum HealthAgent {
     static let emergencyText = "你描述的情况可能需要紧急处理。如果正在出现胸痛或胸闷、呼吸困难、晕厥、一侧肢体无力、口角歪斜、言语不清或意识模糊，请立即拨打 120，不要自行驾车就医；身边有人时请让他们陪同。\n\n严重低血糖且意识不清时不要喂食，同样立即拨打 120。如果你有伤害自己的想法，请立刻联系身边的人或拨打心理援助热线 12356。"
+
+    static let selfHarmText = "听到你这样说，我很担心你。如果你现在有伤害自己的想法，请马上联系身边信任的人陪着你，或者拨打心理援助热线 12356（24 小时）；如果已经有危险，立即拨打 120 或 110。\n\n你不用一个人扛着。愿意的话，可以和我说说发生了什么。"
+    static let selfHarmWords = ["想自杀", "不想活", "活着没意思", "想死", "轻生", "伤害自己", "suicide", "kill myself"]
+
+    /// The fixed reply for an emergency: thoughts of self-harm first, then the medical one.
+    static func emergencyReply(for q: String) -> AgentReply {
+        AgentReply(text: selfHarmWords.contains(where: { q.contains($0) }) ? selfHarmText : emergencyText, urgent: true, intent: .emergency)
+    }
+
+    /// 「那明天呢？」「那苹果呢？」: the previous question with the new day or food in it, so the rules can
+    /// answer it. nil when the question stands on its own or the change can't be placed.
+    static func resolveFollowUp(_ q: String, previous p: String?) -> String? {
+        let t = q.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let p, t.count <= 10, t.hasPrefix("那") || t.hasSuffix("呢") || t.hasSuffix("呢？") || t.hasSuffix("呢?"),
+              let g = AgentQuestion.groups(#"^(?:那么?)?(.{1,8}?)(?:呢|怎么样|行吗|可以吗)?[？?]?$"#, t), !g[0].isEmpty else { return nil }
+        let x = g[0]
+        let dayPattern = #"今天|明天|后天|今晚|明晚|明早|周末|这周|下周|(?:周|星期)[一二三四五六日天]"#
+        if x.range(of: "^(?:\(dayPattern))$", options: .regularExpression) != nil {
+            if let r = p.range(of: dayPattern, options: .regularExpression) { return p.replacingCharacters(in: r, with: x) }
+            return x + p
+        }
+        if let new = FoodGuide.find(in: x), let old = FoodGuide.find(in: p), new != old,
+           let alias = old.aliases.filter({ p.contains($0) }).max(by: { $0.count < $1.count }) {
+            return p.replacingOccurrences(of: alias, with: x)
+        }
+        return nil
+    }
+
+    /// Someone else's health (「我妈有高血压」): not answered from the user's own records.
+    static func aboutSomeoneElse(_ q: String) -> Bool {
+        q.range(of: "(妈|爸|母亲|父亲|老公|老婆|丈夫|妻子|爱人|孩子|儿子|女儿|宝宝|朋友|同事|爷爷|奶奶|外公|外婆|家人|亲戚)[^，。？]{0,2}(有|得了|是|血|的|发|最近|总|老是|一直|患|也)", options: .regularExpression) != nil
+            && !["我也", "我有", "我和", "陪"].contains { q.contains($0) }
+    }
 
     static func intent(for question: String) -> AgentIntent {
         let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -460,39 +512,57 @@ enum HealthAgent {
         // A condition the user says they have counts for this answer already; a card records it.
         // The question is what is left without it: 「我是低血钾症患者」 is not a question about lab results.
         let told = intent(for: question) == .emergency ? nil : ConditionLibrary.mention(in: question, profile: base.profile)
-        let i = intent(for: told.map { question.replacingOccurrences(of: $0.said, with: "") } ?? question)
+        let asked = told.map { question.replacingOccurrences(of: $0.said, with: "") } ?? question
+        let i = intent(for: asked)
         var c = base
         if let t = told { c.profile.include(t.info) }
+        if i == .emergency { return emergencyReply(for: asked) }
+        // Someone else's health: general knowledge, never the user's own numbers.
+        if aboutSomeoneElse(asked), told == nil {
+            var r = unknown(c)
+            r.text = "你问的是家人或朋友的情况，Pulse 只有你自己的记录，下面是一般性的建议；具体以他们的医生为准。"
+            return r
+        }
+        // What the question itself names (a reading, a food, a symptom) comes before its topic.
+        // Explicit plan edits and device help keep their own handling.
+        if i == .device, var k = knowledge(AgentQuestion(asked), context: c) {
+            if let t = told { k = withCondition(k, t, question: question, context: c, before: base) }
+            return k
+        }
+        if ![.planChange, .device].contains(i) || AgentQuestion(asked).symptom != nil,
+           var r = specific(AgentQuestion(asked), context: c) {
+            if let t = told { r = withCondition(r, t, question: question, context: c, before: base) }
+            return r
+        }
         var r: AgentReply
         switch i {
-        case .emergency:
-            return AgentReply(text: emergencyText, sources: [], followUps: [], destination: nil, urgent: true, intent: .emergency)
+        case .emergency: return emergencyReply(for: asked)
         case .daySummary: r = daySummary(c)
-        case .meds: r = meds(c)
+        case .meds: r = meds(c, question: question)
         case .device: r = DeviceGuide.reply(question, context: c)
         case .planChange: r = PlanChat.reply(question, context: c)
         case .trainingCheck: r = TrainingCheck.reply(question, context: c)
-        case .labs: r = labs(c)
+        case .labs: r = labs(c, question: question)
         case .weather: r = weather(c)
-        case .glucose: r = glucose(c)
-        case .bp: r = bloodPressure(c)
+        case .glucose: r = glucose(c, question: question)
+        case .bp: r = bloodPressure(c, question: question)
         case .breathing: r = breathing(c)
-        case .marathon: r = marathon(c)
+        case .marathon: r = marathon(c, question: question)
         case .alcohol: r = alcohol(c, question: question)
         case .caffeine: r = caffeine(c, question: question)
-        case .stress: r = stress(c)
+        case .stress: r = stress(c, question: question)
         case .diet: r = diet(c, question: question)
-        case .hrv: r = hrv(c)
+        case .hrv: r = hrv(c, question: question)
         case .rhr: r = rhr(c, question: question)
         case .readiness: r = readiness(c)
         case .sleep: r = sleep(c, question: question)
-        case .exercise: r = exercise(c)
+        case .exercise: r = exercise(c, question: question)
         case .events: r = events(c)
         case .doctor: r = doctor(c)
         case .next: r = next(c)
         case .overall: r = overall(c)
         case .greeting: r = greeting(c)
-        case .condition, .unknown: r = unknown(c)
+        case .condition, .food, .reading, .symptom, .about, .knowledge, .unknown: r = unknown(c)
         }
         r.intent = i
         if let t = told { r = withCondition(r, t, question: question, context: c, before: base) }
@@ -520,8 +590,15 @@ enum HealthAgent {
         var blocks: [AgentUIBlock] = [.condition(t)]
         if let plan = conditionPlan(x, question: q, context: c, before: base) { blocks.append(.plan(plan)) }
         let ask = "可以把「\(x.name)」记到你的健康状况里，点「记下」后生效。"
+        // A recent lab result that says the opposite (「低血钾」 with potassium 5.4) is pointed out first.
+        var contradiction: String? = nil
+        if let k = base.lab(.potassium, within: 180) {
+            let df = Date.FormatStyle().month().day()
+            if x.id == "hypokalemia", k.value > 5.0 { contradiction = "不过你\(k.date.formatted(df))的血钾是 \(k.valueText)，偏高，和低血钾正好相反，先和医生确认一下诊断；在那之前 Pulse 仍按偏高的化验结果给建议。" }
+            if x.id == "hyperkalemia", k.value < 3.5 { contradiction = "不过你\(k.date.formatted(df))的血钾是 \(k.valueText)，偏低，和高钾血症正好相反，先和医生确认一下诊断；在那之前 Pulse 仍按偏低的化验结果给建议。" }
+        }
         if [.unknown, .greeting, .overall, .next, .doctor].contains(r.intent) {
-            var parts: [String?] = [ask]
+            var parts: [String?] = [ask, contradiction]
             if x.known, !x.summary.isEmpty { parts.append(x.summary) }
             parts.append(bullets(x.changes.map { "记下后，" + $0 }))
             let tips = Array(x.exercise.prefix(2) + x.daily.prefix(1)) + (x.stopSigns.isEmpty ? [] : [x.stopSigns])
@@ -530,9 +607,10 @@ enum HealthAgent {
             out = AgentReply(text: lines(parts), sources: [x.known ? "Pulse 内置的慢病要点" : "你的描述"],
                              followUps: ["\(x.name)运动时要注意什么？", "这周的训练要怎么调整？"], intent: .condition, conclusion: ask)
         } else {
-            out.text += "\n\n你提到有\(x.name)。" + ask
+            out.text += "\n\n你提到有\(x.name)。" + ask + (contradiction ?? "")
         }
         out.blocks = Array((blocks + r.blocks.filter { b in !(blocks.count > 1 && b.proposal != nil) }).prefix(AgentUI.maxBlocks))
+        if let contradiction { out.safety = contradiction }
         return out
     }
 
@@ -601,10 +679,10 @@ enum HealthAgent {
         return parts.isEmpty ? nil : parts.joined(separator: "\n")
     }
 
-    private static func lines(_ parts: [String?]) -> String {
+    static func lines(_ parts: [String?]) -> String {
         parts.compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n\n")
     }
-    private static func bullets(_ items: [String]) -> String? {
+    static func bullets(_ items: [String]) -> String? {
         items.isEmpty ? nil : items.map { "• " + $0 }.joined(separator: "\n")
     }
 
@@ -618,9 +696,32 @@ enum HealthAgent {
         if let a28 = t.avg28 { first += "，近 4 周 \(a28.noDecimal)" }
         if let b = t.baseline { first += "，个人基线 \(b.noDecimal)（\((a7 - b).signedText)）" }
         first += "。" + t.headline + (t.headline.hasSuffix("。") ? "" : "。")
-        // Answer the premise first when the question assumes no progress but the data shows some.
+        // 「静息心率多少算正常」: what it is, then this person's number.
+        if ["多少算", "正常范围", "正常值", "是什么", "什么意思", "多少正常"].contains(where: { question.contains($0) }) {
+            let lead = "成年人安静时的心率一般在 60–100 次/分，常运动的人 50 多甚至更低也正常；更有用的是和自己比：同样条件下比平时高，往往说明没恢复好。"
+            return AgentReply(text: lines([lead, "你近 7 天平均 \(a7.noDecimal) bpm" + (t.baseline.map { "，个人基线 \($0.noDecimal)" } ?? "") + "。"]),
+                              sources: ["静息心率 \(t.points.count) 天"], followUps: ["怎么才能把静息心率降下来？"], destination: .heart, conclusion: lead)
+        }
+        // Answer the premise first when the question assumes no progress.
         let assumesFlat = ["没怎么降", "没降", "不降", "降不下来", "没有下降", "没变化", "没效果"].contains { question.contains($0) }
         var correction: String? = nil
+        if assumesFlat, c.dimension("rhr")?.status != .improved {
+            // It really has been flat: what in the records is most likely holding it up.
+            var held: [String] = []
+            let weekly = c.dimension("activity")?.to ?? "\(Int(c.weekActiveMinutes)) 分钟/周"
+            if c.weekActiveMinutes < 150 || c.dimension("activity")?.status == .needsWork { held.append("活动量偏少：现在大约 \(weekly)，降静息心率一般要每周 150 分钟以上的规律有氧") }
+            for a in ["alcohol-rhr", "shortsleep-rhr", "stress-rhr"].compactMap({ c.association($0) }).filter(\.unfavorable)
+                .sorted(by: { abs($0.withMean - $0.withoutMean) > abs($1.withMean - $1.withoutMean) }).prefix(2) {
+                let e = abs(a.withMean - a.withoutMean).oneDecimal
+                held.append(a.id == "alcohol-rhr" ? "喝酒：喝过酒的第二天早上平均高 \(e)" : (a.id == "shortsleep-rhr" ? "睡得少：睡不够的早上平均高 \(e)" : "压力：压力大的第二天平均高 \(e)"))
+            }
+            if c.profile.onRateLoweringMeds() { held.append("你在用会影响心率的药，静息心率要结合用药来看") }
+            let lead = "最近确实变化不大：近 7 天平均 \(a7.noDecimal)" + (t.avg28.map { "，近 4 周 \($0.noDecimal)" } ?? "") + "，基本在你平时的范围里。"
+            return AgentReply(text: lines([lead, held.isEmpty ? nil : "从记录看，最可能拖住它的是：\n" + held.map { "• " + $0 }.joined(separator: "\n"),
+                                           "静息心率一般要坚持 4–8 周规律有氧、睡够觉才看得出变化，先从活动量下手最有效。"]),
+                              sources: ["静息心率 \(t.points.count) 天", "行为关联 近 120 天"], followUps: ["怎么才能把静息心率降下来？"],
+                              destination: .heart, conclusion: lead)
+        }
         if assumesFlat, let b = t.baseline, a7 <= b - 2 {
             correction = "从记录看，你的静息心率其实在下降：比个人基线 \(b.noDecimal) 低了 \((b - a7).oneDecimal) bpm。"
             var premise = correction ?? ""
@@ -628,6 +729,37 @@ enum HealthAgent {
                 premise += "最近 4 周变化不大，是因为越接近个人的稳定水平，下降越慢，这很常见。"
             }
             first = premise + "\n\n" + first
+        }
+        // 「最近心率为什么变高了」 when it has not: say so first.
+        let assumesRise = ["变高", "升高", "偏高", "高了", "上升", "变快", "快了"].contains { question.contains($0) }
+        var rising = false
+        if case .rise = t.sustained { rising = true }
+        if assumesRise, !rising, let b = t.baseline, a7 <= b + 1 {
+            correction = "从记录看，你的静息心率最近没有变高：近 7 天平均 \(a7.noDecimal)，" + (a7 < b - 1 ? "比个人基线 \(b.noDecimal) 还低 \((b - a7).oneDecimal)。" : "和个人基线 \(b.noDecimal) 差不多。")
+            first = correction! + "如果是某一天早上偏高，常见原因是前一晚睡得少、喝了酒、压力大或快要生病。\n\n" + first
+        }
+        // 「怎么才能把静息心率降下来」: the levers this person's own records point to.
+        if !assumesFlat, ["怎么降", "怎么才能", "如何降", "降下来", "怎样降", "怎么让", "降低"].contains(where: { question.contains($0) }) {
+            var levers: [String] = []
+            for a in ["alcohol-rhr", "shortsleep-rhr", "stress-rhr", "latemeal-rhr", "hard-rhr"].compactMap({ c.association($0) }).filter(\.unfavorable)
+                .sorted(by: { abs($0.withMean - $0.withoutMean) > abs($1.withMean - $1.withoutMean) }) {
+                let e = abs(a.withMean - a.withoutMean).oneDecimal
+                switch a.id {
+                case "alcohol-rhr": levers.append("少喝酒：你喝过酒的第二天早上，静息心率平均高 \(e)")
+                case "shortsleep-rhr": levers.append("睡够 7 小时：睡不够的早上平均高 \(e)")
+                case "stress-rhr": levers.append("压力大的日子做 10 分钟慢呼吸或散步：压力大的第二天平均高 \(e)")
+                case "latemeal-rhr": levers.append("晚饭在睡前 3 小时吃完：晚饭太晚的第二天平均高 \(e)")
+                default: levers.append("两次强度课之间隔开一天：强度课后的早上平均高 \(e)")
+                }
+            }
+            let minutes = Int(c.weekActiveMinutes)
+            levers.append("每周 150 分钟以上的中低强度有氧（能说话、不能唱歌），加 2 次力量训练：这周目前 \(minutes) 分钟")
+            let lead = "对你最有用的是这几件事，按你记录里影响从大到小排："
+            var progress: String? = nil
+            if let b = t.baseline, a7 <= b - 2 { progress = "你已经比个人基线低了 \((b - a7).oneDecimal) bpm，方向是对的；越接近稳定水平降得越慢，通常要 4–8 周才看得出新变化。" }
+            return AgentReply(text: lines([lead, bullets(Array(levers.prefix(4))), progress, first]),
+                              sources: ["静息心率 \(t.points.count) 天", "行为关联 近 120 天"],
+                              followUps: ["饮酒对我的影响有多大？", "我的睡眠怎么样？"], destination: .heart, conclusion: lead)
         }
         var why: [String] = []
         if case .rise(let d) = t.sustained {
@@ -642,11 +774,12 @@ enum HealthAgent {
             let top = Dictionary(grouping: tags, by: { $0 }).sorted { $0.value.count != $1.value.count ? $0.value.count > $1.value.count : $0.key < $1.key }.prefix(3).map(\.key)
             why.append("近 3 周偏高的早晨，多伴随：\(top.joined(separator: "、"))。")
         }
-        var advice = "降低静息心率最可靠的方式是：每周 150 分钟以上的规律有氧、稳定充足的睡眠、减少饮酒和压力。通常需要 4–8 周以上才看得到变化。"
+        var advice: String? = "降低静息心率最可靠的方式是：每周 150 分钟以上的规律有氧、稳定充足的睡眠、减少饮酒和压力。通常需要 4–8 周以上才看得到变化。"
         if c.dimension("rhr")?.status == .stable, c.dimension("activity")?.status == .improved {
             advice = "你的活动量已经提升，静息心率往往滞后于习惯变化。保持当前组合再观察 4–8 周，避免同时改变太多。"
         }
         let limit = t.limitations.first.map { "需要注意：\($0)" }
+        if correction != nil && assumesRise { advice = nil }
         return AgentReply(text: lines([first, why.joined(separator: "\n\n"), advice, limit]),
                           sources: ["静息心率 \(t.points.count) 天", "行为关联 近 120 天"],
                           followUps: ["饮酒对我的影响有多大？", "怎样安排运动更有效？", "我的睡眠怎么样？"], destination: .heart,
@@ -689,15 +822,28 @@ enum HealthAgent {
                           followUps: c.pastBedtime ? ["睡不着怎么办？", "明天适合运动吗？"] : ["今晚该注意什么？", "这周的训练完成得怎么样？"])
     }
 
-    static func hrv(_ c: AgentContext) -> AgentReply {
+    static func hrv(_ c: AgentContext, question q: String = "") -> AgentReply {
         let r7 = Stats.mean(c.recent7.compactMap(\.hrv))
         let r28 = Stats.mean(c.days.filter { $0.day > c.now.adding(days: -28) }.compactMap(\.hrv))
         guard let a = r7 else {
             return AgentReply(text: "还没有心率变异性（HRV）数据。佩戴支持的手表入睡后会自动记录。", destination: .heart)
         }
-        var text = "近 7 天 HRV 平均 \(a.noDecimal) ms\(r28.map { "，近 4 周 \($0.noDecimal) ms" } ?? "")。HRV 个体差异很大，只适合和你自己比较：比平时低，通常代表恢复不足或压力较大。"
-        if let al = c.association("alcohol-hrv"), al.unfavorable { text += "\n\n" + al.sentence + "（观察到的关联）" }
-        return AgentReply(text: text, sources: ["HRV 近 28 天"], followUps: ["今天适合运动吗？", "为什么静息心率最近没怎么降？"], destination: .heart)
+        if ["是什么", "什么意思", "多少算", "正常范围", "正常值"].contains(where: { q.contains($0) }) {
+            let lead = "HRV（心率变异性）是相邻两次心跳间隔的细微变化，一般在睡眠时测。它因人而异，20 到 100 多都常见，只适合和自己比：比平时高通常说明恢复得好，持续偏低常见于睡得少、喝了酒、压力大、练得多或快生病了。"
+            return AgentReply(text: lines([lead, "你近 7 天平均 \(a.noDecimal) ms" + (r28.map { "，近 4 周 \($0.noDecimal) ms" } ?? "") + "。"]),
+                              sources: ["HRV 近 28 天"], followUps: ["为什么我的HRV这么低？"], destination: .heart, conclusion: lead)
+        }
+        var first: String? = nil
+        if ["低", "下降", "掉"].contains(where: { q.contains($0) }), let m = r28 {
+            first = a >= m - 2 ? "从记录看，你的 HRV 最近不算低：近 7 天平均 \(a.noDecimal) ms，\(a > m + 2 ? "比" : "和")近 4 周的 \(m.noDecimal) ms \(a > m + 2 ? "还高" : "差不多")。"
+                : "最近确实比平时低：近 7 天平均 \(a.noDecimal) ms，近 4 周是 \(m.noDecimal) ms。"
+        }
+        var parts: [String?] = [first ?? "近 7 天 HRV 平均 \(a.noDecimal) ms\(r28.map { "，近 4 周 \($0.noDecimal) ms" } ?? "")。"]
+        parts.append("HRV 个体差异很大，有人 30 有人 100，只适合和自己比；比平时低，通常是睡得少、喝了酒、压力大、练得多或快生病了。")
+        let found = ["alcohol-hrv"].compactMap { c.association($0) }.filter(\.unfavorable)
+        if !found.isEmpty { parts.append(found.map { $0.sentence + "（观察到的关联）" }.joined()) }
+        return AgentReply(text: lines(parts), sources: ["HRV 近 28 天"], followUps: ["今天适合运动吗？", "为什么静息心率最近没怎么降？"], destination: .heart,
+                          conclusion: first)
     }
 
     static func readiness(_ c: AgentContext) -> AgentReply {
@@ -718,16 +864,30 @@ enum HealthAgent {
             return AgentReply(text: "今天的身体准备度还没有评估。记录醒后感受（约 20 秒）后，我会结合昨夜睡眠、静息心率和 HRV 告诉你今天适合安排多少。\n\n在那之前：\(c.guidance.exercise)",
                               followUps: ["我的睡眠怎么样？"])
         }
-        let plan = c.todayPlan.filter { $0.kind.isTraining || $0.kind == .walk }.map { "\($0.title)（\($0.minutes) 分钟，\($0.intensity.label)，\($0.status.label)）" }
         let factors = r.factors.filter { $0.available && $0.impact == .negative }.map(\.name)
+        let session = c.todayPlan.first { $0.kind.isTraining && $0.status == .planned }
+        let done = c.todayPlan.first { $0.kind.isTraining && ($0.status == .done || $0.status == .partial) }
+        var first = "今天准备度 \(score)，\(r.level.label)。"
+        if let s = session {
+            switch r.level {
+            case .high: first += "今天的「\(s.title)」可以按计划做。"
+            case .moderate: first += "今天的「\(s.title)」可以做，强度课缩短一些或少做几组。"
+            case .low: first += "今天的「\(s.title)」建议换成轻松有氧或散步。"
+            case .rest: first += "今天的「\(s.title)」先不做，休息或散散步。"
+            }
+        } else if let d = done {
+            first += "今天的「\(d.title)」已经练完，剩下的时间放松就好。"
+        } else {
+            first += r.level == .high || r.level == .moderate ? "今天没有训练安排，想动就做点轻松活动。" : "今天没有训练安排，正好休息。"
+        }
         return AgentReply(text: lines([
-            "今天准备度 \(score)，\(r.level.label)（\(r.confidence.label)）。\(r.recommendation)",
+            first,
             factors.isEmpty ? nil : "主要拉低准备度的是：\(factors.joined(separator: "、"))。",
-            bullets(["运动：\(c.guidance.exercise)", "负荷：\(c.guidance.load)", "恢复：\(c.guidance.recovery)"]),
-            plan.isEmpty ? "今天没有训练安排，保持日常活动即可。" : "今天的计划：\(plan.joined(separator: "；"))。",
+            r.level == .low || r.level == .rest ? c.guidance.recovery : nil,
+            r.confidence == .low ? "今天的数据不全（\(r.confidence.label)），以你自己的感受为准。" : nil,
             r.overrides.first,
         ]), sources: ["昨夜睡眠", "静息心率与 HRV", "近期负荷", "醒后感受"],
-                          followUps: ["今晚该注意什么？", "这周的训练完成得怎么样？"])
+                          followUps: ["准备度是怎么算的？", "这周的训练完成得怎么样？"], conclusion: first)
     }
 
     static func sleep(_ c: AgentContext, question q: String = "") -> AgentReply {
@@ -743,6 +903,23 @@ enum HealthAgent {
                          "当晚按平时时间上床，提前不超过 1 小时，不要一次补很久"]),
                 "一晚睡少对静息心率和 HRV 的影响通常 1–2 天就能恢复；连续几晚睡不够影响才会累积。",
             ]), sources: ["睡眠时间设置"], followUps: ["明天适合运动吗？", "我的睡眠怎么样？"], destination: .sleep)
+        }
+        if c.nightLine == nil || c.profile.shift != nil, ["睡不着", "失眠", "入睡难", "入睡困难", "睡不好", "早醒"].contains(where: { q.contains($0) }) {
+            let cutoff = c.profile.caffeineCutoffHour
+            let first = "睡不着时别硬躺：躺了 20 分钟还没睡意，就起来到别的房间，在暗光下做点安静的事，困了再回床上。"
+            var tips = ["每天同一时间起床，周末也一样，这比早点上床更管用", "床只用来睡觉，别在床上刷手机、工作",
+                        "睡前 1 小时调暗灯光、放下手机，做 5 分钟慢呼吸（吸 4 秒、呼 6 秒）",
+                        "咖啡和浓茶放在 \(cutoff):00 前，晚上不喝酒"]
+            if let b = s.bedtimeSD, b > 45 { tips[0] = "你入睡时间前后差得比较多：先固定起床时间，周末也一样" }
+            var found: [String] = []
+            if let a = c.association("caffeine-sleep"), a.unfavorable { found.append(a.sentence) }
+            if c.recent7.filter(\.highStress).count >= 2 { found.append("这周压力大的天比较多。") }
+            if c.profile.shift != nil { tips[0] = "倒班的人更容易睡不好：夜班后补觉时卧室全遮光、手机静音，休息日起床时间别比上班日晚太多" }
+            return AgentReply(text: lines([
+                first, bullets(tips),
+                found.isEmpty ? nil : "从你的记录看（不一定是原因）：" + found.joined(),
+                "偶尔一两晚睡不好不用担心；每周 3 晚以上、持续 3 个月，可以去睡眠门诊，失眠的认知行为治疗很有效。",
+            ]), sources: ["睡眠", "咖啡因记录"], followUps: ["熬夜后怎么恢复？", "我的睡眠怎么样？"], destination: .sleep, conclusion: first)
         }
         if let roster = c.profile.shift, c.window.kind == .night || c.window.afterNightShift
             || ["夜班", "下班", "补觉", "倒班"].contains(where: { q.contains($0) }) {
@@ -822,25 +999,64 @@ enum HealthAgent {
         return AgentReply(text: text, sources: ["睡眠呼吸线索 近 30 天"], followUps: ["饮酒对我的影响有多大？", "接下来我该关注什么？"], destination: .sleep)
     }
 
-    static func exercise(_ c: AgentContext) -> AgentReply {
+    static func exercise(_ c: AgentContext, question q: String = "") -> AgentReply {
         var parts: [String?] = []
+        var verdict: String? = nil
+        if ["太大", "太多", "太猛", "过量", "练多了", "太累"].contains(where: { q.contains($0) }) {
+            switch c.load.zone {
+            case .high: verdict = "是有点大：最近的训练负荷比前 4 周的平均水平涨得太快（负荷比 \(c.load.ratio.map { String(format: "%.2f", $0) } ?? "—")），这几天先减量。"
+            case .caution: verdict = "有一点偏多：负荷比 \(c.load.ratio.map { String(format: "%.2f", $0) } ?? "—")，已经接近上限，这周别再加量。"
+            case .low: verdict = "不大，反而偏少：最近的训练负荷比前 4 周的平均水平低（负荷比 \(c.load.ratio.map { String(format: "%.2f", $0) } ?? "—")），可以按计划慢慢加回来。"
+            case .insufficient: verdict = "记录还不够判断：训练负荷要有几周的记录才算得出来。"
+            default: verdict = "不大：最近的训练负荷和前 4 周的水平相当（负荷比 \(c.load.ratio.map { String(format: "%.2f", $0) } ?? "—")），节奏合适。"
+            }
+        } else if ["太少", "不够", "够不够", "够吗", "多不多"].contains(where: { q.contains($0) }) {
+            let enough = c.weekActiveMinutes >= Double(c.profile.weeklyTargetMinutes)
+            verdict = enough ? "够了：这周已活动 \(Int(c.weekActiveMinutes)) 分钟，达到每周 \(c.profile.weeklyTargetMinutes) 分钟的目标。"
+                : "还差一些：这周已活动 \(Int(c.weekActiveMinutes)) 分钟，每周目标 \(c.profile.weeklyTargetMinutes) 分钟。"
+        }
+        parts.append(verdict)
         parts.append("本周完成 \(c.weekTrainingsDone)/\(c.weekTrainingsTotal) 次训练，活动 \(Int(c.weekActiveMinutes)) 分钟（本周目标 \(c.profile.weeklyTargetMinutes) 分钟）。")
         if let h = c.adherence("plan") { parts.append("近 4 周：\(h.detail)，\(h.verdict.label)。\(h.suggestion)") }
-        if let fit = c.planFit.first { parts.append("可能不适合你的安排：\(fit.title)。\(fit.detail)") }
-        if let ratio = c.load.ratio { parts.append("训练负荷比 \(String(format: "%.2f", ratio))（\(c.load.zone.label)）。\(c.load.message)") }
+        if verdict == nil, let fit = c.planFit.first { parts.append("可能不适合你的安排：\(fit.title)。\(fit.detail)") }
+        if verdict == nil, let ratio = c.load.ratio { parts.append("训练负荷比 \(String(format: "%.2f", ratio))（\(c.load.zone.label)）。\(c.load.message)") }
         if let act = c.dimension("activity"), act.status != .insufficient { parts.append("长期看，活动持续性\(act.status.label)：\([act.from, act.to].compactMap { $0 }.joined(separator: " → "))。") }
         parts.append("对静息心率最有帮助的是规律的中低强度有氧（能说话但不能唱歌），每周 150–300 分钟，并加入 2 次力量训练。")
         if c.profile.intensityCapped { parts.append("你记录了\(c.profile.intensityCaps.joined(separator: "、"))：医生确认之前，计划里不安排间歇和大重量。") }
         parts.append(conditionPoints(c.profile, \.exercise))
+        if verdict != nil { parts.removeAll { $0?.hasPrefix("对静息心率最有帮助") == true || $0?.hasPrefix("长期看") == true } }
         return AgentReply(text: lines(parts), sources: ["计划完成情况", "训练负荷 近 28 天"],
-                          followUps: ["今天适合运动吗？", "为什么静息心率最近没怎么降？"], destination: .plan)
+                          followUps: ["今天适合运动吗？", "为什么静息心率最近没怎么降？"], destination: .plan, conclusion: verdict)
     }
 
-    static func marathon(_ c: AgentContext) -> AgentReply {
+    static func marathon(_ c: AgentContext, question q: String = "") -> AgentReply {
+        if ["补给", "能量胶", "吃什么", "喝水"].contains(where: { q.contains($0) }) {
+            let carbs = c.profile.race?.fuelCarbsPerHour ?? 45
+            let lead = "跑 60–90 分钟以上才需要途中补给：每小时 \(carbs) g 左右碳水（一支能量胶约 25 g），从第 30–40 分钟开始，每 20–30 分钟补一次。"
+            return AgentReply(text: lines([lead, bullets([
+                "水每 15–20 分钟喝几口，天热或出汗多时用运动饮料补点盐",
+                "比赛用的能量胶和饮料，先在长距离训练里试，别在比赛当天第一次用",
+                "赛前 2–3 小时吃一顿好消化的早饭，以碳水为主，少油少纤维",
+            ]), c.profile.hasDiabetes ? "你有糖尿病：长时间跑之前、途中都要看血糖，补给方案先和医生商量。" : nil,
+                c.profile.fluidLimited ? "你在限水：途中喝多少要按医生允许的量，先问过医生再参加长距离。" : nil]),
+                              sources: ["耐力运动常识"], followUps: ["我适合跑马拉松吗？"], destination: .marathon, conclusion: lead)
+        }
         guard let w = c.race else {
             return AgentReply(text: "还没有设置赛事目标。在「专项运动」中填写比赛日期、目标成绩和当前跑量后，我可以评估可行性并解释每个阶段的重点。", destination: .marathon)
         }
-        var parts: [String?] = ["\(c.raceName.isEmpty ? "全程马拉松" : c.raceName)：距比赛 \(w.weeksToRace) 周，当前处于\(w.phase.label)。\(w.phase.focus)",
+        // 「我适合跑马拉松吗」 with a race already set: whether it is on track.
+        var lead: String? = nil
+        if ["适合", "能不能", "能跑", "可以跑", "跑得下来", "来得及", "行不行"].contains(where: { q.contains($0) }) {
+            let name = c.raceName.isEmpty ? "这场马拉松" : c.raceName
+            if c.profile.cardiacLimited || c.profile.intensityCapped {
+                lead = "你记录了需要医生确认运动强度的情况，\(name)报名前先请医生评估能不能做长时间的耐力训练。"
+            } else if let pr = c.racePrediction, let t = c.raceTarget, pr.minutes > t {
+                lead = "适合，按计划练完赛没问题：距\(name)还有 \(w.weeksToRace) 周；目标 \(RacePredictor.timeText(t)) 现在还差约 \(pr.minutes - t) 分钟，要看接下来几周的进展。"
+            } else {
+                lead = "适合，按计划练完赛没问题：距\(name)还有 \(w.weeksToRace) 周，现在是\(w.phase.label)。"
+            }
+        }
+        var parts: [String?] = [lead, "\(c.raceName.isEmpty ? "全程马拉松" : c.raceName)：距比赛 \(w.weeksToRace) 周，当前处于\(w.phase.label)。\(w.phase.focus)",
                                 "本周目标跑量约 \(Int(w.weeklyKm)) km，长距离 \(Int(w.longRunKm)) km；轻松跑 \(MarathonPlanner.paceText(w.easyPace))，马拉松配速 \(MarathonPlanner.paceText(w.marathonPace))。"]
         if let pr = c.racePrediction {
             var line = "按近 8 周最好的一次训练（\(pr.basisKm.oneDecimal) km）估算，全马约 \(RacePredictor.timeText(pr.minutes))"
@@ -852,33 +1068,120 @@ enum HealthAgent {
         if c.load.zone == .high || c.load.zone == .caution { parts.append(c.load.message) }
         parts.append(w.warnings.first)
         if c.profile.cardiacLimited { parts.append("你记录了心血管相关情况：较高强度内容需要医生确认后再进行。") }
-        return AgentReply(text: lines(parts), sources: ["专项计划", "跑步记录 近 8 周"], followUps: ["长距离怎么补给？", "今天适合运动吗？"], destination: .marathon)
+        return AgentReply(text: lines(parts), sources: ["专项计划", "跑步记录 近 8 周"], followUps: ["长距离怎么补给？", "今天适合运动吗？"], destination: .marathon,
+                          conclusion: lead)
     }
 
     static func alcohol(_ c: AgentContext, question q: String = "") -> AgentReply {
         let week = c.days.filter { $0.day >= c.weekStart }.map(\.alcoholUnits).reduce(0, +)
         var parts: [String?] = []
         var nowAnswer: String? = nil
+        // 「喝酒后第二天能跑步吗」: training after a drink, from this person's own next mornings.
+        if ["喝酒后", "酒后", "喝了酒", "喝完酒", "宿醉", "喝过酒"].contains(where: { q.contains($0) }),
+           ["跑", "练", "运动", "锻炼", "健身", "骑"].contains(where: { q.contains($0) }) {
+            let rhr = c.association("alcohol-rhr").flatMap { $0.unfavorable ? abs($0.withMean - $0.withoutMean) : nil }
+            let hrv = c.association("alcohol-hrv").flatMap { $0.unfavorable ? abs($0.withMean - $0.withoutMean) : nil }
+            let lead = "可以动，但做轻松的：喝过酒的第二天身体还在代谢酒精，强度课和长距离最好换一天。"
+            let effect = [rhr.map { "静息心率平均高 \($0.oneDecimal)" }, hrv.map { "HRV 低 \($0.noDecimal) ms" }].compactMap { $0 }
+            return AgentReply(text: lines([
+                lead,
+                effect.isEmpty ? nil : "从你的记录看，喝过酒的第二天早上\(effect.joined(separator: "、"))，恢复确实会慢一些。",
+                bullets(["早上先看准备度，偏低就改成散步或拉伸", "跑的话以能完整说话为准，时间缩短三分之一", "前一晚喝得多、头疼或心慌，就休息一天",
+                         c.profile.fluidLimited ? "补水按医生允许的量来" : "运动前后多补点水"]),
+                alcoholCautions(c),
+            ]), sources: ["次日静息心率与 HRV"], followUps: ["饮酒对我的影响有多大？"], destination: .recovery, conclusion: lead)
+        }
         if asksAboutNow(q), c.nearBedtime {
             nowAnswer = "现在 \(c.clock)，今晚不建议再喝酒。"
-            parts.append("现在 \(c.clock)，\(c.pastBedtime ? "已过" : "离")\(c.bedPhrase) 的入睡时间\(c.pastBedtime ? "" : "不到 3 小时")，今晚不建议再喝：睡前 3 小时内饮酒对夜间心率和睡眠的影响最大。想喝点什么可以换成温水或无糖的热饮。")
+            // The answer opens with the verdict, then why.
+            parts.append(nowAnswer! + "\(c.pastBedtime ? "已经过了" : "离")\(c.bedPhrase) 的入睡时间\(c.pastBedtime ? "" : "不到 3 小时")，睡前 3 小时内喝酒对夜间心率和睡眠的影响最大。想喝点什么可以换成温水或无糖的热饮。")
         }
-        parts.append("本周饮酒 \(week.oneDecimal) 单位（你的上限 \(c.profile.weeklyAlcoholLimit.noDecimal) 单位）。\(c.adherence("alcohol").map { "近 4 周 \($0.detail)。" } ?? "")")
         let found = ["alcohol-rhr", "alcohol-hrv"].compactMap { c.association($0) }
+        // A drink ahead (「周末聚会要喝酒」): what it does to this person, and how to soften it.
+        if nowAnswer == nil, ["聚会", "要喝", "准备喝", "会喝", "饭局", "应酬", "喝点", "喝几杯"].contains(where: { q.contains($0) }) {
+            let rhr = c.association("alcohol-rhr").flatMap { $0.unfavorable ? abs($0.withMean - $0.withoutMean) : nil }
+            let hrv = c.association("alcohol-hrv").flatMap { $0.unfavorable ? abs($0.withMean - $0.withoutMean) : nil }
+            let effect = [rhr.map { "静息心率平均高 \($0.oneDecimal)" }, hrv.map { "HRV 低 \($0.noDecimal) ms" }].compactMap { $0 }
+            let lead = effect.isEmpty ? "喝酒会让当晚心率偏高、睡得浅，第二天恢复慢一些；聚会时这样做影响会小很多："
+                : "从你的记录看，喝过酒的第二天早上\(effect.joined(separator: "、"))，恢复会慢一些；聚会时这样做影响会小很多："
+            var tips = ["别空腹喝，先吃点东西", "控制在 2 个单位以内（大约一罐啤酒或一杯红酒），每杯酒配一杯水",
+                        "离睡觉 3 小时前停，回家按平时时间睡"]
+            if c.profile.fluidLimited { tips[1] = "控制在 2 个单位以内（大约一罐啤酒或一杯红酒），酒也算进当天的饮水量" }
+            let caution = alcoholCautions(c)
+            let after = q.contains("周末") ? c.plan.filter { [1, 7].contains($0.day.weekday) && $0.day >= c.logicalToday && $0.status == .planned && ($0.intensity == .hard || $0.kind == .long || $0.kind == .quality) }
+                : c.tomorrow.filter { $0.status == .planned && ($0.intensity == .hard || $0.kind == .long || $0.kind == .quality) }
+            if let s = after.first { tips.append("\(Weekday.name(s.day.weekday))的「\(s.title)」放在喝酒前一天，或者往后挪一天") }
+            return AgentReply(text: lines([lead, bullets(tips), caution, "本周目前喝了 \(week.oneDecimal) 个单位，你给自己定的上限是 \(c.profile.weeklyAlcoholLimit.noDecimal)。"]),
+                              sources: ["饮酒记录", "次日静息心率与 HRV"], followUps: ["喝酒后第二天能跑步吗？"], destination: .recovery, conclusion: lead,
+                              safety: caution)
+        }
+        var effectLead: String? = nil
+        if nowAnswer == nil, !q.contains("影响"), AgentQuestion.form(of: q) == .canI {
+            let limit = c.profile.weeklyAlcoholLimit
+            let h = c.adherence("alcohol")
+            var lead = week >= limit ? "这周已经喝到你给自己定的上限（\(week.oneDecimal) 个单位），最好别再喝了。"
+                : "可以少喝一点：这周喝了 \(week.oneDecimal) 个单位，你给自己定的上限是 \(limit.noDecimal)。"
+            if week < limit, let h, h.verdict == .struggling || h.verdict == .partial { lead += "不过从近 4 周看（\(h.detail)），控制得不太好。" }
+            effectLead = lead
+            parts.append(lead)
+        }
+        if nowAnswer == nil, q.contains("影响") {
+            let rhr = c.association("alcohol-rhr").flatMap { $0.unfavorable ? abs($0.withMean - $0.withoutMean) : nil }
+            let hrv = c.association("alcohol-hrv").flatMap { $0.unfavorable ? abs($0.withMean - $0.withoutMean) : nil }
+            let effect = [rhr.map { "静息心率平均高 \($0.oneDecimal)" }, hrv.map { "HRV 低 \($0.noDecimal) ms" }].compactMap { $0 }
+            effectLead = effect.isEmpty ? "从你的记录还看不出明显影响：需要喝酒和没喝酒的早晨各有 4 次以上才能比较。"
+                : "从你的记录看，影响不小：喝过酒的第二天早上\(effect.joined(separator: "、"))，恢复会慢一些。"
+            parts.append(effectLead)
+        }
+        if effectLead == nil || q.contains("影响") {
+            parts.append("本周饮酒 \(week.oneDecimal) 单位（你的上限 \(c.profile.weeklyAlcoholLimit.noDecimal) 单位）。\(c.adherence("alcohol").map { "近 4 周 \($0.detail)。" } ?? "")")
+        }
         if found.isEmpty {
             parts.append("目前还没有足够的记录来判断饮酒对你的具体影响（需要饮酒与不饮酒的早晨各 4 次以上）。")
         } else {
             parts.append("从你的记录看：\n" + found.map { "• " + $0.sentence + "（关联\($0.strength.label)）" }.joined(separator: "\n"))
             parts.append("这是观察到的关联，可能同时受睡眠、聚餐时间等影响。想确认的话，可以在「复盘」中开始 2 周个人验证：减少饮酒，对比次日静息心率。")
         }
+        // After the answer itself (the 「现在」 verdict or the effect), before the weekly numbers.
+        parts.insert(alcoholCautions(c), at: nowAnswer != nil || effectLead != nil ? 1 : 0)
         parts.append("一般来说，酒精会让夜间心率升高、HRV 降低、睡眠变浅，还会加重打鼾。睡前 3 小时内不饮酒\(c.profile.fluidLimited ? "" : "、同时补水")，影响会小一些。")
+        // What alcohol means for the person's conditions is part of the answer, not a footnote.
+        let caution = alcoholCautions(c)
         return AgentReply(text: lines(parts), sources: ["饮酒记录", "次日静息心率与 HRV"], followUps: ["为什么静息心率最近没怎么降？", "我的睡眠怎么样？"], destination: .recovery,
-                          conclusion: nowAnswer)
+                          conclusion: nowAnswer ?? effectLead ?? caution, safety: caution)
+    }
+
+    /// What alcohol means for the conditions the person has, in one line.
+    static func alcoholCautions(_ c: AgentContext) -> String? {
+        let p = c.profile
+        var out: [String] = []
+        if p.hasDiabetes && p.hypoRiskMeds(at: c.now) { out.append("你用的降糖药加上酒，夜里容易低血糖，喝了的话睡前测一下血糖") }
+        else if p.hasDiabetes { out.append("酒会让血糖忽高忽低，别空腹喝") }
+        if let ua = c.lab(.uricAcid, within: 365), ua.value > 420 { out.append("啤酒嘌呤高，你的尿酸 \(ua.valueText) 偏高，最好别喝啤酒") }
+        else if p.extraConditions.contains(where: { $0.id == "gout" }) { out.append("啤酒和白酒都会诱发痛风") }
+        if p.conditions.contains(.hypertension) { out.append("酒会让血压升高") }
+        if p.conditions.contains(.ckd) && p.fluidLimited { out.append("酒也算进每天的饮水量") }
+        return out.isEmpty ? nil : out.joined(separator: "；") + "。"
     }
 
     static func caffeine(_ c: AgentContext, question q: String = "") -> AgentReply {
         var parts: [String?] = []
         var nowAnswer: String? = nil
+        let cutoffHour = c.profile.caffeineCutoffHour
+        // 「下午犯困可以喝咖啡吗」 names a time of day: answer for that, not for now.
+        if ["下午", "上午", "早上", "中午", "白天", "早晨"].contains(where: { q.contains($0) }), !q.contains("现在") {
+            let afternoon = q.contains("下午")
+            nowAnswer = afternoon ? "可以喝，但最好在 \(cutoffHour):00 前喝完，一杯就够。" : "可以喝，\(cutoffHour):00 前喝完就不太影响睡眠。"
+            parts.append(nowAnswer)
+            parts.append("咖啡因的作用会持续 5–6 小时，太晚喝会推迟入睡、让睡眠变浅。")
+            if afternoon {
+                parts.append(bullets(["过了 \(cutoffHour):00 还想提神：起来走动 5 分钟、洗把冷水脸",
+                                      "困得厉害就在午饭后小睡 20 分钟，比下午喝咖啡更管用",
+                                      "下午老是犯困，多半是前一晚没睡够，先看看晚上几点睡"]))
+            }
+            if let a = c.association("caffeine-sleep"), a.unfavorable { parts.append(a.sentence + "（观察到的关联）") }
+            return AgentReply(text: lines(parts), sources: ["咖啡因记录"], followUps: ["我的睡眠怎么样？"], destination: .recovery, conclusion: nowAnswer)
+        }
         if asksAboutNow(q), c.profile.shift != nil, c.window.kind == .night {
             // On a night shift the cutoff follows the daytime sleep: about six hours before it.
             let cutoff = c.window.bed.addingTimeInterval(-6 * 3600)
@@ -903,14 +1206,30 @@ enum HealthAgent {
                           conclusion: nowAnswer)
     }
 
-    static func stress(_ c: AgentContext) -> AgentReply {
+    static func stress(_ c: AgentContext, question q: String = "") -> AgentReply {
         let s = c.recent7.compactMap(\.stress).map(Double.init)
         let high = c.recent7.filter(\.highStress).count
-        var parts: [String?] = [s.isEmpty ? "近 7 天没有压力记录。" : "近 7 天压力平均 \(Stats.mean(s)!.oneDecimal)/5，\(high) 天压力较大。"]
-        if let a = c.association("stress-rhr") { parts.append(a.sentence + "（观察到的关联）") }
-        parts.append(bullets(["每天 5–10 分钟慢呼吸（吸 4 秒、呼 6 秒）", "白天散步或轻松有氧", "睡前 1 小时放下工作，减少屏幕"]))
-        parts.append("如果长期情绪低落、焦虑或睡不好，请寻求专业支持。")
-        return AgentReply(text: lines(parts), sources: ["压力记录"], followUps: ["我的睡眠怎么样？", "今天适合运动吗？"], destination: .recovery)
+        let saysHigh = ["压力很大", "压力大", "压力好大", "焦虑", "紧张", "烦"].contains { q.contains($0) }
+        let sleepToo = ["睡不好", "睡不着", "失眠", "睡不踏实"].contains { q.contains($0) }
+        var parts: [String?] = []
+        var first: String? = nil
+        if saysHigh {
+            first = sleepToo ? "压力大又睡不好，先从睡前这一小时下手：把脑子里的事写下来，再做 5 分钟慢呼吸。"
+                : "压力大的时候，先每天留出 10 分钟给自己：慢呼吸或散步都行。"
+            parts.append(first)
+            if !s.isEmpty, high == 0 { parts.append("你近 7 天记的压力平均 \(Stats.mean(s)!.oneDecimal)/5，如果最近才变大，晚上在「今日」记一下，Pulse 能看出它对你睡眠和心率的影响。") }
+        } else {
+            parts.append(s.isEmpty ? "近 7 天没有压力记录。" : "近 7 天压力平均 \(Stats.mean(s)!.oneDecimal)/5，\(high) 天压力较大。")
+        }
+        if let a = c.association("stress-rhr"), a.unfavorable { parts.append(a.sentence + "（观察到的关联）") }
+        var tips = ["慢呼吸：吸 4 秒、呼 6 秒，做 5 分钟", "白天出去走 20 分钟，比坐着刷手机更解压"]
+        if sleepToo { tips.append("睡前 1 小时放下工作和手机；躺了 20 分钟还睡不着，就起来在暗光下做点安静的事") }
+        else { tips.append("睡前 1 小时放下工作，减少屏幕") }
+        if let avg = c.sleep.avgMinutes, sleepToo { tips.append("你近两周平均每晚睡 \((avg / 60).oneDecimal) 小时，起床时间尽量固定，周末也一样") }
+        parts.append(bullets(tips))
+        parts.append("如果连着两周以上情绪低落、焦虑，或者每周有 3 晚以上睡不好，可以找心理咨询或去医院看看。")
+        return AgentReply(text: lines(parts), sources: ["压力记录", sleepToo ? "睡眠" : nil].compactMap { $0 }, followUps: ["我的睡眠怎么样？", "今天适合运动吗？"],
+                          destination: .recovery, conclusion: first)
     }
 
     static func diet(_ c: AgentContext, question q: String = "") -> AgentReply {
@@ -948,29 +1267,64 @@ enum HealthAgent {
         return AgentReply(text: lines(parts), sources: ["饮食与饮水记录"], followUps: ["饮酒对我的影响有多大？"], destination: .recovery)
     }
 
-    static func bloodPressure(_ c: AgentContext) -> AgentReply {
+    static func bloodPressure(_ c: AgentContext, question q: String = "") -> AgentReply {
         let s = c.bp
+        let p = c.profile
         guard s.count > 0 else {
             return AgentReply(text: "还没有血压记录。建议用经过验证的上臂式血压计，连续 7 天每天晨起、睡前各测 2 遍，平均值最能代表你的日常血压。",
                               followUps: ["接下来我该关注什么？"], destination: .vitals)
         }
-        var parts: [String?] = ["近 30 天 \(s.count) 次测量，平均 \(Int(s.avgSys ?? 0))/\(Int(s.avgDia ?? 0)) mmHg（\(s.category)）\(s.morningSys.map { "，晨起收缩压平均 \(Int($0))" } ?? "")\(s.eveningSys.map { "，晚间 \(Int($0))" } ?? "")。"]
-        parts.append(c.homeBP.message)
+        let sys = Int(s.avgSys ?? 0), dia = Int(s.avgDia ?? 0)
+        let ok = sys <= p.bpTargetSys && dia <= p.bpTargetDia
+        let rate = s.inTargetRate.map { $0 == 0 ? "，还没有一次读数在目标内" : "，\(Int(($0 * 100).rounded()))% 的读数在目标内" } ?? ""
+        let verdict = ok ? "控制得不错：近 30 天 \(s.count) 次测量平均 \(sys)/\(dia)，在目标 \(p.bpTargetSys)/\(p.bpTargetDia) 以内\(rate)。"
+            : "还没达标：近 30 天 \(s.count) 次测量平均 \(sys)/\(dia)，目标是 \(p.bpTargetSys)/\(p.bpTargetDia) 以下\(rate)。"
+        var parts: [String?] = [verdict]
+        if let m = s.morningSys, let e = s.eveningSys { parts.append("晨起收缩压平均 \(Int(m))，晚上 \(Int(e))。") }
+        if c.homeBP.progress < 1 { parts.append(c.homeBP.message) }
         if let m = s.morningSys, let e = s.eveningSys, m - e >= 10 {
             parts.append("晨起比晚间高 \(Int(m - e)) mmHg，复诊时可以把晨起与睡前的记录一起提供给医生。")
         }
-        if c.breathing.level != .none { parts.append("睡眠呼吸问题与晨起血压偏高常常同时出现，你也记录到了打鼾等线索。") }
-        parts.append(bullets(["测量前静坐 5 分钟，背部有支撑，袖带与心脏同高", "少盐、规律有氧、减少饮酒、保证睡眠都有助于降低血压", "家庭血压平均 ≥135/85 mmHg 时，请与医生讨论"]))
-        return AgentReply(text: lines(parts), sources: ["血压 \(s.count) 次"], followUps: ["我需要去看医生吗？"], destination: c.profile.hasCardiac ? .cardio : .vitals)
+        // Readings on days the medicine was missed, against the others.
+        let missed = Set(c.days.filter { $0.day > c.now.adding(days: -30) && $0.medsTaken == false }.map(\.day))
+        let bp = c.vitals.filter { $0.kind == .bloodPressure && $0.time > c.now.adding(days: -30) }
+        let onMissed = bp.filter { missed.contains($0.time.startOfDay) }.map(\.value)
+        if onMissed.count >= 2, let x = Stats.mean(onMissed), let y = Stats.mean(bp.filter { !missed.contains($0.time.startOfDay) }.map(\.value)), x - y >= 5 {
+            parts.append("没按时吃药的 \(missed.count) 天，收缩压平均 \(Int(x))，其他日子 \(Int(y))：按时吃药对你影响很明显。")
+        }
+        if c.breathing.level != .none { parts.append("睡眠呼吸问题和晨起血压偏高常常一起出现，你也记录到了打鼾等线索。") }
+        let onBPMeds = c.medications.contains { [.betaBlocker, .rateLimitingCCB, .otherAntihypertensive].contains($0.category) }
+        parts.append(bullets(ok ? ["继续早晚测，复诊时带上记录", "测量前静坐 5 分钟，背靠椅背、袖带和心脏同高"]
+                             : [onBPMeds ? "每天固定时间吃药，别漏" : "每周 150 分钟以上的有氧，比如快走、骑车",
+                                "盐每天不超过 \(p.saltLimitG.noDecimal) g，酱油、咸菜、外卖都算",
+                                onBPMeds ? "这样坚持 2–4 周还没降到目标，带着记录找医生调整方案" : "坚持 2–4 周再看平均值；家庭血压平均一直在 135/85 以上，去看医生"]))
+        return AgentReply(text: lines(parts), sources: ["血压 \(s.count) 次"], followUps: ["少吃盐有什么技巧？", "我需要去看医生吗？"],
+                          destination: c.profile.hasCardiac ? .cardio : .vitals, conclusion: verdict)
     }
 
-    static func glucose(_ c: AgentContext) -> AgentReply {
+    static func glucose(_ c: AgentContext, question q: String = "") -> AgentReply {
         let m = c.glucose
         guard m.readings > 0 else {
             return AgentReply(text: "还没有血糖数据。可以通过健康 App 连接 CGM，或手动记录指尖血糖。\(c.profile.hasDiabetes ? "糖尿病管理中，CGM 的达标时间（TIR）比单次数值更适合回顾。" : "")",
                               destination: .glucose)
         }
         var parts: [String?] = []
+        let tir = Int(((m.tir ?? 0) * 100).rounded())
+        let verdict = tir >= 70 ? "控制得不错：近 14 天 \(tir)% 的时间在目标范围内（一般希望 70% 以上）。"
+            : "还没达标：近 14 天 \(tir)% 的时间在目标范围内，一般希望 70% 以上。"
+        parts.append(verdict)
+        // When it runs high: the meal windows with the most time above range.
+        let pts = c.vitals.filter { $0.kind == .glucose && $0.time > c.now.adding(days: -14) }
+        let windows: [(String, Range<Int>)] = [("早饭后", 8..<11), ("午饭后", 12..<16), ("晚饭后", 19..<23), ("夜里", 0..<6)]
+        let highs = windows.compactMap { w -> (String, Double)? in
+            let v = pts.filter { w.1.contains($0.time.hour) }.map(\.value)
+            guard v.count >= 10 else { return nil }
+            return (w.0, Double(v.filter { $0 > c.profile.glucoseHigh }.count) / Double(v.count))
+        }.sorted { $0.1 > $1.1 }
+        let asksHigh = ["高", "降", "怎么办"].contains { q.contains($0) } && tir < 90
+        if let top = highs.first, top.1 >= 0.3 {
+            parts.append("偏高的时候多在\(top.0)：这段时间有 \(Int((top.1 * 100).rounded()))% 高于 \(c.profile.glucoseHigh.oneDecimal)。")
+        }
         if m.isContinuous {
             parts.append("近 14 天 CGM：目标范围内 \(Int((m.tir ?? 0) * 100))%（参考 >70%），低于范围 \(String(format: "%.1f", (m.tbr ?? 0) * 100))%（参考 <4%），高于范围 \(Int((m.tar ?? 0) * 100))%；平均 \(m.mean?.oneDecimal ?? "—") mmol/L，波动 CV \(Int(m.cv ?? 0))%。")
         } else {
@@ -981,21 +1335,45 @@ enum HealthAgent {
         } else {
             parts.append("近 14 天没有低于 \(c.profile.glucoseLow.oneDecimal) 的时段。")
         }
-        parts.append("可以在「血糖管理」中查看每餐后的上升幅度和运动前后的变化。目标与用药调整请以医疗团队的照护计划为准。")
-        return AgentReply(text: lines(parts), sources: [m.isContinuous ? "CGM 近 14 天" : "血糖 \(m.readings) 次"], followUps: ["运动前血糖要注意什么？"], destination: .glucose)
+        if asksHigh || tir < 70 {
+            parts.append(bullets(["饭后散步 10–15 分钟，对餐后血糖最直接", "先吃菜和肉，主食放最后，一餐一拳头，换一半成粗粮",
+                                  "连续两周达标时间都在 70% 以下，带着记录问医生要不要调整方案（药怎么调由医生定）"]))
+        }
+        parts.append("在「血糖管理」里能看到每餐后升了多少、运动前后的变化。")
+        return AgentReply(text: lines(parts), sources: [m.isContinuous ? "CGM 近 14 天" : "血糖 \(m.readings) 次"], followUps: ["今天吃什么好？"],
+                          destination: .glucose, conclusion: verdict)
     }
 
-    static func meds(_ c: AgentContext) -> AgentReply {
-        var parts: [String?] = ["我不能提供开始、停止或调整药物（包括胰岛素剂量）的建议，这需要由你的医生或药师根据具体情况决定。"]
+    /// Medicines: what the question is about first (stopping, the dose, insulin), the records that
+    /// matter for the conversation with the doctor, and never a change made here.
+    static func meds(_ c: AgentContext, question q: String = "") -> AgentReply {
         let m = c.medications
-        if !m.isEmpty {
-            parts.append("你记录的用药：\(m.map { "\($0.name)（\($0.category.label)，\($0.category.hrEffect.label)）" }.joined(separator: "；"))。")
+        let p = c.profile
+        let named = m.filter { q.contains($0.name) }.map(\.name)
+        let drug = named.first ?? (q.contains("降压") ? "降压药" : (q.contains("胰岛素") ? "胰岛素" : (q.contains("降糖") ? "降糖药" : "药")))
+        let first: String
+        if ["停", "不吃", "不用吃", "戒掉"].contains(where: { q.contains($0) }) {
+            first = "\(drug)能不能停，要问开药的医生，别自己停：突然停药可能让血压、血糖反弹，有的药还要慢慢减。"
+        } else if ["减半", "减量", "少吃", "加量", "多吃", "加大", "几片", "多少", "剂量", "打多少", "单位"].contains(where: { q.contains($0) }) {
+            first = "\(drug)的用量要由医生根据你的情况定，我不能替你调整；觉得药量不合适，带着记录去和医生商量。"
+        } else {
+            first = "用药的事以医生和药师为准，我不能帮你决定开始、停止或调整；可以帮你把相关的记录整理好，方便和医生商量。"
         }
-        if c.profile.onRateLoweringMeds() {
-            parts.append("其中有可能降低心率的药物：静息心率的变化需要结合用药一起解读，运动强度以主观感受为准。")
+        var parts: [String?] = [first]
+        // What the doctor will want to know, from the records.
+        var notes: [String] = []
+        if let sys = c.bp.avgSys, let dia = c.bp.avgDia, c.bp.count >= 5, q.contains("降压") || named.contains(where: { n in m.first { $0.name == n }.map { [.betaBlocker, .rateLimitingCCB, .otherAntihypertensive].contains($0.category) } ?? false }) {
+            notes.append("你近 30 天血压平均 \(Int(sys))/\(Int(dia))（目标 \(p.bpTargetSys)/\(p.bpTargetDia)）")
         }
-        parts.append("复诊时，可以在「我的 › 隐私与数据导出」生成就诊摘要，带上血压、心率和用药记录。")
-        return AgentReply(text: lines(parts), sources: ["用药记录"], followUps: ["我需要去看医生吗？"])
+        if p.hasDiabetes, let tir = c.glucose.tir, c.glucose.readings > 0 { notes.append("近 14 天血糖 \(Int((tir * 100).rounded()))% 在目标范围内") }
+        if !c.lows.isEmpty { notes.append("近 14 天有 \(c.lows.count) 次低血糖，这一点一定要告诉医生") }
+        let missed = c.days.filter { $0.day > c.now.adding(days: -30) && $0.medsTaken == false }.count
+        if missed > 0 { notes.append("近 30 天有 \(missed) 天记录了没按时吃药") }
+        if !notes.isEmpty { parts.append("复诊时可以告诉医生：\n" + notes.map { "• " + $0 }.joined(separator: "\n")) }
+        if !m.isEmpty { parts.append("你记录的用药：\(m.map(\.name).joined(separator: "、"))。") }
+        if p.onRateLoweringMeds() { parts.append("其中有会降低心率的药，静息心率要结合用药来看，运动强度以主观感受为准。") }
+        parts.append("在「我的 › 隐私与数据导出」可以生成就诊摘要，带上血压、血糖和用药记录。")
+        return AgentReply(text: lines(parts), sources: ["用药记录"], followUps: ["我需要去看医生吗？"], conclusion: first)
     }
 
     static func events(_ c: AgentContext) -> AgentReply {
@@ -1010,17 +1388,31 @@ enum HealthAgent {
     }
 
     /// 化验结果: the latest value of each test, how it reads, and how eGFR is moving.
-    static func labs(_ c: AgentContext) -> AgentReply {
+    static func labs(_ c: AgentContext, question q: String = "") -> AgentReply {
         let latest = LabAnalyzer.latest(c.labs)
         guard !latest.isEmpty else {
             return AgentReply(text: "还没有化验结果。拿到化验单后，在「趋势 › 关键指标 › 化验结果」或右上角「+」里填 eGFR、血肌酐、血钾、尿白蛋白/肌酐比等，我会按参考范围解读，并跟踪肾功能的变化。",
                               sources: [], followUps: ["我的血压控制得怎么样？"], destination: .labs)
         }
-        var items = latest.map { l in
+        // 「我是不是有低血钾」「肌酐高吗」: that test first.
+        let names: [(LabKind, [String])] = [(.potassium, ["血钾", "低钾", "高钾", "低血钾", "高血钾"]), (.egfr, ["eGFR", "egfr", "肾小球"]),
+                                            (.creatinine, ["肌酐"]), (.uacr, ["尿蛋白", "尿白蛋白", "UACR"]), (.hemoglobin, ["血红蛋白", "贫血"]),
+                                            (.uricAcid, ["尿酸"]), (.hba1c, ["糖化"]), (.phosphorus, ["血磷"])]
+        var lead: String? = nil
+        var asked: LabKind? = nil
+        if let (kind, _) = names.first(where: { $0.1.contains { q.contains($0) } }), let l = latest.first(where: { $0.kind == kind }) {
+            asked = kind
+            let status = LabAnalyzer.status(kind, l.value, profile: c.profile)
+            var line = "\(kind.label) \(l.valueText) \(kind.unit)（\(l.date.formatted(.dateTime.month().day()))）：\(status.text)。"
+            if kind == .potassium, q.contains("低"), l.value > 5.0 { line = "从化验看不是偏低，而是偏高：" + line }
+            if kind == .potassium, q.contains("高"), l.value < 3.5 { line = "从化验看不是偏高，而是偏低：" + line }
+            lead = line + "是不是某种病要由医生结合多次结果判断。"
+        }
+        var items = latest.filter { $0.kind != asked }.map { l in
             "\(l.kind.label) \(l.valueText) \(l.kind.unit)（\(l.date.formatted(.dateTime.month().day()))\(l.estimated ? "，由肌酐估算" : "")）：\(LabAnalyzer.status(l.kind, l.value, profile: c.profile).text)"
         }
-        if let t = LabAnalyzer.egfrTrend(c.labs) { items.insert("eGFR \(t.text)", at: 1) }
-        var parts: [String?] = ["你最近的化验结果：", bullets(items)]
+        if let t = LabAnalyzer.egfrTrend(c.labs) { items.insert("eGFR \(t.text)", at: min(1, items.count)) }
+        var parts: [String?] = [lead, items.isEmpty ? nil : (lead == nil ? "你最近的化验结果：" : "其他化验结果："), bullets(items)]
         let flagged = latest.filter { LabAnalyzer.status($0.kind, $0.value, profile: c.profile).level >= .abnormal }
         if let k = flagged.first(where: { $0.kind == .potassium }) {
             parts.append("血钾\(k.value < 3.5 ? "偏低" : "偏高")会影响心跳和肌肉：\(LabAnalyzer.status(.potassium, k.value, profile: c.profile).level == .urgent ? "请今天就联系医生；在这之前先不运动。" : "运动以中低强度为主，按医生的安排复查。")不要自己加减补钾药或利尿剂。")
@@ -1032,7 +1424,8 @@ enum HealthAgent {
             parts.append("血红蛋白偏低时，静息心率会偏高、运动更容易累，看心率趋势时要考虑这一点。")
         }
         parts.append(LabAnalyzer.rangeNote)
-        return AgentReply(text: lines(parts), sources: ["化验记录"], followUps: ["饮食上要注意什么？", "今天适合运动吗？"], destination: .labs)
+        return AgentReply(text: lines(parts), sources: ["化验记录"], followUps: ["饮食上要注意什么？", "今天适合运动吗？"], destination: .labs,
+                          conclusion: lead)
     }
 
     static func doctor(_ c: AgentContext) -> AgentReply {
@@ -1042,46 +1435,84 @@ enum HealthAgent {
         if let avg = c.homeBP.overallAvg, c.homeBP.progress >= 0.5, avg.sys >= 135 || avg.dia >= 85 { reasons.append("家庭血压平均 \(Int(avg.sys))/\(Int(avg.dia))：心内科或全科") }
         if case .rise = c.trend.sustained { reasons.append("静息心率持续偏高且伴随不适时") }
         if (c.glucose.tbr ?? 0) >= 0.04 { reasons.append("低血糖时段偏多：与医疗团队讨论") }
+        let first = reasons.isEmpty ? "从记录看，目前没有需要尽快就医的信号。" : "建议找医生看看，从你的记录看有 \(reasons.count) 件事值得聊："
         let text = reasons.isEmpty
-            ? "根据目前的记录，没有需要尽快就医的信号。保持规律体检；如出现胸痛、晕厥、明显气短或持续心悸，请立即就医或拨打 120。"
-            : lines(["根据你的记录，以下情况建议咨询医生：", bullets(reasons), "就诊时可以带上 Pulse 生成的就诊摘要（「我的 › 隐私与数据导出」），只选择与这次就诊相关的数据即可。"])
-        return AgentReply(text: text, sources: ["异常提醒", "血压与睡眠呼吸线索"], followUps: ["接下来我该关注什么？"], destination: reasons.isEmpty ? nil : .events)
+            ? first + "保持规律体检；如出现胸痛、晕厥、明显气短或持续心悸，请立即就医或拨打 120。"
+            : lines([first, bullets(reasons), "就诊时可以带上 Pulse 生成的就诊摘要（「我的 › 隐私与数据导出」），只选择与这次就诊相关的数据即可。"])
+        return AgentReply(text: text, sources: ["异常提醒", "血压与睡眠呼吸线索"], followUps: ["接下来我该关注什么？"], destination: reasons.isEmpty ? nil : .events,
+                          conclusion: first)
     }
 
     static func next(_ c: AgentContext) -> AgentReply {
         let a = assess(c)
+        let lead = a.nextSteps.isEmpty ? "目前没有特别需要处理的事，保持现在的节奏就好。" : "接下来最值得做的三件事："
         return AgentReply(text: lines([
-            "接下来最值得做的三件事：",
-            a.nextSteps.enumerated().map { "\($0.offset + 1). \($0.element.title)：\($0.element.detail)" }.joined(separator: "\n"),
+            lead,
+            // A 「• 」 list: the form suggestions take everywhere, so a model rewording it keeps them.
+            bullets(a.nextSteps.map { "\($0.title)：\($0.detail)" }),
             a.watch.isEmpty ? nil : "需要持续关注：" + a.watch.map(\.title).joined(separator: "、") + "。",
-        ]), sources: [a.basis.replacingOccurrences(of: "依据：", with: "")], followUps: Array(a.questions.prefix(3)), destination: a.nextSteps.first?.destination)
+        ]), sources: [a.basis.replacingOccurrences(of: "依据：", with: "")], followUps: Array(a.questions.prefix(3)), destination: a.nextSteps.first?.destination,
+                          conclusion: lead, verbatim: true)
     }
 
     static func overall(_ c: AgentContext) -> AgentReply {
         let a = assess(c)
+        let dims = c.progress.dimensions
+        let better = dims.filter { $0.status == .improved }
+        let worse = dims.filter { $0.status == .needsWork }
+        func change(_ d: ProgressDimension) -> String {
+            d.name + ([d.from, d.to].allSatisfy { $0 != nil } ? "（\(d.from!) → \(d.to!)）" : "")
+        }
+        let first = !better.isEmpty ? "有进步：" + better.prefix(3).map(change).joined(separator: "、") + "。"
+            : worse.isEmpty ? "整体稳定，没有明显变好也没有变差。" : "这段时间没看到明显的进步。"
+        let items = worse.prefix(3).map { "还要加把劲：" + change($0) } + a.watch.prefix(3).map { "需要关注：\($0.title)（\($0.detail)）" }
         return AgentReply(text: lines([
-            a.headline + "。",
+            first,
+            bullets(items),
             a.summary,
-            a.going.isEmpty ? nil : "做得好的：" + a.going.map(\.title).joined(separator: "、") + "。",
-            a.watch.isEmpty ? nil : "需要关注：" + a.watch.map { "\($0.title)（\($0.detail)）" }.joined(separator: "；") + "。",
-        ]), sources: [a.basis.replacingOccurrences(of: "依据：", with: "")], followUps: ["接下来我该关注什么？", "为什么静息心率最近没怎么降？"])
+        ]), sources: [a.basis.replacingOccurrences(of: "依据：", with: "")], followUps: ["接下来我该关注什么？", "为什么静息心率最近没怎么降？"],
+                          conclusion: first)
     }
 
     static func greeting(_ c: AgentContext) -> AgentReply {
-        AgentReply(text: "你好\(c.name.isEmpty || c.name == "你" ? "" : "，\(c.name)")。我是你的 Health Agent，会根据你在 Pulse 中的记录——静息心率、睡眠、运动、饮食、血压和血糖——解释变化、回答问题、按你的情况调整训练计划，并给出接下来的建议。\n\n我不做诊断，也不提供用药建议；所有分析都在这台设备上完成。",
+        AgentReply(text: "你好\(c.name.isEmpty || c.name == "你" ? "" : "，\(c.name)")。\(c.agentName == AgentName.standard ? "我是你的 Health Agent" : "我是\(c.agentName)")，会根据你在 Pulse 中的记录——静息心率、睡眠、运动、饮食、血压和血糖——解释变化、回答问题、按你的情况调整训练计划，并给出接下来的建议。\n\n我不做诊断，也不提供用药建议；所有分析都在这台设备上完成。",
                    followUps: ["我最近整体怎么样？", "今天适合运动吗？", "接下来我该关注什么？"])
     }
 
     static func unknown(_ c: AgentContext) -> AgentReply {
-        AgentReply(text: "这个问题我暂时没法从你的记录中找到答案。我可以回答关于静息心率、睡眠与打鼾、运动计划、饮酒与咖啡因、压力、饮食、血压、血糖和马拉松训练的问题，也可以按你的情况调整训练计划、指导手表和 CGM 的使用，例如：",
+        AgentReply(text: "这个问题 Pulse 现在还答不好。和你的身体数据有关的问题我最拿手：睡眠、静息心率、运动和计划、饮食、血压、血糖、化验结果，也可以帮你改训练计划。可以试试下面这些：",
                    followUps: ["我最近整体怎么样？", "为什么静息心率最近没怎么降？", "今天适合运动吗？", "接下来我该关注什么？"])
     }
 
     // MARK: Digest for the language model
 
     /// Compact plain-text summary of the user's data (kept short for the on-device context window).
-    static func digest(_ c: AgentContext, anonymous: Bool = false) -> String {
+    /// Parts of the digest, so a question gets only the data that bears on it.
+    enum DigestTopic: CaseIterable { case conditions, labs, kidneyDiet, rhr, readiness, sleep, exercise, habits, associations, progress, bp, glucose, race, weather, events }
+
+    /// What the model sees for an answer of this kind; nil = everything (open questions, summaries).
+    static func digestTopics(for i: AgentIntent) -> Set<DigestTopic>? {
+        switch i {
+        case .rhr, .hrv: [.rhr, .sleep, .exercise, .habits, .associations, .progress]
+        case .readiness, .trainingCheck, .exercise, .planChange, .marathon: [.conditions, .labs, .readiness, .sleep, .exercise, .race, .weather, .events]
+        case .weather: [.conditions, .exercise, .weather]
+        case .sleep, .breathing: [.sleep, .habits, .associations, .readiness]
+        case .alcohol, .caffeine, .stress: [.habits, .associations, .sleep, .rhr]
+        case .diet, .food: [.conditions, .labs, .kidneyDiet, .glucose, .bp]
+        case .bp: [.conditions, .bp, .sleep, .kidneyDiet, .labs]
+        case .glucose: [.conditions, .glucose, .exercise, .labs]
+        case .labs: [.conditions, .labs, .kidneyDiet, .bp, .glucose]
+        case .reading: [.conditions, .bp, .glucose, .sleep, .labs]
+        case .symptom: [.conditions, .labs, .bp, .glucose, .sleep, .readiness, .events]
+        case .meds, .device: [.conditions, .bp, .glucose]
+        case .unknown, .knowledge: [.conditions]
+        default: nil
+        }
+    }
+
+    static func digest(_ c: AgentContext, anonymous: Bool = false, topics: Set<DigestTopic>? = nil) -> String {
         var d: [String] = []
+        func add(_ t: DigestTopic, _ line: String) { if topics?.contains(t) ?? true { d.append(line) } }
         let p = c.profile
         let w = c.window
         d.append("现在：\(c.now.formatted(Date.FormatStyle().month().day().weekday(.abbreviated).locale(Locale(identifier: "zh_CN")))) \(Clock.text(c.now.minutesOfDay))\(c.pastBedtime ? "，已过\(c.bedPhrase) 的入睡时间，下次起床约 \(Clock.text(w.nextWake.minutesOfDay))" : "")。")
@@ -1096,33 +1527,33 @@ enum HealthAgent {
         if !p.conditionNames.isEmpty { who += "；健康状况：\(p.conditionNames.joined(separator: "、"))" }
         if !c.medications.isEmpty { who += "；用药：\(c.medications.map { "\($0.name)（\($0.category.hrEffect.label)）" }.joined(separator: "、"))" }
         d.append(who + "。目标：\(p.goals.map(\.label).joined(separator: "、"))。")
-        for x in p.extraConditions where x.known { d.append("\(x.brief)（Pulse 资料库的要点，不是诊断）") }
-        if p.intensityCapped { d.append("运动强度：因为\(p.intensityCaps.joined(separator: "、"))，医生确认前只做中低强度，不做间歇和大重量。") }
-        if p.fluidLimited { d.append("限水：医生要求每天饮水不超过 \(p.waterTargetMl) ml，不要建议多喝水。") }
-        if let l = LabAnalyzer.digest(c.labs, profile: p) { d.append("化验（最近一次）：\(l)。") }
-        if let k = KidneyDiet.digest(c.days, profile: p, now: c.now) { d.append(k + "。") }
+        for x in p.extraConditions where x.known { add(.conditions, "\(x.brief)（Pulse 资料库的要点，不是诊断）") }
+        if p.intensityCapped { add(.conditions, "运动强度：因为\(p.intensityCaps.joined(separator: "、"))，医生确认前只做中低强度，不做间歇和大重量。") }
+        if p.fluidLimited { add(.conditions, "限水：医生要求每天饮水不超过 \(p.waterTargetMl) ml，不要建议多喝水。") }
+        if let l = LabAnalyzer.digest(c.labs, profile: p) { add(.labs, "化验（最近一次）：\(l)。") }
+        if let k = KidneyDiet.digest(c.days, profile: p, now: c.now) { add(.kidneyDiet, k + "。") }
         let t = c.trend
         if let a7 = t.avg7 {
-            d.append("静息心率：近7天 \(a7.noDecimal)，近4周 \(t.avg28?.noDecimal ?? "—")，基线 \(t.baseline?.noDecimal ?? "—")。\(t.headline)")
+            add(.rhr, "静息心率：近7天 \(a7.noDecimal)，近4周 \(t.avg28?.noDecimal ?? "—")，基线 \(t.baseline?.noDecimal ?? "—")。\(t.headline)")
         }
-        if let s = c.readiness.score { d.append("今天准备度 \(s)（\(c.readiness.level.label)）：\(c.readiness.recommendation)") }
-        if let sl = c.sleep.avgMinutes { d.append("睡眠：近14晚平均 \((sl / 60).oneDecimal) 小时，目标 \((p.sleepNeedMinutes / 60).oneDecimal)，\(c.sleep.regularityText)。睡眠呼吸：\(c.breathing.level.label)，打鼾 \(c.breathing.snoring) 晚\(c.stopBangScore.map { "，STOP-BANG \($0)/8" } ?? "")。") }
-        d.append("运动：本周计划训练 \(c.weekTrainingsTotal) 次，已完成 \(c.weekTrainingsDone) 次；本周已活动 \(Int(c.weekActiveMinutes)) 分钟，每周目标 \(p.weeklyTargetMinutes) 分钟；训练负荷\(c.load.zone.label)。")
+        if let s = c.readiness.score { add(.readiness, "今天准备度 \(s)（\(c.readiness.level.label)）：\(c.readiness.recommendation)") }
+        if let sl = c.sleep.avgMinutes { add(.sleep, "睡眠：近14晚平均 \((sl / 60).oneDecimal) 小时，目标 \((p.sleepNeedMinutes / 60).oneDecimal)，\(c.sleep.regularityText)。睡眠呼吸：\(c.breathing.level.label)，打鼾 \(c.breathing.snoring) 晚\(c.stopBangScore.map { "，STOP-BANG \($0)/8" } ?? "")。") }
+        add(.exercise, "运动：本周计划训练 \(c.weekTrainingsTotal) 次，已完成 \(c.weekTrainingsDone) 次；本周已活动 \(Int(c.weekActiveMinutes)) 分钟，每周目标 \(p.weeklyTargetMinutes) 分钟；训练负荷\(c.load.zone.label)。")
         let habits = c.adherence.filter { $0.verdict != .noData }.map { "\($0.name)\($0.verdict.label)" }
-        if !habits.isEmpty { d.append("习惯：\(habits.joined(separator: "、"))。") }
+        if !habits.isEmpty { add(.habits, "习惯：\(habits.joined(separator: "、"))。") }
         let assoc = c.associations.filter { $0.sufficient && $0.strength >= .weak }.prefix(3).map(\.sentence)
-        if !assoc.isEmpty { d.append("观察到的关联（不等于原因）：\(assoc.joined())") }
+        if !assoc.isEmpty { add(.associations, "观察到的关联（不等于原因）：\(assoc.joined())") }
         let dims = c.progress.dimensions.filter { $0.status != .insufficient }.map { "\($0.name)\($0.status.label)" }
-        if !dims.isEmpty { d.append("长期进展：\(dims.joined(separator: "、"))。") }
-        if c.bp.count > 0 { d.append("血压：近30天平均 \(Int(c.bp.avgSys ?? 0))/\(Int(c.bp.avgDia ?? 0))，\(c.bp.category)；目标 \(p.bpTargetSys)/\(p.bpTargetDia)。") }
-        if c.glucose.readings > 0 { d.append("血糖：14天平均 \(c.glucose.mean?.oneDecimal ?? "—")，范围内 \(Int((c.glucose.tir ?? 0) * 100))%，低于范围 \(String(format: "%.1f", (c.glucose.tbr ?? 0) * 100))%。") }
-        if let r = c.race { d.append("赛事：\(c.raceName)，距比赛 \(r.weeksToRace) 周，\(r.phase.label)，本周跑量 \(Int(r.weeklyKm)) km。") }
+        if !dims.isEmpty { add(.progress, "长期进展：\(dims.joined(separator: "、"))。") }
+        if c.bp.count > 0 { add(.bp, "血压：近30天平均 \(Int(c.bp.avgSys ?? 0))/\(Int(c.bp.avgDia ?? 0))，\(c.bp.category)；目标 \(p.bpTargetSys)/\(p.bpTargetDia)。") }
+        if c.glucose.readings > 0 { add(.glucose, "血糖：14天平均 \(c.glucose.mean?.oneDecimal ?? "—")，范围内 \(Int((c.glucose.tir ?? 0) * 100))%，低于范围 \(String(format: "%.1f", (c.glucose.tbr ?? 0) * 100))%。") }
+        if let r = c.race { add(.race, "赛事：\(c.raceName)，距比赛 \(r.weeksToRace) 周，\(r.phase.label)，本周跑量 \(Int(r.weeklyKm)) km。") }
         if !c.weather.isEmpty {
-            d.append("天气预报（\(c.weatherSource)）：" + c.weather.prefix(4).map { weatherText($0, now: c.now) }.joined(separator: "；") + "。")
+            add(.weather, "天气预报（\(c.weatherSource)）：" + c.weather.prefix(4).map { weatherText($0, now: c.now) }.joined(separator: "；") + "。")
             let notes = WeatherPlanner.advice(plan: c.plan, forecast: c.weather, now: c.now, profile: c.profile).notes
-            if !notes.isEmpty { d.append("天气对本周户外训练的影响（只是建议，用户还没有采纳，计划尚未改变）：" + notes.joined()) }
+            if !notes.isEmpty { add(.weather, "天气对本周户外训练的影响（只是建议，用户还没有采纳，计划尚未改变）：" + notes.joined()) }
         }
-        d.append(c.openEvents.isEmpty ? "待处理提醒：无。" : "待处理提醒：\(c.openEvents.prefix(3).map(\.title).joined(separator: "、"))。")
+        add(.events, c.openEvents.isEmpty ? "待处理提醒：无。" : "待处理提醒：\(c.openEvents.prefix(3).map(\.title).joined(separator: "、"))。")
         return d.joined(separator: "\n")
     }
 
@@ -1131,13 +1562,30 @@ enum HealthAgent {
     /// Sections are marked 【…】 so small models don't echo them as headings.
     static func modelPrompt(question q: String, history: [String], context c: AgentContext, reply r: AgentReply,
                             anonymous: Bool) -> String {
-        var parts = ["【数据】\n" + digest(c, anonymous: anonymous)]
+        // The forecast only where the question or the answer is about being outdoors.
+        var topics = digestTopics(for: r.intent)
+        if let t = topics, t.contains(.weather), ![.weather, .trainingCheck, .planChange].contains(r.intent),
+           !AgentIntent.weather.keywords.contains(where: { q.contains($0) }), !["户外", "室外", "外面"].contains(where: { q.contains($0) }) {
+            topics?.remove(.weather)
+        }
+        var parts = ["【数据】\n" + digest(c, anonymous: anonymous, topics: topics)]
         if !history.isEmpty { parts.append("【之前的对话】\n" + history.joined(separator: "\n")) }
         parts.append("【问题】\n\(q)")
         parts.append(r.intent == .unknown
-                     ? "【要点】\nPulse 没有针对这个问题的现成分析。\n如果问题和健康、身体数据有关：只根据【数据】回答，【数据】里没有的说明 Pulse 中没有相关记录。\n如果问题和健康无关（比如写诗、闲聊、其他领域的问题）：只回复这一句，不要给建议：\(offTopicReply)"
-                     : "【要点】（Pulse 根据记录算出的事实）\n" + String(r.text.prefix(900)))
+                     ? "【要点】\nPulse 的规则里没有专门针对这个问题的分析，可以用常识回答。\n如果问题和健康、运动（包括装备、拉伸、跑姿）、饮食、睡眠有关：第一句直接回答，再给一两条具体可做的建议；【数据】里和问题直接相关的才提，不相关的不要提；涉及诊断和用药的，说明要问医生。\n只有和健康、身体、运动、饮食、睡眠都无关的问题（比如写诗、编程、股票）才只回复这一句：\(offTopicReply)"
+                     : "【要点】（Pulse 根据记录得出的回答，事实和结论以它为准）\n" + String(r.text.prefix(900)))
+        // On the device, suggestions come from the rules answer or not at all: a small model otherwise
+        // fills the list with whatever the data has (snoring under a diet question, weather under training
+        // load). A cloud model (anonymous prompt) may add its own.
+        if !anonymous, r.intent != .unknown, !r.proposesPlan {
+            parts.append(r.text.contains("• ")
+                         ? "【说明】要列建议的话，只用【要点】里以「• 」开头的那几条，可以说得更口语，不要另外加。"
+                         : "【说明】【要点】里没有要用户去做的建议，这次只回答问题，不要列建议。")
+        }
         if let k = r.conclusion { parts.append("【第一句】\n\(k)") }
+        if r.intent == .unknown, aboutSomeoneElse(q) {
+            parts.append("【说明】用户问的是家人或朋友的情况：不要用【数据】里用户自己的数字回答，给一般性的建议，并提醒以对方医生的意见为准。")
+        }
         if r.proposesPlan {
             parts.append("【说明】计划修改会以卡片展示给用户确认，用户点「采纳」前计划没有改变：用「建议」「可以改为」来说，不要说「已改为」「已调整」；每一天原来是什么、改成什么，以【要点】为准，不要说反；【数据】里的天气建议说的是调整前的计划，调整后各天的天气提醒以【要点】为准；只说明怎么改、为什么，不要另外提出不同的修改。"
                          + (r.intent == .planChange ? "这次不用另外给 2–3 条建议：每个改动的日子写一行，以「• 」开头，说怎么改、为什么，有天气提醒就带上；不要再加「保持准备度」「注意恢复」这类泛泛的话。" : ""))
@@ -1153,7 +1601,7 @@ enum HealthAgent {
 
     /// Prompt labels the model sometimes echoes at the start of a line.
     private static let echoedLabels = ["【数据】", "【问题】", "【要点】", "【第一句】", "【说明】", "【之前的对话】", "用户数据摘要：", "用户数据摘要:",
-                                       "观察到的关联：", "分析要点：", "结论：", "结论:", "第一句话：", "第一句话:", "第一句：", "第一句:", "回答：", "现在："]
+                                       "观察到的关联：", "分析要点：", "要点：", "要点:", "结论：", "结论:", "第一句话：", "第一句话:", "第一句：", "第一句:", "回答：", "现在："]
 
     /// Removes echoed prompt labels line by line. While streaming, a label still being written
     /// (「第一」, 「【数」) is held back too, so it never flashes up.
@@ -1163,12 +1611,17 @@ enum HealthAgent {
             // 「**第一句**：」, 「**第一句：**」, 「第一句话:」…
             if let r = l.range(of: #"^\*{0,2}第一句话?\*{0,2}\s*[：:]\s*\*{0,2}\s*"#, options: .regularExpression) { l.removeSubrange(r) }
             for label in echoedLabels where l.hasPrefix(label) { l = String(l.dropFirst(label.count)).trimmingCharacters(in: .whitespaces) }
+            // A whole line in 【】 the model made up: keep the words, drop the brackets.
+            if l.hasPrefix("【"), l.hasSuffix("】"), l.count > 2 { l = String(l.dropFirst().dropLast()) }
             // Any other short 【…】 heading the model made up.
             if let r = l.range(of: #"^【[^】]{1,8}】\s*"#, options: .regularExpression) { l.removeSubrange(r) }
+            // 「- 」「* 」 lists are written as 「• 」 lists, so they are held to the same rules.
+            if let r = l.range(of: #"^[-*]\s+"#, options: .regularExpression) { l.replaceSubrange(r, with: "• ") }
             return l
         }
-        // A section heading on its own line ("用户数据摘要") carries nothing.
-        lines.removeAll { ["用户数据摘要", "观察到的关联", "数据", "要点"].contains($0) }
+        // A section heading on its own line ("用户数据摘要") carries nothing, nor does the digest's time line.
+        lines.removeAll { ["用户数据摘要", "观察到的关联", "数据", "要点"].contains($0)
+            || $0.range(of: #"^\d{1,2}月\d{1,2}日\s*(周.)?\s*\d{1,2}:\d{2}。?$"#, options: .regularExpression) != nil }
         if streaming, let last = lines.last?.replacingOccurrences(of: "*", with: ""), !last.isEmpty,
            echoedLabels.contains(where: { $0.count > last.count && $0.hasPrefix(last) }) {
             lines.removeLast()
@@ -1316,10 +1769,21 @@ enum HealthAgent {
         return notApplied(String(t[..<pending]), changedDays: days)
     }
 
+    /// Whether a model answer opens with the rules' conclusion (spacing aside). A small model that
+    /// opens with something else has usually lost the question; the rules answer is shown instead.
+    static func keepsConclusion(_ text: String, of r: AgentReply) -> Bool {
+        guard let k = r.conclusion else { return true }
+        func squeeze(_ s: String) -> String { s.filter { !$0.isWhitespace && $0 != "*" } }
+        let verdict = squeeze(k.split(separator: "。", maxSplits: 1).first.map(String.init) ?? k)
+        let head = squeeze(stripLabels(text)).prefix(verdict.count + 30)
+        return head.contains(verdict)
+    }
+
     /// Cleans a model answer: drops echoed section labels, keeps a form question short, and puts a
     /// dropped or rewritten conclusion back in front. With plan changes to adopt (`proposals`, by
     /// default those of the rules answer), claims that they are already done are reworded.
-    static func finalize(_ text: String, of r: AgentReply, proposals: [PlanChangeProposal]? = nil) -> String {
+    /// `strict` (on-device answers) also keeps suggestions to those the rules made.
+    static func finalize(_ text: String, of r: AgentReply, proposals: [PlanChangeProposal]? = nil, strict: Bool = true) -> String {
         var lines = notRecorded(stripLabels(text), of: r).components(separatedBy: "\n")
         let pending = proposals ?? r.proposals
         if !pending.isEmpty {
@@ -1330,29 +1794,63 @@ enum HealthAgent {
         if r.blocks.contains(where: { if case .form = $0 { true } else { false } }) {
             lines = lines.filter { !$0.hasPrefix("•") }
         }
+        // Suggestions only where the rules made some, and one list of them: a small model otherwise
+        // adds a second list, or one from unrelated data.
+        if strict, r.intent != .unknown, r.intent != .planChange, pending.isEmpty {
+            if !r.text.contains("• ") {
+                lines = lines.filter { !$0.hasPrefix("•") }
+            } else if let start = lines.firstIndex(where: { $0.hasPrefix("•") }) {
+                // One list, and no longer than the rules' own.
+                let allowed = r.text.components(separatedBy: "\n").filter { $0.hasPrefix("• ") }.count
+                let end = min(lines[start...].firstIndex { !$0.hasPrefix("•") } ?? lines.endIndex, start + max(allowed, 1))
+                lines = lines.enumerated().filter { i, l in !l.hasPrefix("•") || (start..<end).contains(i) }.map(\.element)
+            }
+        }
+        while let last = lines.last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }), last.hasSuffix("：") || last.hasSuffix(":"),
+              let i = lines.lastIndex(of: last), !(r.text.hasSuffix(last)) {
+            lines.remove(at: i)
+        }
         var t = lines.joined(separator: "\n").replacingOccurrences(of: "\n\n\n", with: "\n\n")
             .replacingOccurrences(of: "【数据】", with: "你的数据").replacingOccurrences(of: "【要点】", with: "分析")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        // The off-topic reply stands alone.
-        if t.contains(offTopicReply) { return offTopicReply }
+        // The off-topic reply stands alone, and only where the rules had nothing: a model that calls a
+        // question it was given an answer for off-topic falls back to that answer.
+        if t.contains(offTopicReply) || (r.intent == .unknown && t.hasPrefix("这个我帮不上忙")) { return r.intent == .unknown ? offTopicReply : r.text }
         if t.isEmpty { t = r.text }
         // The verdict sentence is what must survive; the reasons after it may be reworded.
-        guard let k = r.conclusion else { return t }
-        let verdict = k.split(separator: "。", maxSplits: 1).first.map { String($0) + "。" } ?? k
-        if t.contains(k) || t.contains(verdict) { return t }
-        return k + "\n\n" + t
+        if let k = r.conclusion, !t.contains(k) {
+            let verdict = k.split(separator: "。", maxSplits: 1).first.map { String($0) + "。" } ?? k
+            if let at = t.range(of: verdict) {
+                // The reasons after the verdict carry the numbers (「你10月9日的血钾 5.4 偏高」): put them
+                // back when the model dropped them.
+                let rest = String(k.dropFirst(verdict.count))
+                let numbers = (try? NSRegularExpression(pattern: #"\d+(?:\.\d+)?"#))
+                    .map { re in re.matches(in: rest, range: NSRange(rest.startIndex..., in: rest)).compactMap { Range($0.range, in: rest).map { String(rest[$0]) } } } ?? []
+                let squeezed = { (x: String) in x.filter { !$0.isWhitespace } }
+                let restHead = String(squeezed(rest).prefix(10))
+                if numbers.contains(where: { !t.contains($0) }) || (!restHead.isEmpty && !squeezed(t).contains(restHead)) { t.replaceSubrange(at, with: k) }
+            } else {
+                t = k + "\n\n" + t
+            }
+        }
+        // When to see a doctor stays, however the model shortened the answer.
+        if let s = r.safety {
+            func squeeze(_ x: String) -> String { x.filter { !$0.isWhitespace } }
+            if !squeeze(t).contains(squeeze(String(s.prefix(14)))) { t += "\n\n" + s }
+        }
+        return t
     }
 
     /// Instructions for the on-device model (Apple Intelligence).
     static let groundedInstructions = """
-    你是 Pulse 应用中的 Health Agent，根据用户自己的身体数据回答问题，长期目标是降低静息心率。
-    【】里是给你的材料：不要输出这些标题，也不要整段复述【数据】。
+    你是 Pulse 里的健康助手，用口语化的简体中文回答用户的问题，像一位懂行、说话直接的朋友。
+    【】里是给你的材料：不要输出这些标签，也不要整段复述【数据】。
     要求：
-    1. 先用一句话直接回答【问题】。只使用【数据】和【要点】中的事实与数字，可以结合【数据】里与问题相关的其他数据（睡眠、静息心率、训练、血压、血糖等）；没有的数据直接说明没有记录，不要编造。
-    2. 有【第一句】时，回答必须以它原样开头，后面的内容不能与它矛盾。
-    3. 注意【数据】中的「现在」时间；问到户外运动时，参考【数据】里的天气预报。区分观察到的关联和原因；不做诊断；不建议开始、停止或调整任何药物和剂量。
-    4. 然后给 2–3 条具体建议，每条单独一行，以「• 」开头。不超过 200 字，不加标题。
-    5. 【要点】没有提到急救时，不要提及急救或 120。
+    1. 第一句就回答用户问的事，不要先复述问题。有【第一句】时原样用它开头，后面不能和它矛盾。
+    2. 事实、数字和结论以【要点】为准。只说和【问题】有关的内容，不要从【数据】里另找不相关的事来说（比如问饮食时不要谈打鼾、天气、静息心率）。
+    3. 建议最多 3 条，每条单独一行、以「• 」开头；按【说明】列或不列，不要从【数据】里另外编。
+    4. 不做诊断；不建议开始、停止或调整任何药物和剂量；【要点】没有提到急救时，不要提急救或 120。
+    5. 不超过 180 字，不加标题。
     """
 
     static let offTopicReply = "这个我帮不上忙。我可以根据你的数据回答睡眠、静息心率、运动计划、血压和血糖等问题。"

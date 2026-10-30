@@ -21,29 +21,30 @@ struct DemoTimeView: View {
     var body: some View {
         Form {
             Section {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                     Text(Date.app.formatted(.dateTime.month().day().weekday(.wide).hour().minute()))
                         .font(.title2.weight(.semibold))
                     Text(DemoClock.isShifted ? "演示时间 · 实际时间 \(Date().formatted(.dateTime.hour().minute()))" : "与实际时间相同")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, Theme.Space.tight)
             } header: { Text("现在的演示时间") }
 
             Section {
                 ForEach(Self.presets, id: \.0) { name, detail, h, m in
                     Button { apply(Self.today(h, m)) } label: {
                         HStack {
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                                 Text("\(name) \(Clock.text(h * 60 + m))").foregroundStyle(.primary)
                                 Text(detail).font(.footnote).foregroundStyle(.secondary)
                             }
                             Spacer()
                         }
+                        // On the label, so the whole 44 pt row is tappable.
+                        .frame(minHeight: Theme.Size.tap)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .frame(minHeight: 44)
                 }
             } header: { Text("跳到今天的某个时段") }
 
@@ -62,10 +63,18 @@ struct DemoTimeView: View {
         .navigationTitle("演示时间")
         .navigationBarTitleDisplayMode(.inline)
         .disabled(working)
-        .overlay { if working { ProgressView("正在生成示例数据…").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) } }
+        .overlay {
+            if working {
+                ProgressView("正在生成示例数据…")
+                    .padding(Theme.Space.cardPadding)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+            }
+        }
         .safeAreaInset(edge: .bottom) {
+            // Not scroll content, so the page margin is set here by hand.
             Text("切换后会按新的时间重新生成当前示例用户的数据，演示中新增的记录会被替换。状态栏仍显示手机的实际时间。")
-                .font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 20).padding(.bottom, 8)
+                .font(.footnote).foregroundStyle(.secondary)
+                .padding(.horizontal, Theme.Space.gutter).padding(.bottom, Theme.Space.item)
         }
     }
 

@@ -27,10 +27,11 @@ enum TrainingCheck {
     }
 
     static func isRequest(_ q: String) -> Bool {
-        let ask = ["适合", "能不能", "能否", "可以", "要不要", "该不该", "行不行", "合适", "能练", "能跑"]
+        let ask = ["适合", "能不能", "能否", "可以", "要不要", "该不该", "行不行", "合适", "能练", "能跑", "还要", "还能", "去不去", "该去"]
         let act = ["练", "训练", "运动", "跑", "骑", "游泳", "力量", "撸铁", "举铁", "举重", "深蹲", "间歇", "长距离", "健身", "锻炼",
                    "散步", "走路", "快走", "拉伸", "瑜伽", "动一动"]
-        guard ask.contains(where: { q.contains($0) }), act.contains(where: { q.contains($0) }) else { return false }
+        let asks = ask.contains(where: { q.contains($0) }) || q.range(of: "(能|可以)[^，。？]{0,8}(吗|不|么)", options: .regularExpression) != nil
+        guard asks, act.contains(where: { q.contains($0) }) else { return false }
         // Glucose and blood-pressure thresholds before exercise have their own answers.
         return !q.contains("血糖") && !q.contains("血压")
     }
@@ -76,6 +77,13 @@ enum TrainingCheck {
         // not about the coming day.
         let aboutNow = HealthAgent.asksAboutNow(q) || q.contains("这会儿")
             || (!c.beforeWake && q.contains("今天") && targetDay(q, now: now, profile: p) == now.startOfDay)
+        if aboutNow, let s = p.shift, c.window.kind == .night, c.now < c.window.bed,
+           c.now.minutesOfDay >= s.nightStart || c.now.minutesOfDay < s.nightEnd {
+            let first = "你现在在上夜班，先别安排训练：下班后按安排 \(Clock.text(c.window.bed.minutesOfDay)) 补觉，睡醒以后再做 20–30 分钟轻松活动。"
+            return AgentReply(text: first + "\n\n" + ["夜班中想提提神，可以起来走动几分钟、做做拉伸", "下班路上戴墨镜、少看手机，到家尽快睡",
+                                                       "强度课和大重量放到作息调回来、睡够的一天"].map { "• " + $0 }.joined(separator: "\n"),
+                              sources: ["倒班安排"], followUps: ["夜班后怎么补觉？"], destination: .sleep, conclusion: first)
+        }
         if aboutNow, c.nearBedtime {
             return nowReply(q, context: c)
         }
@@ -84,6 +92,9 @@ enum TrainingCheck {
         var session = session(in: q)
         let planned = c.plan.filter { $0.day == target && $0.status == .planned }
         let plannedTraining = planned.filter { $0.kind.isTraining }
+        let namedActivity = ["跑步", "跑", "骑车", "骑行", "游泳", "快走", "散步", "走路", "爬山", "徒步"].contains { q.contains($0) }
+        let defaulted = session == .any && !namedActivity
+        if session == .any, namedActivity { session = .easy }
         if session == .any {
             // Nothing named: judge the day's planned training, or light activity when none is planned.
             if let s = plannedTraining.max(by: { $0.intensity < $1.intensity }) {
@@ -104,6 +115,7 @@ enum TrainingCheck {
         var sleepLine: String? = nil
         var blockers: [String] = []
         var cautions: [String] = []
+        var weatherNotes: [String] = []
 
         // At 2 am the user's "明天" (or "今天") both mean the coming daytime; say how it was read.
         let clarified = early && target == today && said != nil
@@ -151,8 +163,18 @@ enum TrainingCheck {
                 cautions.append("今晚记录了肌肉酸痛（\(e.eveningSoreness ?? 0)/3），酸痛部位不宜再加大重量。")
             }
         }
+        // How the user says they feel counts as much as the numbers.
+        if AskedSymptom.find(in: q) == .fatigue {
+            cautions.append(measured && c.readiness.level == .high ? "你说今天有点累：数据显示恢复得不错，但感受更重要，按感受来。" : "你说今天有点累。")
+        }
         if c.days.contains(where: { $0.day >= today.adding(days: -2) && $0.illness }) {
             blockers.append("最近两天记录了生病 / 不适，症状消退 1–2 天后再恢复训练。")
+        }
+
+        if p.shift != nil, session.demanding || session == .heavyStrength {
+            let tw = DayClock.window(for: target, profile: p)
+            if tw.afterNightShift { blockers.append("那天是夜班后的恢复日，白天只补几个小时觉，不做间歇、长距离和大重量。") }
+            else if tw.kind == .night { blockers.append("那天晚上要上夜班，白天别把体力用在强度课上。") }
         }
 
         // 4. Load, care limits and vitals.
@@ -210,10 +232,10 @@ enum TrainingCheck {
             let k = w.concerns
             let indoorsForMe = WeatherPlanner.movesIndoors(w, for: p)
             if (k.contains(.extremeHeat) || k.contains(.heat)) && !indoorsForMe {
-                cautions.append("\(dayName)最高 \(Int(w.high))°C，户外强度降一级，放在早上 7 点前或傍晚 7 点后，带水，觉得头晕、恶心就停下来。")
+                weatherNotes.append("\(dayName)最高 \(Int(w.high))°C，在户外的话强度降一级，放在早上 7 点前或傍晚 7 点后，带水，觉得头晕、恶心就停下来。")
             }
             if k.contains(.badAir) || k.contains(.air) {
-                cautions.append("\(dayName)空气质量\(k.contains(.badAir) ? "差" : "一般")（AQI \(w.aqi ?? 0)），户外练得轻松些。")
+                weatherNotes.append("\(dayName)空气质量\(k.contains(.badAir) ? "差" : "一般")（AQI \(w.aqi ?? 0)），在户外的话练得轻松些。")
             }
             if indoorsForMe {
                 indoors = true
@@ -235,8 +257,8 @@ enum TrainingCheck {
         else { verdict = .go }
 
         // The user's own word for the activity, when it is a plain one ("跑步"), for the weather sentence.
-        let asked = ["跑步", "骑行", "骑车", "快走", "散步", "徒步", "爬山"].first { q.contains($0) } ?? session.label
-        let head: String
+        let asked = ["跑步", "骑行", "骑车", "快走", "散步", "徒步", "爬山", "游泳"].first { q.contains($0) } ?? (q.contains("跑") ? "跑步" : session.label)
+        var head: String
         switch verdict {
         case .notAdvised: head = "不建议\(dayText)做\(session.label)。"
         case .easier: head = session == .easy ? "\(dayText)可以做轻松的活动，但量要少一点。" : "\(dayText)可以练，但要降低强度。"
@@ -246,8 +268,29 @@ enum TrainingCheck {
         case .go: head = indoors ? "从身体状态看\(dayText)可以\(asked)，但天气不适合户外，改在室内做。" : "\(dayText)适合做\(session.label)。"
         }
 
+        if namedActivity, session == .easy {
+            switch verdict {
+            case .go: head = indoors ? head : "\(dayText)可以去\(asked)，保持轻松。"
+            case .easier: head = "\(dayText)可以去\(asked)，但量要少一点、强度放轻。"
+            case .notAdvised: head = "不建议\(dayText)去\(asked)。"
+            case .morning: break
+            }
+        } else if defaulted, plannedTraining.isEmpty, verdict == .go, target == today {
+            head = "\(dayText)计划里是休息，状态不错，想动的话做点轻松活动就好。"
+        }
+        // Tired today: the answer is about how the user feels, with the plan for the day.
+        if AskedSymptom.find(in: q) == .fatigue, target == today, verdict != .notAdvised {
+            if plannedTraining.isEmpty {
+                // A rest day anyway: nothing to grade, only to say so.
+                let rest = "\(dayText)计划里本来就是休息，累的话就别\(asked == session.label ? "练" : asked)了，散散步或拉伸一下就好。"
+                return AgentReply(text: rest + "\n\n" + ["今晚早点睡，明天起床看准备度再安排", "累了两三天还不见好，留意是不是快生病了"].map { "• " + $0 }.joined(separator: "\n"),
+                                  sources: ["\(dayName)计划", measured ? "今天准备度" : nil].compactMap { $0 }, followUps: ["明天适合运动吗？"],
+                                  destination: .plan, conclusion: rest)
+            }
+            head = "累的话\(dayText)的「\(plannedTraining[0].title)」降一级：强度放轻、时间缩短三分之一，练着更累就停。"
+        }
         var parts: [String] = [([head] + facts + blockers).joined(separator: "")]
-        if !cautions.isEmpty { parts.append(cautions.joined(separator: "")) }
+        if !(cautions + weatherNotes).isEmpty { parts.append((cautions + weatherNotes).joined(separator: "")) }
         if let w = weatherLine { parts.append(w) }
         if !planned.isEmpty {
             let desc = PlanChat.describe(planned)
@@ -270,7 +313,8 @@ enum TrainingCheck {
         case .morning:
             tips.append("早上醒来记录感受（约 20 秒），准备度偏低就改成轻松活动。")
         case .go:
-            tips.append("充分热身 10 分钟，按计划完成，不额外加量。")
+            tips.append(namedActivity ? "充分热身，\(asked == "跑步" ? "跑" : "练")的时候以能完整说话为准；计划里的训练照常做或者换一天，别一天塞太多。"
+                        : (defaulted && plannedTraining.isEmpty ? "散步、骑车或拉伸 20–40 分钟就好，不用额外加训练。" : "充分热身 10 分钟，按计划完成，不额外加量。"))
         }
         if session == .heavyStrength || session == .strength { tips.append("任何时候出现胸痛、胸闷、头晕或明显气短，立即停止。") }
         parts.append(tips.map { "• " + $0 }.joined(separator: "\n"))
@@ -299,7 +343,9 @@ enum TrainingCheck {
                                     outdoor && c.weather(on: target) != nil ? "天气预报" : nil].compactMap { $0 },
                           followUps: opportunity != nil ? ["熬夜后怎么恢复？"] : ["这周的训练完成得怎么样？"],
                           destination: blocks.isEmpty ? .plan : nil, blocks: blocks,
-                          conclusion: head + (sleepLine ?? "") + (weatherLine.flatMap { w in c.weather(on: target)?.movesIndoors == true ? w : nil } ?? ""))
+                          // Not advised: the reason goes with the verdict, so a model rewording it keeps both.
+                          conclusion: head + (sleepLine ?? (verdict == .notAdvised ? blockers.first ?? "" : ""))
+                            + (weatherLine.flatMap { w in c.weather(on: target)?.movesIndoors == true ? w : nil } ?? ""))
     }
 
     /// "现在 / 今晚适合…吗？" near or after bedtime: graded by the time left before sleep.
@@ -310,7 +356,12 @@ enum TrainingCheck {
         let finishBy = Clock.text(c.window.bed.minutesOfDay - 60)
         let text: String
         var tips: [String]
-        if c.pastBedtime {
+        let tired = AskedSymptom.find(in: q) == .fatigue
+        if tired, !c.pastBedtime {
+            let what = ["跑步", "跑", "骑车", "游泳", "力量", "健身"].first { q.contains($0) } ?? "练"
+            text = "累的话今晚就别\(what == "跑" ? "跑了" : (what == "练" ? "练了" : "去\(what)了"))，散散步或拉伸 10 分钟就好。现在 \(c.clock)，离\(c.bedPhrase) 入睡约 \((Double(toBed) / 60).oneDecimal) 小时，今晚早点睡，明天起床看准备度再安排。"
+            tips = ["洗个温水澡，睡前 1 小时放下手机", "训练不用补，明天按准备度来"]
+        } else if c.pastBedtime {
             text = "现在不建议\(s == .any ? "运动" : "做\(s.label)")。现在 \(c.clock)，已过\(c.bedPhrase) 的入睡时间，运动会让心率和体温升高、推迟入睡，反而影响明天的恢复。"
             tips = ["现在做 5–10 分钟轻柔拉伸或慢呼吸（吸 4 秒、呼 6 秒），然后睡觉", "训练放到明天，起床后看准备度再定强度"]
         } else if toBed < 60 {

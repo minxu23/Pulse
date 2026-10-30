@@ -44,24 +44,24 @@ struct HealthEventsView: View {
 struct EventRow: View {
     let event: HealthEvent
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Theme.Space.block) {
             Image(systemName: event.kind.icon)
                 .foregroundStyle(Theme.severity(event.severity))
-                .frame(width: 32, height: 32)
+                .frame(width: Theme.Size.iconTile, height: Theme.Size.iconTile)
                 .background(Theme.severity(event.severity).opacity(0.12), in: Circle())
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 Text(event.title).font(.subheadline.weight(.semibold))
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.tight) {
                     Text(event.severity.label)
                     Text("·")
                     Text(event.status.label)
                     Text("·")
                     Text(event.relatedDate.formatted(.dateTime.month().day()))
                 }
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.footnote).foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Theme.Space.hairline)
     }
 }
 
@@ -74,7 +74,7 @@ struct HealthEventDetailView: View {
     var body: some View {
         List {
             Section {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Theme.Space.item) {
                     StatusLabel(text: event.severity.label, icon: event.severity.icon, color: Theme.severity(event.severity))
                         .font(.subheadline.weight(.semibold))
                     Text(event.title).font(.title3.bold())
@@ -82,7 +82,7 @@ struct HealthEventDetailView: View {
                     Text("\(event.relatedDate.formatted(date: .abbreviated, time: .shortened))\(event.valueText.isEmpty ? "" : " · \(event.valueText)")")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, Theme.Space.tight)
             }
             Section("建议的处理") {
                 Text(event.guidance).font(.subheadline)
@@ -141,21 +141,21 @@ struct HealthEventDetailView: View {
 struct CareTaskRow: View {
     @Bindable var task: CareTask
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Theme.Space.block) {
             Button {
                 task.done.toggle()
                 task.doneAt = task.done ? .app : nil
             } label: {
                 Image(systemName: task.done ? "checkmark.circle.fill" : "circle").font(.title3)
                     .foregroundStyle(task.done ? .green : .secondary)
-                    .frame(width: 44, height: 44)
+                    .frame(width: Theme.Size.tap, height: Theme.Size.tap)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(task.done ? "标记为未完成" : "标记为完成")
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 Text(task.title).font(.subheadline).strikethrough(task.done)
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Space.item) {
                     Label(task.area.label, systemImage: task.area.icon)
                     if let due = task.due {
                         if !task.done && due < .app {
@@ -166,8 +166,9 @@ struct CareTaskRow: View {
                         }
                     }
                 }
-                .font(.caption).foregroundStyle(.secondary)
-                if !task.note.isEmpty { Text(task.note).font(.caption).foregroundStyle(.secondary) }
+                .font(.footnote).foregroundStyle(.secondary)
+                .labelStyle(.inline)
+                if !task.note.isEmpty { Text(task.note).font(.footnote).foregroundStyle(.secondary) }
             }
         }
     }

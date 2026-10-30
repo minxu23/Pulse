@@ -70,24 +70,24 @@ struct OnboardingView: View {
 
     private var welcome: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: Theme.Space.cardGap) {
                 Image(systemName: "heart.text.square.fill")
                     .font(.system(size: 52))
                     .foregroundStyle(Theme.heartData)
-                    .padding(.top, 40)
-                VStack(alignment: .leading, spacing: 8) {
+                    .padding(.top, Theme.Space.section)
+                VStack(alignment: .leading, spacing: Theme.Space.item) {
                     Text("Pulse").font(.largeTitle.bold())
                     Text("围绕智能穿戴设备的静息心率健康管理").font(.title3).foregroundStyle(.secondary)
                 }
                 Text("通过可持续的运动、睡眠、饮食和恢复管理，促进适合你个人情况的静息心率改善，同时提升日常精力与运动能力。")
                     .font(.body)
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: Theme.Space.block) {
                     ForEach(JourneyStage.allCases) { s in
-                        HStack(alignment: .top, spacing: 12) {
+                        HStack(alignment: .top, spacing: Theme.Space.block) {
                             Text("\(s.rawValue + 1)")
                                 .font(.subheadline.bold()).foregroundStyle(Color(.systemBackground))
                                 .frame(width: 26, height: 26).background(Color.primary, in: Circle())
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                                 Text(s.title).font(.headline)
                                 Text(s.focus).font(.subheadline).foregroundStyle(.secondary)
                             }
@@ -95,7 +95,7 @@ struct OnboardingView: View {
                     }
                 }
                 Callout(kind: .info, text: "静息心率受运动水平、睡眠、压力、疾病、药物等多种因素影响。Pulse 结合你的个人背景与其他表现来评估进展，不提供医疗诊断。")
-                VStack(spacing: 10) {
+                VStack(spacing: Theme.Space.item) {
                     Button { withAnimation { step = 1 } } label: {
                         Text("建立我的健康档案").frame(maxWidth: .infinity).fontWeight(.semibold).padding(.vertical, 6)
                     }
@@ -107,9 +107,11 @@ struct OnboardingView: View {
                     }
                     .buttonStyle(.bordered)
                 }
-                .padding(.top, 8)
+                // The actions are their own group: a section gap above them.
+                .padding(.top, Theme.Space.section - Theme.Space.cardGap)
             }
-            .padding(24)
+            // Side margins come from the app's page margins; only the vertical inset is set here.
+            .padding(.vertical, Theme.Space.block)
         }
     }
 
@@ -118,9 +120,9 @@ struct OnboardingView: View {
             ForEach(ProModule.allCases) { m in
                 Toggle(isOn: Binding(get: { p.hasModule(m) }, set: { p.setModule(m, enabled: $0) })) {
                     Label {
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                             Text(m.label)
-                            Text(m.subtitle).font(.caption).foregroundStyle(.secondary)
+                            Text(m.subtitle).font(.footnote).foregroundStyle(.secondary)
                         }
                     } icon: { Image(systemName: m.icon) }
                 }
@@ -152,7 +154,7 @@ struct OnboardingView: View {
                     if connecting { ProgressView() } else if p.useHealthKit { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
                 }
             }
-            if let healthMessage { Text(healthMessage).font(.caption).foregroundStyle(.secondary) }
+            if let healthMessage { Text(healthMessage).font(.footnote).foregroundStyle(.secondary) }
             Picker("静息心率主要来源", selection: Binding(get: { p.rhrMethod }, set: { p.rhrMethod = $0 })) {
                 ForEach(RHRSource.allCases) { Text($0.label).tag($0) }
             }
@@ -165,11 +167,11 @@ struct OnboardingView: View {
 
     private func finish(_ p: UserProfile) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Image(systemName: "checkmark.seal.fill").font(.system(size: 48)).foregroundStyle(.green).padding(.top, 30)
+            VStack(alignment: .leading, spacing: Theme.Space.cardGap) {
+                Image(systemName: "checkmark.seal.fill").font(.system(size: 48)).foregroundStyle(.green).padding(.top, Theme.Space.section)
                 Text("档案已建立").font(.largeTitle.bold())
                 Text("接下来的 2 周是「了解个人基础」阶段：").font(.headline)
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: Theme.Space.item) {
                     BulletText(text: "每天在相同条件下获取静息心率（\(p.rhrMethod.label)），建立个人基线。")
                     BulletText(text: "每天早晨花 20 秒记录醒后感受，晚上看看恢复重点。")
                     BulletText(text: "第一周计划以 \(p.weeklyTargetMinutes) 分钟有氧为目标，安排在 \(p.availableWeekdays.sorted { PlanGenerator.order($0) < PlanGenerator.order($1) }.map(Weekday.name).joined(separator: "、"))。")
@@ -189,9 +191,11 @@ struct OnboardingView: View {
                     Text("开始").frame(maxWidth: .infinity).fontWeight(.semibold).padding(.vertical, 6)
                 }
                 .buttonStyle(.borderedProminent)
-                .padding(.top, 10)
+                // The action is its own group: a section gap above it.
+                .padding(.top, Theme.Space.section - Theme.Space.cardGap)
             }
-            .padding(24)
+            // Side margins come from the app's page margins; only the vertical inset is set here.
+            .padding(.vertical, Theme.Space.block)
         }
     }
 }

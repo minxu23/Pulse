@@ -385,7 +385,9 @@ enum PlanChat {
                     note("只能调整今天及以后、还没完成的安排，\(Weekday.name(open.contains(from) ? to : from))这次没有改动。"); continue
                 }
                 let a = day(from, ws), b = day(to, ws)
-                guard after.contains(where: { $0.day == a && $0.kind.isTraining }) else { continue }
+                guard after.contains(where: { $0.day == a && $0.kind.isTraining }) else {
+                    note("\(Weekday.name(from))本来没有安排训练，没有可以挪的。"); continue
+                }
                 next = after.map { s in var s = s; if s.day == a { s.day = b } else if s.day == b { s.day = a }; return s }
             case .minutes(let wd, let m):
                 guard open.contains(wd), let i = primary(after, day(wd, ws)), after[i].kind.isTraining else { continue }
@@ -569,8 +571,9 @@ enum PlanChat {
         }
         switch parse(q, context: c) {
         case .clarify(let form):
+            // A question back to the user: shown as written, a model would only shorten it.
             return AgentReply(text: clarifyText(form), sources: ["\(form.id.contains("next") ? "下周" : "本周")计划"],
-                              blocks: [.form(form)], conclusion: clarifyText(form).split(separator: "。").first.map { String($0) + "。" })
+                              blocks: [.form(form)], conclusion: clarifyText(form).split(separator: "。").first.map { String($0) + "。" }, verbatim: true)
         case .edits(let scope, let ops, let notes):
             var p = propose(ops, scope: scope, request: q, context: c, source: "Pulse 规则")
             p.notes = notes + p.notes

@@ -30,7 +30,7 @@ struct ConditionsSection: View {
     @Bindable var p: UserProfile
     var body: some View {
         Section {
-            FlowLayout(spacing: 8) {
+            FlowLayout(spacing: Theme.Space.item) {
                 ForEach(HealthCondition.allCases) { c in
                     ToggleChip(text: c.label, isOn: Binding(
                         get: { p.conditions.contains(c) },
@@ -43,7 +43,7 @@ struct ConditionsSection: View {
                         }))
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, Theme.Space.tight)
             if p.conditions.contains(where: \.watchesFluid) && !p.fluidLimit {
                 Text("医生要求限制饮水时，在「恢复目标」里打开「限水」，Pulse 就不再提醒多喝水。")
                     .font(.footnote).foregroundStyle(.secondary)
@@ -51,13 +51,16 @@ struct ConditionsSection: View {
             ForEach(p.extraConditionsRaw, id: \.self) { raw in
                 let x = ConditionLibrary.resolve(raw)
                 HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         Text(x.name)
                         Text(x.known ? x.summary : "资料库未收录，只记了名字").font(.footnote).foregroundStyle(.secondary)
                     }
                     Spacer()
                     Button(role: .destructive) { p.extraConditionsRaw.removeAll { $0 == raw } } label: {
+                        // 44 pt tap area; the glyph stays at the top trailing corner, on the name's baseline.
                         Image(systemName: "minus.circle.fill")
+                            .frame(minWidth: Theme.Size.tap, minHeight: Theme.Size.tap, alignment: .topTrailing)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.borderless)
                     .accessibilityLabel("移除\(x.name)")
@@ -68,7 +71,7 @@ struct ConditionsSection: View {
         } header: {
             Text("健康状况")
         } footer: {
-            Text("这些信息用于调整运动强度、提醒与解读方式，仅保存在本机。已在接受治疗的情况，请以医生的照护计划为准。\(p.extraConditionsRaw.isEmpty ? "也可以在和 Health Agent 聊天时告诉它，它会帮你记下。" : "带名字的几项是在和 Health Agent 聊天时记下的。")")
+            Text("这些信息用于调整运动强度、提醒与解读方式，仅保存在本机。已在接受治疗的情况，请以医生的照护计划为准。\(p.extraConditionsRaw.isEmpty ? AgentNameSettings.shared.phrase("也可以在和", "聊天时告诉它，它会帮你记下。") : AgentNameSettings.shared.phrase("带名字的几项是在和", "聊天时记下的。"))")
         }
     }
 }
@@ -103,7 +106,7 @@ struct MedicationsSection: View {
     var body: some View {
         Section {
             ForEach(meds) { m in
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                     HStack {
                         Text(m.name).font(.body.weight(.medium))
                         if !m.isActive { Chip(text: "已停用", color: .gray) }
@@ -176,7 +179,7 @@ struct ExerciseBaseSection: View {
                 p.weeklyTargetMinutes = max(60, min($0.startingWeeklyMinutes, Int(Double(p.weeklyTimeBudget) * 0.8)))
             })) {
                 ForEach(ActivityLevel.allCases) { l in
-                    VStack(alignment: .leading) { Text(l.label); Text(l.detail).font(.caption) }.tag(l)
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) { Text(l.label); Text(l.detail).font(.footnote) }.tag(l)
                 }
             }
             .pickerStyle(.navigationLink)
@@ -191,11 +194,11 @@ struct LifeConstraintsSection: View {
     @Bindable var p: UserProfile
     var body: some View {
         Section {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Theme.Space.item) {
                 Text("哪几天可以安排运动").font(.subheadline)
                 WeekdayPicker(selection: $p.availableWeekdays)
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, Theme.Space.tight)
             Stepper("每次可投入 \(p.sessionMinutes) 分钟", value: $p.sessionMinutes, in: 10...150, step: 5)
             Stepper("每周总共可投入 \(p.weeklyTimeBudget) 分钟", value: $p.weeklyTimeBudget, in: 30...900, step: 15)
             Picker("偏好时段", selection: Binding(get: { p.preferredTime }, set: { p.preferredTime = $0 })) {
@@ -215,7 +218,7 @@ struct LifeConstraintsSection: View {
 struct WeekdayPicker: View {
     @Binding var selection: [Int]
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Space.item) {
             ForEach(Weekday.mondayFirst, id: \.self) { wd in
                 let on = selection.contains(wd)
                 Button {
@@ -223,9 +226,10 @@ struct WeekdayPicker: View {
                 } label: {
                     Text(Weekday.short(wd))
                         .font(.subheadline.weight(on ? .semibold : .regular))
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .frame(maxWidth: .infinity, minHeight: Theme.Size.tap)
                         .foregroundStyle(on ? Color.white : Color.primary)
                         .background(on ? Color.accentColor : Theme.subtle, in: Circle())
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -237,14 +241,14 @@ struct GoalsSection: View {
     @Bindable var p: UserProfile
     var body: some View {
         Section {
-            FlowLayout(spacing: 8) {
+            FlowLayout(spacing: Theme.Space.item) {
                 ForEach(GoalDirection.allCases) { g in
                     ToggleChip(text: g.label, icon: g.icon, isOn: Binding(
                         get: { p.goals.contains(g) },
                         set: { on in var s = p.goals; if on { s.insert(g) } else { s.remove(g) }; p.goals = s }))
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, Theme.Space.tight)
             TextField("用一句话描述你的目标（可选）", text: $p.goalNote, axis: .vertical)
             Toggle("设定静息心率目标", isOn: Binding(get: { p.targetRHR != nil }, set: { on in
                 p.targetRHR = on ? ((p.baselineRHR ?? 70) - 4).rounded() : nil

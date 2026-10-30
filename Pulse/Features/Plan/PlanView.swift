@@ -23,8 +23,8 @@ struct PlanView: View {
                     ForEach(Segment.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+                .padding(.horizontal, Theme.Space.gutter)
+                .padding(.bottom, Theme.Space.item)
                 .background(.bar)
             }
             .navigationTitle("计划")
@@ -65,9 +65,12 @@ struct WeeklyPlanView: View {
             if let mw = generated.marathon, snap.modules.contains(.marathon) { MarathonPhaseCard(week: mw) }
             summaryCard(week, p, generated, weekStart: ws, isNext: ws == nextWs)
             if ws != nextWs { AgentContextReader { WeatherPlanCard(context: $0) } }
+            // Three groups: the week, the chosen day, and the background to the plan.
             weekStrip(week, weekStart: ws)
+                .padding(.top, Theme.Space.section - Theme.Space.cardGap)
             dayDetail(week.filter { $0.day == selectedDay })
             notesCard(generated.notes)
+                .padding(.top, Theme.Space.section - Theme.Space.cardGap)
             historyCard
             if let p { NavigationLink { PlanSettingsView(profile: p) } label: { settingsRow } .buttonStyle(.plain) }
             Disclaimer(text: "运动计划为一般性健康建议。有心血管疾病、糖尿病、妊娠或其他健康状况时，请遵循医生的个人照护要求。")
@@ -106,20 +109,20 @@ struct WeeklyPlanView: View {
             }
             Text("参考：成年人每周 150–300 分钟中等强度有氧，并进行 2 次以上力量训练。计划会从你的现状出发，按完成情况逐步进阶。")
                 .font(.footnote).foregroundStyle(.secondary)
-            AgentAskButton(title: "和 Health Agent 调整\(isNext ? "下周" : "本周")计划",
+            AgentAskButton(title: AgentNameSettings.shared.phrase("和", "调整\(isNext ? "下周" : "本周")计划"),
                            question: isNext ? "帮我调整下周计划" : "帮我调整这周的训练计划")
         }
     }
 
     private func weekStrip(_ week: [PlanItem], weekStart ws: Date) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.Space.item) {
             ForEach(0..<7, id: \.self) { i in
                 let day = ws.adding(days: i)
                 let dayItems = week.filter { $0.day == day }
                 let main = dayItems.first { $0.kind.isTraining } ?? dayItems.first
                 let selected = day == selectedDay
                 Button { selectedDay = day } label: {
-                    VStack(spacing: 6) {
+                    VStack(spacing: Theme.Space.tight) {
                         Text(Weekday.short(day.weekday)).font(.caption).foregroundStyle(.secondary)
                         Text("\(Calendar.pulse.component(.day, from: day))")
                             .font(.subheadline.weight(day.isSameDay(.app) ? .bold : .regular))
@@ -129,9 +132,9 @@ struct WeeklyPlanView: View {
                             .frame(height: 16)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(selected ? Theme.accent.opacity(0.12) : Theme.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(selected ? Theme.accent : .clear, lineWidth: 1.5))
+                    .padding(.vertical, Theme.Space.block)
+                    .background(selected ? Theme.accent.opacity(0.12) : Theme.card, in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous).stroke(selected ? Theme.accent : .clear, lineWidth: 1.5))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(Weekday.name(day.weekday)) \(Calendar.pulse.component(.day, from: day)) 日，\(main.map { "\($0.title)，\($0.intensity.label)，\($0.status.label)" } ?? "没有安排")")
@@ -145,11 +148,11 @@ struct WeeklyPlanView: View {
             CardHeader(title: selectedDay.formatted(.dateTime.month().day().weekday(.wide)), icon: "list.bullet.clipboard", color: Theme.activity)
             if dayItems.isEmpty { EmptyHint(icon: "calendar", text: "这一天没有安排。") }
             ForEach(dayItems) { item in
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .top) {
-                        Image(systemName: item.kind.icon).foregroundStyle(Theme.intensity(item.intensity)).frame(width: 26)
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: Theme.Space.item) {
+                    HStack(alignment: .top, spacing: Theme.Space.block) {
+                        Image(systemName: item.kind.icon).foregroundStyle(Theme.intensity(item.intensity)).frame(width: Theme.Size.iconTile)
+                        VStack(alignment: .leading, spacing: Theme.Space.hairline) {
+                            HStack(spacing: Theme.Space.item) {
                                 Text(item.title).font(.headline)
                                 if item.isKey { Chip(text: "重点", icon: "star.fill", color: .yellow) }
                             }
@@ -164,7 +167,8 @@ struct WeeklyPlanView: View {
                             if item.kind.isTraining { Button { logItem = item } label: { Label("记录运动详情", systemImage: "square.and.pencil") } }
                         } label: {
                             Image(systemName: item.status.icon).font(.title3).foregroundStyle(Theme.planStatus(item.status))
-                                .frame(width: 44, height: 44)
+                                .frame(width: Theme.Size.tap, height: Theme.Size.tap)
+                                .contentShape(Rectangle())
                         }
                         .accessibilityLabel("\(item.title)，\(item.status.label)，更改状态")
                     }
@@ -229,8 +233,7 @@ struct WeeklyPlanView: View {
             Image(systemName: "chevron.right").foregroundStyle(.tertiary)
         }
         .font(.subheadline)
-        .padding(16)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .cardSurface()
     }
 }
 

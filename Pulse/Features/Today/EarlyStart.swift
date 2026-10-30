@@ -13,9 +13,9 @@ struct EarlyStartSheet: View {
         let today = now.startOfDay
         let night = data.analytics.day(today)
         let need = data.p.sleepNeedMinutes
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             Label("开始 \(today.formatted(.dateTime.month().day()))？", systemImage: "sunrise.fill")
-                .font(.title3.weight(.semibold))
+                .font(.title3.weight(.semibold)).labelStyle(.inline)
             Text("晨起评估会用昨夜到现在的数据：").font(.subheadline).foregroundStyle(.secondary)
             // Only a night that has actually ended counts (synced sleep that ends before now).
             if let n = night, let s = n.sleepStart, let e = n.sleepEnd, e <= now, let m = n.sleepMinutes {
@@ -25,8 +25,8 @@ struct EarlyStartSheet: View {
                     Text("\(Clock.text(s.minutesOfDay)) → \(Clock.text(e.minutesOfDay)) · \((m / 60).oneDecimal) 小时").monospacedDigit()
                 }
                 .font(.subheadline)
-                .padding(12)
-                .background(Theme.page, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(Theme.Space.block)
+                .background(Theme.page, in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
                 if m < need - 60 {
                     Text("比你需要的 \((need / 60).oneDecimal) 小时少约 \(((need - m) / 60).oneDecimal) 小时，准备度会把这一点算进去。")
                         .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -40,10 +40,13 @@ struct EarlyStartSheet: View {
                 Text("开始今天，记录醒后感受").fontWeight(.semibold).frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent).controlSize(.large)
-            Button("还没起床，继续睡") { dismiss() }
-                .frame(maxWidth: .infinity, minHeight: 44)
+            Button { dismiss() } label: {
+                Text("还没起床，继续睡").frame(maxWidth: .infinity, minHeight: Theme.Size.tap).contentShape(Rectangle())
+            }
         }
-        .padding(24)
+        // A sheet without a scroll view: the page margins on the sides, a section's space at the top and bottom.
+        .padding(.horizontal, Theme.Space.gutter)
+        .padding(.vertical, Theme.Space.section)
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
     }
@@ -53,15 +56,18 @@ struct EarlyStartSheet: View {
 struct EarlyStartUndoRow: View {
     let start: Date
     var body: some View {
-        HStack {
+        HStack(spacing: Theme.Space.item) {
             Label("\(Clock.text(start.minutesOfDay)) 开始今天", systemImage: "sunrise").font(.subheadline).foregroundStyle(.secondary)
-            Spacer()
+            Spacer(minLength: 0)
             Text("不是起床？").font(.subheadline).foregroundStyle(.secondary)
-            Button("撤销") { DayClock.undoEarlyStart() }
-                .font(.subheadline.weight(.semibold))
-                .frame(minHeight: 44)
+            Button { DayClock.undoEarlyStart() } label: {
+                Text("撤销").frame(minWidth: Theme.Size.tap, minHeight: Theme.Size.tap, alignment: .trailing).contentShape(Rectangle())
+            }
+            .font(.subheadline.weight(.semibold))
         }
-        .padding(.horizontal, 16)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        // The 44 pt button already leaves 12 pt above and below its line; 4 more matches the 16 pt sides.
+        .padding(.horizontal, Theme.Space.cardPadding)
+        .padding(.vertical, Theme.Space.tight)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
     }
 }

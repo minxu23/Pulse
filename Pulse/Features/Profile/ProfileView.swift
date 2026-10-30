@@ -8,6 +8,7 @@ struct ProfileView: View {
     @Query(sort: \DailyRecord.day) private var records: [DailyRecord]
     @Query(sort: \ActivitySession.start) private var sessions: [ActivitySession]
     @State private var pendingPersona: DemoPersona?
+    @State private var renamingAgent = false
 
     var body: some View {
         NavigationStack {
@@ -35,7 +36,7 @@ struct ProfileView: View {
                                     if m == .marathon && on && p.raceDate == nil { p.raceDate = p.targetDate ?? .app.adding(days: 140) }
                                     DataHub.regenerateWeekPlan(in: ctx)
                                 })) {
-                                    Label { VStack(alignment: .leading, spacing: 2) { Text(m.label); Text(m.subtitle).font(.caption).foregroundStyle(.secondary) } }
+                                    Label { VStack(alignment: .leading, spacing: Theme.Space.hairline) { Text(m.label); Text(m.subtitle).font(.footnote).foregroundStyle(.secondary) } }
                                     icon: { Image(systemName: m.icon).foregroundStyle(m == .marathon ? Theme.activity : (m == .cardioCare ? Theme.heartData : Theme.glucose)) }
                                 }
                             }
@@ -60,19 +61,32 @@ struct ProfileView: View {
                     } header: { Text("我的数据") }
 
                     Section {
-                        link("云端模型（测试）", "cloud", .gray) { CloudModelSettingsView() }
-                    } header: { Text("实验功能") } footer: {
-                        Text(CloudModelSettings.shared.isActive ? "Health Agent 正在使用云端模型，提问时会发送数据摘要。" : "默认关闭。开启前，Health Agent 的所有分析都在本机完成。")
+                        Button { renamingAgent = true } label: {
+                            LabeledContent {
+                                Text(AgentNameSettings.shared.name)
+                            } label: {
+                                Label { Text("名字") } icon: { tileIcon("sparkles", .purple) }
+                            }
+                        }
+                        // A settings row, not a blue action: the name shows on the right, the dialog edits it.
+                        .tint(.primary)
+                        link("回答方式与云端模型", "cloud", .gray) { CloudModelSettingsView() }
+                    } header: { Text("Health Agent") } footer: {
+                        switch CloudModelSettings.shared.effectiveMode {
+                        case .cloud: Text("正在使用「全部云端」：提问时会发送数据摘要。")
+                        case .hybrid: Text("正在使用「端云结合」：涉及你记录的问题在本机回答，通用问题只把问题原文发到云端。")
+                        case .onDevice: Text(AgentNameSettings.shared.phrase("正在使用「仅本机」：", "的所有分析都在本机完成。"))
+                        }
                     }
 
                     Section {
                         ForEach(DemoPersona.allCases) { persona in
                             Button { pendingPersona = persona } label: {
-                                HStack(spacing: 12) {
+                                HStack(spacing: Theme.Space.block) {
                                     Text(String(persona.name.prefix(1)))
                                         .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
-                                        .frame(width: 32, height: 32).background(Color.gray.gradient, in: Circle())
-                                    VStack(alignment: .leading, spacing: 2) {
+                                        .frame(width: Theme.Size.iconTile, height: Theme.Size.iconTile).background(Color.gray.gradient, in: Circle())
+                                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                                         Text(persona.name).foregroundStyle(.primary)
                                         Text(persona.summary).font(.footnote).foregroundStyle(.secondary)
                                     }
@@ -81,7 +95,7 @@ struct ProfileView: View {
                                         Text("当前").font(.footnote).foregroundStyle(.secondary)
                                     }
                                 }
-                                .frame(minHeight: 44)
+                                .frame(minHeight: Theme.Size.tap)
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -92,13 +106,14 @@ struct ProfileView: View {
                             }
                         }
                     } header: { Text("示例用户") } footer: {
-                        Text("每位示例用户包含 120 天的模拟记录。陈杰、林悦、王建国的健康情况一般、计划遵从性较差，可用来查看 Pulse 和 Health Agent 如何应对。载入会替换当前所有记录。")
+                        Text(AgentNameSettings.shared.phrase("每位示例用户包含 120 天的模拟记录。陈杰、林悦、王建国的健康情况一般、计划遵从性较差，可用来查看 Pulse 和", "如何应对。载入会替换当前所有记录。"))
                     }
                     Section {
                         Disclaimer().listRowBackground(Color.clear)
                     }
                 }
                 .navigationTitle("我的")
+                .agentRenameAlert(isPresented: $renamingAgent)
                 .confirmationDialog("载入「\(pendingPersona?.name ?? "")」的示例数据会替换当前所有记录。",
                                     isPresented: Binding(get: { pendingPersona != nil }, set: { if !$0 { pendingPersona = nil } }),
                                     titleVisibility: .visible, presenting: pendingPersona) { persona in
@@ -114,20 +129,23 @@ struct ProfileView: View {
 
     private func link<D: View>(_ title: String, _ icon: String, _ color: Color, @ViewBuilder destination: @escaping () -> D) -> some View {
         NavigationLink(destination: destination) {
-            Label { Text(title) } icon: {
-                Image(systemName: icon).foregroundStyle(.white).font(.caption.weight(.semibold))
-                    .frame(width: 28, height: 28).background(color, in: RoundedRectangle(cornerRadius: 7))
-            }
+            Label { Text(title) } icon: { tileIcon(icon, color) }
         }
+    }
+
+    private func tileIcon(_ icon: String, _ color: Color) -> some View {
+        Image(systemName: icon).foregroundStyle(.white).font(.caption.weight(.semibold))
+            // Settings-style 28 pt square: the List aligns its separators to it.
+            .frame(width: 28, height: 28).background(color, in: RoundedRectangle(cornerRadius: Theme.Radius.tile(28), style: .continuous))
     }
 
     private func headerCard(_ p: UserProfile, _ a: Analytics) -> some View {
         Card {
-            HStack(spacing: 14) {
+            HStack(spacing: Theme.Space.block) {
                 Text(String(p.displayName.prefix(1)))
                     .font(.title.bold()).foregroundStyle(.white)
-                    .frame(width: 58, height: 58).background(Color.gray.gradient, in: Circle())
-                VStack(alignment: .leading, spacing: 3) {
+                    .frame(width: Theme.Size.hero, height: Theme.Size.hero).background(Color.gray.gradient, in: Circle())
+                VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                     Text(p.displayName).font(.title3.bold())
                     Text("\(p.age) 岁 · \(p.sex.label) · BMI \(String(format: "%.1f", p.bmi)) · \(p.activityLevel.label)")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -138,7 +156,7 @@ struct ProfileView: View {
                 MetricTile(label: "近 4 周", value: a.trend.avg28.map { $0.noDecimal } ?? "—", unit: "bpm", icon: "calendar", color: Theme.heartData)
                 MetricTile(label: "每周可用", value: "\(p.weeklyTimeBudget)", unit: "分钟", icon: "clock", color: .green)
             }
-            FlowLayout(spacing: 6) {
+            FlowLayout(spacing: Theme.Space.item) {
                 ForEach(Array(p.goals).sorted { $0.rawValue < $1.rawValue }) { Chip(text: $0.label, icon: $0.icon, color: .orange) }
                 ForEach(Array(p.conditions).sorted { $0.rawValue < $1.rawValue }) { Chip(text: $0.label, icon: "cross.case", color: .gray) }
                 ForEach(p.extraConditionsRaw, id: \.self) { Chip(text: ConditionLibrary.resolve($0).name, icon: "cross.case", color: .gray) }
@@ -147,7 +165,7 @@ struct ProfileView: View {
             }
             if !p.goalNote.isEmpty { Text("“\(p.goalNote)”").font(.subheadline).foregroundStyle(.secondary) }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Theme.Space.tight)
     }
 }
 
@@ -232,7 +250,7 @@ struct DataSourcesView: View {
                     if let last = profile.lastSync {
                         LabeledContent("上次同步", value: last.formatted(date: .abbreviated, time: .shortened))
                     }
-                    if let msg = hk.lastMessage { Text(msg).font(.caption).foregroundStyle(.secondary) }
+                    if let msg = hk.lastMessage { Text(msg).font(.footnote).foregroundStyle(.secondary) }
                 }
             } header: {
                 Text("智能手表 / 手环 / CGM")
@@ -259,7 +277,7 @@ struct DataSourcesView: View {
             Section {
                 AgentAskButton(title: "按我的训练指导设备使用", question: "根据我的训练，手表和 CGM 怎么用更准？")
             } footer: {
-                Text("Health Agent 会结合你的训练内容和近期数据的完整度，给出佩戴与设置建议；开启云端模型时由云端模型生成个性化指导。")
+                Text(AgentNameSettings.shared.phrase("", "会结合你的训练内容和近期数据的完整度，给出佩戴与设置建议；开启云端模型时由云端模型生成个性化指导。"))
             }
         }
         .navigationTitle("数据来源").calmStyle()

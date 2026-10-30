@@ -26,11 +26,11 @@ extension StatusLabel {
 // MARK: - Card surfaces
 
 extension View {
-    /// The standard card surface: 16 pt padding, grouped background, 20 pt continuous corners.
-    func cardSurface(padding: CGFloat = 16) -> some View {
+    /// The standard card surface: card padding, grouped background, panel corners.
+    func cardSurface(padding: CGFloat = Theme.Space.cardPadding) -> some View {
         self.padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
     }
 }
 
@@ -41,10 +41,10 @@ struct CardTitle<Trailing: View>: View {
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.item) {
             Text(title).font(.headline).accessibilityAddTraits(.isHeader)
             if let detail { Text(detail).font(.footnote).foregroundStyle(.secondary) }
-            Spacer(minLength: 8)
+            Spacer(minLength: Theme.Space.item)
             trailing
         }
     }
@@ -69,14 +69,14 @@ struct HealthMetricCard<Footer: View>: View {
     @ViewBuilder var footer: Footer
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: icon).font(.subheadline.weight(.semibold)).foregroundStyle(color)
+        VStack(alignment: .leading, spacing: Theme.Space.item) {
+            HStack(spacing: Theme.Space.iconGap) {
+                Image(systemName: icon).font(.subheadline.weight(.semibold)).imageScale(.small).foregroundStyle(color)
                 Text(title).font(.subheadline.weight(.semibold))
-                Spacer(minLength: 4)
+                Spacer(minLength: Theme.Space.tight)
                 if let time { Text(time).font(.footnote).foregroundStyle(.secondary) }
             }
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                 Text(value).font(valueFont).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.6)
                 if !unit.isEmpty { Text(unit).font(.subheadline).foregroundStyle(.secondary) }
@@ -86,9 +86,9 @@ struct HealthMetricCard<Footer: View>: View {
             }
             footer
         }
-        .padding(16)
+        .padding(Theme.Space.cardPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 }
@@ -101,11 +101,12 @@ extension HealthMetricCard where Footer == EmptyView {
     }
 }
 
-/// Two equal columns for metric cards.
+/// Two equal columns for metric cards, spaced like cards in a stack.
 struct MetricGrid<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+        let gap = Theme.Space.cardGap
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: gap), GridItem(.flexible(), spacing: gap)], spacing: gap) {
             content
         }
     }
@@ -115,13 +116,15 @@ struct SectionTitle: View {
     let title: String
     var subtitle: String? = nil
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.item) {
             Text(title).font(.title3.bold())
             if let subtitle { Text(subtitle).font(.subheadline).foregroundStyle(.secondary) }
             Spacer()
         }
-        .padding(.horizontal, 4)
-        .padding(.top, 10)
+        .padding(.horizontal, Theme.Space.tight)
+        // In a card stack: a section gap above, and the title sits closer to its own cards than cards to each other.
+        .padding(.top, Theme.Space.section - Theme.Space.cardGap)
+        .padding(.bottom, -Theme.Space.tight)
         .accessibilityAddTraits(.isHeader)
     }
 }
@@ -134,7 +137,7 @@ struct PageFootnote: View {
         Text(text)
             .font(.footnote).foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 4)
+            .padding(.horizontal, Theme.Space.tight)
     }
 }
 
@@ -148,9 +151,9 @@ struct IconTextRow: View {
     let text: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Theme.Space.block) {
             IconTile(icon: icon, color: color)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 if !title.isEmpty { Text(title).font(.subheadline.weight(.semibold)) }
                 if !text.isEmpty {
                     Text(text).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -162,15 +165,15 @@ struct IconTextRow: View {
     }
 }
 
-/// 32 pt rounded tile holding a category glyph.
+/// Rounded tile holding a category glyph (32 pt in rows and card headers).
 struct IconTile: View {
     let icon: String
     var color: Color = .secondary
-    var size: CGFloat = 32
+    var size: CGFloat = Theme.Size.iconTile
     var body: some View {
         Image(systemName: icon).font(size > 34 ? .title3.weight(.semibold) : .body.weight(.semibold)).foregroundStyle(color)
             .frame(width: size, height: size)
-            .background(color == .secondary ? Theme.subtle : color.opacity(0.12), in: RoundedRectangle(cornerRadius: size / 4, style: .continuous))
+            .background(color == .secondary ? Theme.subtle : color.opacity(0.12), in: RoundedRectangle(cornerRadius: Theme.Radius.tile(size), style: .continuous))
             .accessibilityHidden(true)
     }
 }
@@ -182,8 +185,8 @@ struct HeroIcon: View {
     var body: some View {
         Image(systemName: icon)
             .font(.title2.weight(.semibold)).foregroundStyle(.white)
-            .frame(width: 56, height: 56)
-            .background(color.gradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .frame(width: Theme.Size.hero, height: Theme.Size.hero)
+            .background(color.gradient, in: RoundedRectangle(cornerRadius: Theme.Radius.tile(Theme.Size.hero), style: .continuous))
             .accessibilityHidden(true)
     }
 }
@@ -197,17 +200,17 @@ struct NavRowLabel: View {
     var value: String? = nil
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Theme.Space.block) {
             IconTile(icon: icon, color: color)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 Text(title).font(.body).foregroundStyle(.primary)
                 if let detail { Text(detail).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
             }
-            Spacer(minLength: 8)
+            Spacer(minLength: Theme.Space.item)
             if let value { Text(value).font(.subheadline).foregroundStyle(.secondary).monospacedDigit() }
             Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
         }
-        .frame(minHeight: 44)
+        .frame(minHeight: Theme.Size.tap)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
@@ -220,7 +223,7 @@ struct FactRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             Text(label).font(.subheadline).foregroundStyle(.secondary)
-            Spacer(minLength: 12)
+            Spacer(minLength: Theme.Space.block)
             Text(value).font(.subheadline.weight(.medium)).monospacedDigit().multilineTextAlignment(.trailing)
         }
         .accessibilityElement(children: .combine)
@@ -229,6 +232,10 @@ struct FactRow: View {
 
 /// Tappable checklist row: circle → checkmark, title and explanation; ≥ 44 pt.
 struct ChecklistRow: View {
+    /// The glyph column, as wide as an icon tile so row text lines up with icon-tile rows.
+    static let glyphColumn = Theme.Size.iconTile
+    /// Indent for a divider under the row text.
+    static let textInset = glyphColumn + Theme.Space.block
     let done: Bool
     let title: String
     let detail: String
@@ -236,18 +243,18 @@ struct ChecklistRow: View {
 
     var body: some View {
         Button(action: toggle) {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: Theme.Space.block) {
                 Image(systemName: done ? "checkmark.circle.fill" : "circle")
                     .font(.title3).foregroundStyle(done ? Color.green : Color.secondary)
-                    .frame(width: 28)
-                VStack(alignment: .leading, spacing: 2) {
+                    .frame(width: Self.glyphColumn)
+                VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                     Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(done ? .secondary : .primary)
                     Text(detail).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
             }
-            .frame(minHeight: 44)
+            .frame(minHeight: Theme.Size.tap)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -269,16 +276,16 @@ struct LogActionBar: View {
     let items: [Item]
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.Space.item) {
             ForEach(items) { item in
                 Button(action: item.action) {
-                    VStack(spacing: 4) {
+                    VStack(spacing: Theme.Space.tight) {
                         Image(systemName: item.icon).font(.body)
                         Text(item.title).font(.caption).lineLimit(1).minimumScaleFactor(0.8)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .frame(maxWidth: .infinity, minHeight: Theme.Size.tap + Theme.Space.item)
                     .foregroundStyle(Theme.accent)
-                    .background(Theme.subtle.opacity(0.7), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(Theme.subtle.opacity(0.7), in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("记录\(item.title)")
@@ -294,7 +301,7 @@ struct EmptyLine: View {
     var body: some View {
         Text(text).font(.subheadline).foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 6)
+            .padding(.vertical, Theme.Space.item)
     }
 }
 

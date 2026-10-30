@@ -73,7 +73,7 @@ struct DiabetesCareView: View {
     private func mealCard(_ g: [VitalPoint], _ p: ProfileSnapshot) -> some View {
         let responses = GlucoseAnalyzer.mealResponses(g, meals: meals.map { MealInfo(time: $0.time, kind: $0.kind, carbs: $0.carbsG, note: $0.note) })
         let byKind = Dictionary(grouping: responses, by: \.kind).compactMapValues { Stats.mean($0.map(\.rise)) }
-        return VStack(alignment: .leading, spacing: 10) {
+        return VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle(title: "餐后反应") {
                 Button { log = .diet } label: { Label("记录饮食", systemImage: "plus") }.buttonStyle(.bordered)
             }
@@ -82,7 +82,7 @@ struct DiabetesCareView: View {
             } else {
                 HStack(spacing: 0) {
                     ForEach([MealKind.breakfast, .lunch, .dinner], id: \.self) { k in
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Theme.Space.tight) {
                             Text("\(k.label)平均").font(.caption).foregroundStyle(.secondary)
                             Text(byKind[k].map { "+\($0.oneDecimal)" } ?? "—").font(.headline).monospacedDigit()
                         }
@@ -92,18 +92,18 @@ struct DiabetesCareView: View {
                 }
                 Divider()
                 ForEach(responses.prefix(5)) { r in
-                    HStack(spacing: 12) {
+                    HStack(spacing: Theme.Space.block) {
                         IconTile(icon: r.kind.icon, color: Theme.nutrition)
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                             Text("\(r.kind.label) · \(r.time.formatted(.dateTime.month().day())) \(Clock.text(r.time.minutesOfDay))").font(.subheadline)
                             Text([r.carbs.map { "\(Int($0)) g 碳水" } ?? "", r.note, "\(r.minutesToPeak) 分钟达峰 \(r.peak.oneDecimal)"]
                                 .filter { !$0.isEmpty }.joined(separator: " · "))
                                 .font(.footnote).foregroundStyle(.secondary).lineLimit(2)
                         }
-                        Spacer(minLength: 4)
+                        Spacer(minLength: Theme.Space.tight)
                         StatusLabel(r.rise >= 3 ? .attention("+\(r.rise.oneDecimal)") : .neutral("+\(r.rise.oneDecimal)")).font(.subheadline).monospacedDigit()
                     }
-                    .frame(minHeight: 44)
+                    .frame(minHeight: Theme.Size.tap)
                     .accessibilityElement(children: .combine)
                 }
                 Text("餐后上升超过 3 mmol/L 时，可以留意这一餐的碳水量、进餐顺序和餐后活动。这些是观察到的关联，调整饮食前请与医疗团队讨论。")
@@ -115,22 +115,22 @@ struct DiabetesCareView: View {
 
     private func exerciseCard(_ g: [VitalPoint], _ p: ProfileSnapshot) -> some View {
         let responses = GlucoseAnalyzer.exerciseResponses(g, sessions: sessions.map(\.point))
-        return VStack(alignment: .leading, spacing: 10) {
+        return VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("运动前后")
             if responses.isEmpty { EmptyLine("佩戴 CGM 运动后，这里会显示运动前后的血糖变化。") }
             ForEach(responses.prefix(4)) { r in
                 let delayedLow = (r.lowestNext12h ?? 99) < p.glucoseLow
-                HStack(spacing: 12) {
+                HStack(spacing: Theme.Space.block) {
                     IconTile(icon: r.type.icon, color: Theme.activity)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         Text("\(r.type.label) \(Int(r.minutes)) 分钟 · \(r.start.formatted(.dateTime.month().day()))").font(.subheadline)
                         Text("\(r.before.oneDecimal) → \(r.after.oneDecimal) mmol/L\(r.lowestNext12h.map { " · 之后 12 小时最低 \($0.oneDecimal)" } ?? "")")
                             .font(.footnote).foregroundStyle(.secondary).monospacedDigit()
                     }
-                    Spacer(minLength: 4)
+                    Spacer(minLength: Theme.Space.tight)
                     StatusLabel(delayedLow ? .attention("延迟低血糖") : .neutral(r.change.signedText)).font(.footnote)
                 }
-                .frame(minHeight: 44)
+                .frame(minHeight: Theme.Size.tap)
                 .accessibilityElement(children: .combine)
             }
             Divider()
@@ -154,7 +154,7 @@ struct DiabetesCareView: View {
     private func lowCard(_ g: [VitalPoint], _ p: ProfileSnapshot) -> some View {
         let episodes = GlucoseAnalyzer.lowEpisodes(g.filter { $0.time > Date.app.adding(days: -14) }, low: p.glucoseLow)
         let related = events.filter { [.glucoseLow, .glucoseSevereLow, .glucoseHigh].contains($0.kind) }.prefix(3)
-        return VStack(alignment: .leading, spacing: 10) {
+        return VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle(title: "低血糖") {
                 Button { log = .symptom } label: { Label("记录症状", systemImage: "plus") }.buttonStyle(.bordered)
             }
@@ -168,7 +168,7 @@ struct DiabetesCareView: View {
             ForEach(Array(related)) { e in
                 NavigationLink { HealthEventDetailView(event: e) } label: {
                     HStack { EventRow(event: e); Spacer(); Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary) }
-                        .frame(minHeight: 44).contentShape(Rectangle())
+                        .frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -184,7 +184,7 @@ struct DiabetesCareView: View {
     }
 
     private func guidanceCard(_ p: ProfileSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("生病日")
             IconTextRow(icon: "drop.triangle", color: .secondary, title: "更频繁地监测", text: "发热、呕吐或进食减少时，每 2–4 小时查看一次血糖；1 型糖尿病同时检测酮体。")
             IconTextRow(icon: "cup.and.saucer", color: .secondary, title: "补充水分", text: "少量多次饮水；进食困难时选择含碳水的流质。")
@@ -197,12 +197,12 @@ struct DiabetesCareView: View {
     private var followUpCard: some View {
         let list = tasks.filter { $0.area == .diabetes }
         let missing = DiabetesChecks.all.filter { c in !list.contains { $0.title == c.title } }
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: Theme.Space.item) {
             CardTitle(title: "检查与随访") {
                 Button { addTask = true } label: { Label("添加", systemImage: "plus") }.buttonStyle(.bordered)
             }
             if list.isEmpty { EmptyLine("常规检查包括 HbA1c、眼底、足部和肾功能。") }
-            ForEach(list) { CareTaskRow(task: $0).frame(minHeight: 44) }
+            ForEach(list) { CareTaskRow(task: $0).frame(minHeight: Theme.Size.tap) }
             if !missing.isEmpty {
                 Button {
                     for c in missing { ctx.insert(CareTask(title: c.title, area: .diabetes, due: .app.adding(days: c.dueInDays), note: c.note)) }
@@ -236,12 +236,12 @@ struct GlucoseHeroCard: View {
         let p = profile
         let last = points.last
         let fresh = last.map { Date.app.timeIntervalSince($0.time) < 3600 } ?? false
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle(title: metrics.isContinuous ? "当前血糖" : "最近一次血糖") {
                 if metrics.isContinuous { Chip(text: "CGM", icon: "sensor.tag.radiowaves.forward", color: .secondary) }
             }
             if let v = last {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                     Text(v.value.oneDecimal).font(.system(.largeTitle, design: .rounded).weight(.bold)).monospacedDigit()
                     Text("mmol/L").font(.subheadline).foregroundStyle(.secondary)
                     if metrics.isContinuous && fresh, let arrow = trendArrow {
@@ -261,7 +261,7 @@ struct GlucoseHeroCard: View {
             if metrics.isContinuous {
                 TIRBar(metrics: metrics)
             }
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.Space.item) {
                 Button { onLog(.glucose) } label: { Label("记录血糖", systemImage: "plus").frame(maxWidth: .infinity) }
                     .buttonStyle(.borderedProminent).controlSize(.large)
                 Button { onLog(.diet) } label: { Label("记录饮食", systemImage: "fork.knife").frame(maxWidth: .infinity) }
@@ -299,7 +299,7 @@ struct TIRBar: View {
             ("偏高", (m.tar ?? 0) - (m.tarSevere ?? 0), .orange.opacity(0.6)),
             ("很高", m.tarSevere ?? 0, .orange),
         ]
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.item) {
             GeometryReader { geo in
                 HStack(spacing: 2) {
                     ForEach(parts.filter { $0.1 > 0.001 }, id: \.0) { part in
@@ -320,7 +320,7 @@ struct TIRBar: View {
     }
 
     private func legend(_ label: String, _ v: Double, _ c: Color) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: Theme.Space.iconGap) {
             Circle().fill(c).frame(width: 8, height: 8)
             Text("\(label) \(v < 0.1 && v > 0 ? String(format: "%.1f", v * 100) : "\(Int((v * 100).rounded()))")%")
                 .font(.footnote).foregroundStyle(.secondary).monospacedDigit()
@@ -343,7 +343,7 @@ struct Last24hCard: View {
         let continuous = day.count >= 24
         let mealTimes = meals.filter { $0.time > from }
         let ex = sessions.filter { $0.start > from }
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("最近 24 小时")
             if day.isEmpty {
                 EmptyLine("最近 24 小时没有血糖数据。")
@@ -393,7 +393,7 @@ struct AGPCard: View {
         let p = profile
         let prof = GlucoseAnalyzer.hourlyProfile(points.filter { $0.time > Date.app.adding(days: -14) }.map { ($0.time, $0.value) })
         let dn = GlucoseAnalyzer.dayNightTIR(points, low: p.glucoseLow, high: p.glucoseHigh)
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("每日规律", detail: "14 天叠加")
             Chart {
                 GlucoseRangeMarks(low: p.glucoseLow, high: p.glucoseHigh)
@@ -412,12 +412,12 @@ struct AGPCard: View {
             .accessibilityLabel("14 天每日血糖规律")
             Text("线为中位数，深色带为 25%–75%，浅色带为 10%–90%").font(.footnote).foregroundStyle(.secondary)
             HStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Theme.Space.tight) {
                     Text("白天范围内").font(.caption).foregroundStyle(.secondary)
                     Text(dn.day.map { "\(Int($0 * 100))%" } ?? "—").font(.headline).monospacedDigit()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Theme.Space.tight) {
                     Text("夜间范围内（0–6 点）").font(.caption).foregroundStyle(.secondary)
                     Text(dn.night.map { "\(Int($0 * 100))%" } ?? "—").font(.headline).monospacedDigit()
                 }

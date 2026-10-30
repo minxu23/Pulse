@@ -61,10 +61,10 @@ struct MarathonView: View {
     }
 
     private func noGoalCard(_ p: UserProfile) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
+            HStack(spacing: Theme.Space.block) {
                 HeroIcon(icon: "flag.checkered", color: Theme.activity)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Theme.Space.tight) {
                     Text("设定一个赛事目标").font(.title3.weight(.semibold))
                     Text("填写比赛日期、目标成绩和当前跑量，Pulse 会评估可行性并分阶段安排训练。")
                         .font(.subheadline).foregroundStyle(.secondary)
@@ -86,14 +86,14 @@ struct MarathonView: View {
         let planned = enabled ? items.filter { $0.weekStart == ws && $0.kind.isTraining } : []
         let preview = enabled ? [] : week.sessions.filter { $0.kind.isTraining }
         let km = sessions.filter { $0.type == .run && $0.start >= ws }.compactMap(\.distanceKm).reduce(0, +)
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle(title: enabled ? "本周 · \(week.phase.label)" : "开启后的本周安排 · \(week.phase.label)") {
                 if enabled {
                     Text("\(planned.filter { $0.status == .done || $0.status == .partial }.count)/\(planned.count) 次")
                         .font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).monospacedDigit()
                 }
             }
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                 Text(km.oneDecimal).font(.system(.title, design: .rounded).weight(.semibold)).monospacedDigit()
                 Text("/ \(Int(week.weeklyKm)) km").font(.subheadline).foregroundStyle(.secondary)
                 Spacer()
@@ -105,34 +105,34 @@ struct MarathonView: View {
             if !planned.isEmpty {
                 Divider()
                 ForEach(planned) { item in
-                    HStack(spacing: 12) {
+                    HStack(spacing: Theme.Space.block) {
                         IconTile(icon: item.kind.icon, color: Theme.activity)
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                             Text(item.title).font(.body)
                             Text("\(Weekday.name(item.day.weekday)) · \(item.minutes) 分钟 · \(item.intensity.label)")
                                 .font(.footnote).foregroundStyle(.secondary)
                         }
-                        Spacer(minLength: 4)
+                        Spacer(minLength: Theme.Space.tight)
                         StatusLabel(text: item.status.label, icon: item.status.icon, color: Theme.planStatus(item.status), secondaryText: true)
                             .labelStyle(.iconOnly).font(.title3)
                             .accessibilityLabel(item.status.label)
                     }
-                    .frame(minHeight: 44)
+                    .frame(minHeight: Theme.Size.tap)
                     .accessibilityElement(children: .combine)
                 }
             }
             if !preview.isEmpty {
                 Divider()
                 ForEach(Array(preview.enumerated()), id: \.offset) { _, s in
-                    HStack(spacing: 12) {
+                    HStack(spacing: Theme.Space.block) {
                         IconTile(icon: s.kind.icon, color: Theme.activity)
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                             Text(s.title).font(.body)
                             Text("\(Weekday.name(s.weekday)) · \(s.minutes) 分钟 · \(s.intensity.label)").font(.footnote).foregroundStyle(.secondary)
                         }
                         Spacer(minLength: 0)
                     }
-                    .frame(minHeight: 44)
+                    .frame(minHeight: Theme.Size.tap)
                     .accessibilityElement(children: .combine)
                 }
             }
@@ -162,7 +162,7 @@ struct MarathonView: View {
         }
         // Said once under the grid, so the first card is not taller than its neighbours.
         Text("负荷比 = 近 7 天 ÷ 近 4 周平均，适宜 0.8–1.3。").font(.footnote).foregroundStyle(.secondary)
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("近 8 周跑量")
             Chart {
                 ForEach(load.weeks) { w in
@@ -207,7 +207,7 @@ struct MarathonView: View {
         return HealthMetricCard(title: "有氧效率", icon: "waveform.path.ecg", color: Theme.heartData, time: "轻松跑",
                                 value: hr1.map { $0.noDecimal } ?? "—", unit: "bpm", status: status) {
             if let pa = pace0, let pb = pace1, easy.count >= 6 {
-                Text("配速 \(MarathonPlanner.paceText(pa)) → \(MarathonPlanner.paceText(pb))").font(.caption).foregroundStyle(.secondary)
+                Text("配速 \(MarathonPlanner.paceText(pa)) → \(MarathonPlanner.paceText(pb))").font(.footnote).foregroundStyle(.secondary)
             }
         }
     }
@@ -218,9 +218,9 @@ struct MarathonView: View {
         let plan = MarathonPlanner.fuelPlan(minutes: Int(fuelMinutes), carbsPerHour: p.fuelCarbsPerHour)
         let longRuns = sessions.filter { $0.type == .run && $0.minutes >= 90 }.suffix(4).reversed()
         let gels = Int((Double(plan.carbs) / 22).rounded(.up))
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("补给计算")
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Theme.Space.tight) {
                 HStack {
                     Text("运动时长").font(.subheadline)
                     Spacer()
@@ -231,7 +231,7 @@ struct MarathonView: View {
             }
             Stepper("每小时碳水 \(p.fuelCarbsPerHour) g", value: Bindable(p).fuelCarbsPerHour, in: 20...100, step: 5)
                 .font(.subheadline)
-            HStack(spacing: 12) {
+            MetricRow {
                 fuelFact("碳水", "\(plan.carbs)", "g", "bolt.fill")
                 fuelFact("能胶约", plan.carbs > 0 ? "\(gels)" : "0", "支", "takeoutbag.and.cup.and.straw.fill")
                 fuelFact("饮水", plan.fluidHigh > 0 ? "\(plan.fluidLow)–\(plan.fluidHigh)" : "按口渴", plan.fluidHigh > 0 ? "ml" : "", "drop.fill")
@@ -256,17 +256,8 @@ struct MarathonView: View {
     }
 
     private func fuelFact(_ label: String, _ value: String, _ unit: String, _ icon: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label(label, systemImage: icon).font(.caption).foregroundStyle(.secondary)
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(value).font(.title3.weight(.semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
-                Text(unit).font(.caption).foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(Theme.subtle.opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .accessibilityElement(children: .combine)
+        MetricTile(label: label, value: value, unit: unit, icon: icon)
+            .accessibilityElement(children: .combine)
     }
 
     // MARK: Lactate (professional context)
@@ -277,7 +268,7 @@ struct MarathonView: View {
         let test = all.filter { $0.time.startOfDay == lastDay }
         let stages = LactateAnalyzer.stages(test.map(\.point), pulses: test.map(\.pulse), notes: test.map(\.note))
         let result = LactateAnalyzer.analyze(stages)
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle(title: "递增负荷测试", detail: lastDay?.formatted(.dateTime.month().day())) {
                 Button { addLactate = true } label: { Label("记录", systemImage: "plus") }
                     .buttonStyle(.bordered)
@@ -301,7 +292,7 @@ struct MarathonView: View {
                 EmptyLine("暂无测试记录。测试需在专业人员指导下进行。")
             }
             if let r = result {
-                HStack(spacing: 12) {
+                MetricRow {
                     fuelFact("有氧阈 LT1", r.lt1HR.map { "\(Int($0))" } ?? "—", "bpm", "1.circle")
                     fuelFact("乳酸阈 LT2", r.lt2HR.map { "\(Int($0))" } ?? "—", "bpm", "2.circle")
                 }
@@ -338,13 +329,13 @@ struct RaceHeroCard: View {
 
     var body: some View {
         let days = max(0, race.date.daysSince(.app))
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle(title: "赛事目标") {
                 if profile.hasModule(.marathon) { Chip(text: week.phase.label, icon: "flag.checkered", color: Theme.activity) }
             }
-            HStack(alignment: .center, spacing: 14) {
+            HStack(alignment: .center, spacing: Theme.Space.block) {
                 HeroIcon(icon: "figure.run", color: Theme.activity)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Theme.Space.tight) {
                     Text(race.name.isEmpty ? "全程马拉松" : race.name).font(.title3.weight(.semibold))
                     Text("\(race.date.formatted(.dateTime.year().month().day())) · 还有 \(days) 天")
                         .font(.subheadline).foregroundStyle(.secondary)
@@ -378,7 +369,7 @@ struct RaceHeroCard: View {
     }
 
     private func fact(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
             Text(label).font(.caption).foregroundStyle(.secondary)
             Text(value).font(.headline).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
         }
@@ -395,41 +386,41 @@ struct PaceCard: View {
     @State private var showSplits = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Space.item) {
             CardTitle("训练配速")
             paceRow("轻松跑 / 长距离", week.easyPace, "能完整说话，占跑量的大部分", Intensity.easy)
-            Divider().padding(.leading, 44)
+            Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block)
             paceRow("马拉松配速", week.marathonPace, "专项期的配速跑与比赛日", Intensity.moderate)
-            Divider().padding(.leading, 44)
+            Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block)
             paceRow("阈值配速", week.thresholdPace, "约可持续 1 小时的强度", Intensity.hard)
             if let t = targetMinutes {
                 DisclosureGroup("比赛日分段时间（匀速）", isExpanded: $showSplits) {
-                    VStack(spacing: 6) {
+                    VStack(spacing: Theme.Space.item) {
                         ForEach(RacePredictor.splits(targetMinutes: t), id: \.km) { s in
                             FactRow(label: s.km == 21.0975 ? "半程" : (s.km == 42.195 ? "终点" : "\(Int(s.km)) km"),
                                     value: RacePredictor.clockText(s.minutes))
                         }
                     }
-                    .padding(.top, 6)
+                    .padding(.top, Theme.Space.item)
                 }
                 .font(.subheadline)
-                .padding(.top, 4)
+                .padding(.top, Theme.Space.tight)
             }
         }
         .cardSurface()
     }
 
     private func paceRow(_ title: String, _ pace: Double, _ text: String, _ i: Intensity) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Theme.Space.block) {
             IconTile(icon: "speedometer", color: Theme.intensity(i))
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 Text(title).font(.subheadline.weight(.semibold))
                 Text(text).font(.footnote).foregroundStyle(.secondary)
             }
             Spacer()
             Text(MarathonPlanner.paceText(pace)).font(.body.weight(.semibold)).monospacedDigit()
         }
-        .frame(minHeight: 44)
+        .frame(minHeight: Theme.Size.tap)
         .accessibilityElement(children: .combine)
     }
 }
@@ -440,15 +431,15 @@ struct HRZonesCard: View {
     var body: some View {
         let (zones, basis) = HRZones.zones(profile: profile)
         let maxHigh = Double(zones.map(\.high).max() ?? 200)
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("心率区间")
             ForEach(zones) { z in
-                HStack(spacing: 12) {
+                HStack(spacing: Theme.Space.block) {
                     Text("\(z.index)").font(.footnote.weight(.bold)).foregroundStyle(.primary)
-                        .frame(width: 28, height: 28)
+                        .frame(width: Theme.Size.iconTile, height: Theme.Size.iconTile)
                         .background(Theme.subtle, in: Circle())
                         .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: Theme.Space.tight) {
                         HStack {
                             Text(z.name).font(.subheadline.weight(.semibold))
                             if z.aboveCap { StatusLabel(.attention("超出医生给出的上限")).font(.caption) }
@@ -480,7 +471,7 @@ struct RaceWeekCard: View {
     let week: MarathonWeek
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("比赛日准备")
             IconTextRow(icon: "bed.double.fill", color: Theme.sleep, title: "赛前两晚睡好",
                         text: "比赛前一晚紧张睡不好很常见，前两晚的睡眠更重要。")

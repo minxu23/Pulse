@@ -32,7 +32,7 @@ struct ExerciseDayView: View {
         if !tips.isEmpty { PreExerciseCard(tips: tips) }
 
         SectionTitle(title: "今天的活动")
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+        MetricGrid {
             stepsCard
             activeMinutesCard
             vitalityCard
@@ -41,10 +41,7 @@ struct ExerciseDayView: View {
 
         WorkoutLogCard(sessions: data.todaySessions, onLog: { sheet = .workout(nil) })
 
-        Text("活力度综合步数与活动时间，反映今天实际活动了多少；准备度则说明今天适合安排多少。")
-            .font(.footnote).foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 4)
+        PageFootnote("活力度综合步数与活动时间，反映今天实际活动了多少；准备度则说明今天适合安排多少。")
     }
 
     private func setStatus(_ item: PlanItem, _ status: PlanStatus) {
@@ -133,22 +130,18 @@ struct SessionHeroCard: View {
     var onLog: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             HStack {
                 Text("今日训练").font(.headline)
                 Spacer()
                 if item.isKey { Chip(text: "重点课", icon: "star.fill", color: .yellow) }
             }
 
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: item.kind.icon)
-                    .font(.title2.weight(.semibold)).foregroundStyle(.white)
-                    .frame(width: 56, height: 56)
-                    .background(Theme.activity.gradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: Theme.Space.block) {
+                HeroIcon(icon: item.kind.icon, color: Theme.activity)
+                VStack(alignment: .leading, spacing: Theme.Space.tight) {
                     Text(item.title).font(.title3.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
-                    HStack(spacing: 10) {
+                    HStack(spacing: Theme.Space.item) {
                         if item.minutes > 0 { Text("\(item.minutes) 分钟").font(.subheadline.weight(.semibold)).monospacedDigit() }
                         StatusLabel(text: item.intensity.label, icon: "circle.fill", color: Theme.intensity(item.intensity), secondaryText: true)
                             .font(.subheadline).imageScale(.small)
@@ -160,7 +153,7 @@ struct SessionHeroCard: View {
             StatusLabel(text: fit.text, icon: fit.icon, color: fit.color, secondaryText: true).font(.subheadline)
 
             if item.status == .planned {
-                HStack(spacing: 10) {
+                HStack(spacing: Theme.Space.item) {
                     Button(action: onDone) { Label("完成", systemImage: "checkmark").frame(maxWidth: .infinity) }
                         .buttonStyle(.borderedProminent).controlSize(.large)
                     Button(action: onAdjust) { Label("调整", systemImage: "slider.horizontal.3").frame(maxWidth: .infinity) }
@@ -171,9 +164,10 @@ struct SessionHeroCard: View {
                         Divider()
                         Button(action: onLog) { Label("记录运动详情", systemImage: "square.and.pencil") }
                     } label: {
+                        // As tall as the large buttons beside it.
                         Image(systemName: "ellipsis").font(.body.weight(.semibold))
                             .frame(width: 50, height: 50)
-                            .background(Theme.subtle, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .background(Theme.subtle, in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
                     }
                     .accessibilityLabel("更多操作")
                 }
@@ -189,14 +183,14 @@ struct SessionHeroCard: View {
                             Button { onStatus(s) } label: { Label(s.label, systemImage: s.icon) }
                         }
                     } label: {
-                        Image(systemName: "ellipsis").font(.body.weight(.semibold)).frame(width: 44, height: 44)
+                        Image(systemName: "ellipsis").font(.body.weight(.semibold)).frame(width: Theme.Size.tap, height: Theme.Size.tap)
                     }
                     .accessibilityLabel("更改状态")
                 }
             }
 
             Divider()
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: Theme.Space.block) {
                 IconTextRow(icon: "text.alignleft", color: .secondary, title: "内容", text: item.detail)
                 IconTextRow(icon: "speedometer", color: .secondary, title: "强度参考", text: item.guidance)
                 if item.minimumMinutes > 0 && !item.minimumDetail.isEmpty {
@@ -207,8 +201,7 @@ struct SessionHeroCard: View {
                 }
             }
         }
-        .padding(16)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .cardSurface()
     }
 
     /// Does the session fit today's readiness?
@@ -232,15 +225,11 @@ struct ActivityDayHeroCard: View {
     var onLog: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             Text("今日安排").font(.headline)
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: "figure.walk")
-                    .font(.title2.weight(.semibold)).foregroundStyle(.white)
-                    .frame(width: 56, height: 56)
-                    .background(Theme.activity.gradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top, spacing: Theme.Space.block) {
+                HeroIcon(icon: "figure.walk", color: Theme.activity)
+                VStack(alignment: .leading, spacing: Theme.Space.tight) {
                     Text(title).font(.title3.weight(.semibold))
                     Text(detail).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
@@ -251,8 +240,7 @@ struct ActivityDayHeroCard: View {
             Button(action: onLog) { Label("记录一次运动", systemImage: "plus").frame(maxWidth: .infinity) }
                 .buttonStyle(.bordered).controlSize(.large)
         }
-        .padding(16)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .cardSurface()
     }
 }
 
@@ -263,11 +251,11 @@ struct OtherSessionsCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("其他安排").font(.headline).padding(.bottom, 6)
+            Text("其他安排").font(.headline).padding(.bottom, Theme.Space.tight)
             ForEach(items) { item in
-                HStack(spacing: 12) {
-                    Image(systemName: item.kind.icon).foregroundStyle(Theme.activity).frame(width: 28)
-                    VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: Theme.Space.block) {
+                    Image(systemName: item.kind.icon).foregroundStyle(Theme.activity).frame(width: Self.glyphWidth)
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         Text(item.title).font(.body)
                         Text("\(item.minutes) 分钟 · \(item.intensity.label)").font(.footnote).foregroundStyle(.secondary)
                     }
@@ -280,17 +268,19 @@ struct OtherSessionsCard: View {
                         Button { onLog(item.id) } label: { Label("记录运动详情", systemImage: "square.and.pencil") }
                     } label: {
                         Image(systemName: item.status.icon).font(.title2).foregroundStyle(Theme.planStatus(item.status))
-                            .frame(width: 44, height: 44)
+                            .frame(width: Theme.Size.tap, height: Theme.Size.tap)
                     }
                     .accessibilityLabel("\(item.title)，\(item.status.label)")
                 }
-                .frame(minHeight: 52)
-                if item.id != items.last?.id { Divider().padding(.leading, 40) }
+                .frame(minHeight: Theme.Size.tap + Theme.Space.item)
+                if item.id != items.last?.id { Divider().padding(.leading, Self.glyphWidth + Theme.Space.block) }
             }
         }
-        .padding(16)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .cardSurface()
     }
+
+    /// The column the session glyphs sit in, so the titles line up.
+    private static let glyphWidth: CGFloat = 28
 }
 
 // MARK: - Pre-exercise tips
@@ -309,7 +299,7 @@ struct PreExerciseCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("提示").font(.headline).padding(.bottom, 6)
+            Text("提示").font(.headline).padding(.bottom, Theme.Space.tight)
             ForEach(tips) { tip in
                 Group {
                     if tip.destination == .marathon {
@@ -318,6 +308,7 @@ struct PreExerciseCard: View {
                                 IconTextRow(icon: tip.icon, color: tip.color, title: tip.title, text: tip.text)
                                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
                             }
+                            .frame(minHeight: Theme.Size.tap)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -325,12 +316,11 @@ struct PreExerciseCard: View {
                         IconTextRow(icon: tip.icon, color: tip.color, title: tip.title, text: tip.text)
                     }
                 }
-                .padding(.vertical, 8)
-                if tip.id != tips.last?.id { Divider().padding(.leading, 44) }
+                .padding(.vertical, Theme.Space.item)
+                if tip.id != tips.last?.id { Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block) }
             }
         }
-        .padding(16)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .cardSurface()
     }
 }
 
@@ -348,17 +338,14 @@ struct WorkoutLogCard: View {
                 Button(action: onLog) { Label("记录", systemImage: "plus") }
                     .buttonStyle(.bordered)
             }
-            .padding(.bottom, 6)
+            .padding(.bottom, Theme.Space.tight)
             if sessions.isEmpty {
-                Text("今天还没有运动记录。手表记录的运动会自动同步。")
-                    .font(.subheadline).foregroundStyle(.secondary).padding(.vertical, 8)
+                EmptyLine("今天还没有运动记录。手表记录的运动会自动同步。")
             }
             ForEach(sessions) { s in
-                HStack(alignment: .center, spacing: 12) {
-                    Image(systemName: s.type.icon).font(.body.weight(.semibold)).foregroundStyle(Theme.activity)
-                        .frame(width: 36, height: 36)
-                        .background(Theme.activity.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .center, spacing: Theme.Space.block) {
+                    IconTile(icon: s.type.icon, color: Theme.activity)
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         Text("\(s.type.label) · \(Int(s.minutes)) 分钟\(s.distanceKm.map { " · \($0.oneDecimal) km" } ?? "")")
                             .font(.body)
                         Text([Clock.text(s.start.minutesOfDay), "用力 \(s.rpe ?? s.type.defaultRPE)/10",
@@ -366,19 +353,18 @@ struct WorkoutLogCard: View {
                             .filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(.footnote).foregroundStyle(.secondary)
                     }
-                    Spacer(minLength: 4)
+                    Spacer(minLength: Theme.Space.tight)
                     if let f = s.feeling {
                         StatusLabel(text: f.label, icon: f.icon, color: f == .unwell ? .red : (f == .hard ? .orange : .gray), secondaryText: true)
                             .font(.footnote)
                     }
                 }
-                .frame(minHeight: 56)
+                .padding(.vertical, Theme.Space.item)
                 .accessibilityElement(children: .combine)
-                if s.id != sessions.last?.id { Divider().padding(.leading, 48) }
+                if s.id != sessions.last?.id { Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block) }
             }
         }
-        .padding(16)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .cardSurface()
     }
 }
 
@@ -387,12 +373,13 @@ struct WeatherReminderCard: View {
     let reminder: WeatherReminder
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             Label {
-                Text("今天的天气").font(.headline)
+                Text("今天的天气")
             } icon: {
                 Image(systemName: reminder.icon).symbolRenderingMode(.multicolor)
             }
+            .font(.headline)
             Text(reminder.line).font(.subheadline).fixedSize(horizontal: false, vertical: true)
             if reminder.changePlan {
                 NavigationLink {

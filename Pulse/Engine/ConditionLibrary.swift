@@ -33,14 +33,14 @@ struct ConditionInfo: Identifiable, Equatable {
     var changes: [String] {
         if let n = native { return ConditionLibrary.builtInChanges(n) }
         guard known else {
-            return ["Health Agent 回答时会知道你有\(name)，就诊摘要里也会列出",
+            return ["回答你的问题时会考虑你有\(name)，就诊摘要里也会列出",
                     "Pulse 的资料库里还没有\(name)的要点：运动和饮食上的具体限制，请问医生后写进「我的 › 健康状况与用药」里的「身体限制」"]
         }
         var out: [String] = []
         if moderateOnly { out.append("运动计划不再安排间歇等高强度训练，问到高强度训练时会建议先问医生") }
         if noImpact { out.append("运动计划不安排间歇、冲刺和大重量，问到这类训练时会提醒你") }
         if avoidHeat { out.append("高温天（32°C 以上）的户外训练建议改到室内") }
-        out.append("运动计划附上\(name)的运动要点，Health Agent 回答时也会考虑")
+        out.append("运动计划附上\(name)的运动要点，回答你的问题时也会考虑")
         out.append("就诊摘要里列出这一情况")
         return out
     }
@@ -169,7 +169,7 @@ enum ConditionLibrary {
             ["运动计划以中低强度为主，医生确认强度范围前不安排间歇等高强度训练",
              "3 天内体重增加 2 kg 以上时提醒你（可能是体内存了水）",
              "医生要求限水时，可以在「我的 › 恢复目标」打开「限水」，Pulse 就不再提醒多喝水",
-             "血压按照护目标解读，Health Agent 回答时考虑肾病"]
+             "血压按照护目标解读，回答你的问题时考虑肾病"]
         case .heartFailure:
             ["运动以低–中等强度为主，计划里不安排高强度训练",
              "3 天内体重增加 2 kg 以上时提醒你",

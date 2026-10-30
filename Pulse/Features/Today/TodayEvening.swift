@@ -69,11 +69,11 @@ struct TonightHeroCard: View {
         let wake = r?.plannedWake?.minutesOfDay ?? data.window.nextWake.minutesOfDay
         let left = (bed - data.now.minutesOfDay + 1440) % 1440
         let window = Double((wake - bed + 1440) % 1440)
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("今晚")
-            HStack(alignment: .center, spacing: 14) {
+            HStack(alignment: .center, spacing: Theme.Space.block) {
                 HeroIcon(icon: "moon.zzz.fill", color: Theme.sleep)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Theme.Space.tight) {
                     Text("\(Clock.text(bed)) 前上床").font(.title3.weight(.semibold))
                     Text(left < 600 ? "还有 \(left / 60) 小时 \(left % 60) 分钟 · 计划 \(Clock.text(wake)) 起床" : "计划 \(Clock.text(wake)) 起床")
                         .font(.subheadline).foregroundStyle(.secondary)
@@ -124,20 +124,21 @@ struct RecoveryChecklistCard: View {
         let items = RecoveryAdvisor.bedtimeFocus(today: analytics.today, history: analytics.history, profile: analytics.profile,
                                                  readiness: readiness, tomorrow: tomorrow)
         let done = record.bedtimeDone.filter { id in items.contains { $0.id == id } }.count
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Theme.Space.item) {
             CardTitle(title: "今晚恢复重点") {
                 Text("\(done)/\(items.count)").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).monospacedDigit()
                     .accessibilityLabel("已完成 \(done) 项，共 \(items.count) 项")
             }
+            // The checklist is its own block below the bar.
             ProgressBar(value: Double(done) / Double(max(1, items.count)), color: .green, height: 6)
-                .padding(.bottom, 4)
+                .padding(.bottom, Theme.Space.block - Theme.Space.item)
                 .accessibilityHidden(true)
             ForEach(items) { item in
                 let isDone = record.bedtimeDone.contains(item.id)
                 ChecklistRow(done: isDone, title: item.title, detail: item.detail) {
                     if isDone { record.bedtimeDone.removeAll { $0 == item.id } } else { record.bedtimeDone.append(item.id) }
                 }
-                if item.id != items.last?.id { Divider().padding(.leading, 40) }
+                if item.id != items.last?.id { Divider().padding(.leading, ChecklistRow.textInset) }
             }
         }
         .cardSurface()
@@ -149,7 +150,7 @@ struct TomorrowCard: View {
 
     var body: some View {
         let trainings = sessions.filter { $0.kind.isTraining }
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("明天")
             if trainings.isEmpty {
                 IconTextRow(icon: "figure.walk", color: Theme.activity, title: sessions.first?.title ?? "日常活动日",
@@ -176,7 +177,7 @@ struct DayReviewView: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle(title: "今天的总结") {
                 if record.reviewedAt != nil {
                     StatusLabel(text: "已回顾", icon: "checkmark.seal.fill", color: .green).font(.subheadline.weight(.semibold))
@@ -189,10 +190,10 @@ struct DayReviewView: View {
         }
         .cardSurface()
 
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("今晚与明天的恢复安排")
             ForEach(Array(summary.arrangements.enumerated()), id: \.offset) { i, line in
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: Theme.Space.block) {
                     Text("\(i + 1)").font(.footnote.weight(.bold)).monospacedDigit()
                         .frame(width: 24, height: 24)
                         .background(Theme.subtle, in: Circle())
@@ -204,13 +205,13 @@ struct DayReviewView: View {
         }
         .cardSurface()
 
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("今天的笔记")
             TextField("今天感觉如何？有什么影响了你的状态？", text: $record.dayNote, axis: .vertical)
                 .focused($focused)
                 .lineLimit(3...6)
-                .padding(12)
-                .background(Theme.subtle.opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(Theme.Space.block)
+                .background(Theme.subtle.opacity(0.6), in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
             Button {
                 record.reviewedAt = .app
                 focused = false
@@ -221,23 +222,29 @@ struct DayReviewView: View {
         }
         .cardSurface()
 
+        // A list of rows: each row has its own vertical padding, so the card adds the rest of its padding.
         VStack(spacing: 0) {
             Button { askAgent = true } label: {
-                NavRowLabel(icon: "sparkles", color: .purple, title: "问问 Health Agent", detail: "今天的数据说明了什么、明天要注意什么")
+                NavRowLabel(icon: "sparkles", color: .purple, title: AgentNameSettings.shared.phrase("问问"), detail: "今天的数据说明了什么、明天要注意什么")
+                    .padding(.vertical, Theme.Space.item).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            Divider().padding(.leading, 44)
+            Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block)
             NavigationLink { HistoryView() } label: {
                 NavRowLabel(icon: "clock.arrow.circlepath", title: "记录历史", detail: "补记或修改过去的记录")
+                    .padding(.vertical, Theme.Space.item).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            Divider().padding(.leading, 44)
+            Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block)
             Button(action: onReview) {
                 NavRowLabel(icon: "chart.line.uptrend.xyaxis", title: "本周复盘与长期复盘", detail: "查看行为与身体变化的关联")
+                    .padding(.vertical, Theme.Space.item).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
-        .cardSurface(padding: 12)
+        .padding(.horizontal, Theme.Space.cardPadding)
+        .padding(.vertical, Theme.Space.cardPadding - Theme.Space.item)
+        .cardSurface(padding: 0)
         .sheet(isPresented: $askAgent) { HealthAgentChatView(initialQuestion: "总结一下今天，明天要注意什么？") }
 
         PageFootnote("每天的回顾会汇总进周复盘；持续记录后，回顾页会比较行为与身体变化之间的关联。")

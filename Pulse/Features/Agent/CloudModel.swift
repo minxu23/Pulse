@@ -1,9 +1,10 @@
 import Foundation
 import Security
 
-// Optional cloud language model for the Health Agent — a test entry under 我的. Off by default.
-// When enabled (key saved, connection tested, sending explicitly agreed to), each question sends
-// the data digest, the rules-engine analysis and the question to the configured service.
+// Optional cloud language model for the Health Agent, under 我的 › 回答方式与云端模型. The user picks
+// an `AnswerMode`: 仅本机 (default, nothing sent), 端云结合 (general questions only, as their text,
+// without any records) or 全部云端 (each question sends the data digest, the rules-engine analysis
+// and the question; needs explicit consent). A key and a passed connection test come first.
 // Emergency questions are always answered on the device.
 
 enum CloudProvider: String, CaseIterable, Identifiable {
@@ -86,6 +87,46 @@ enum LaunchKeys {
     static var source: String { ProcessInfo.processInfo.environment["PULSE_KEY_SOURCE"].flatMap { $0.isEmpty ? nil : $0 } ?? "启动环境" }
 }
 
+/// What a pasted API key looks like once the clutter around it is gone (「OPENROUTER_API_KEY=sk-or-…」,
+/// quotes, 「Bearer 」, line breaks), and whether it fits the chosen service.
+enum APIKeyText {
+    static func cleaned(_ raw: String) -> String {
+        let line = raw.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty && !$0.hasPrefix("#") } ?? ""
+        var s = line
+        if let r = s.range(of: #"^(export\s+)?[A-Za-z_][A-Za-z0-9_]*\s*[=:]\s*"#, options: .regularExpression) { s.removeSubrange(r) }
+        if s.lowercased().hasPrefix("bearer ") { s = String(s.dropFirst(7)) }
+        s = s.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`“”‘’ "))
+        s.removeAll { $0.isWhitespace }
+        return s
+    }
+
+    /// The service a key belongs to, when its prefix says so.
+    static func provider(of key: String) -> CloudProvider? {
+        if key.hasPrefix("sk-or-") { return .openRouter }
+        if key.hasPrefix("sk-ant-") { return .anthropic }
+        return nil
+    }
+
+    /// Why this text can't be the key for `provider` (nil when it can).
+    static func problem(_ key: String, for provider: CloudProvider) -> String? {
+        if key.isEmpty { return "剪贴板里没有文字。先复制 API 密钥，再点「粘贴」。" }
+        if key.unicodeScalars.contains(where: { $0.value > 0x7F }) || key.count < 20 {
+            return "粘贴的内容不像 API 密钥（太短或含有中文等字符）。请确认复制的是完整的密钥。"
+        }
+        switch provider {
+        case .openRouter where !key.hasPrefix("sk-or-"): return "OpenRouter 的密钥以 sk-or- 开头，粘贴的内容不是。请确认复制的是 OpenRouter 的密钥，或者在上面换一个服务。"
+        case .anthropic where !key.hasPrefix("sk-ant-"): return "Anthropic 的密钥以 sk-ant- 开头，粘贴的内容不是。请确认复制的是 Anthropic 的密钥，或者在上面换一个服务。"
+        default: return nil
+        }
+    }
+
+    /// 「sk-or-…3f9a」: enough to tell which key it is, never the key.
+    static func hint(_ key: String) -> String {
+        key.count > 14 ? String(key.prefix(6)) + "…" + String(key.suffix(4)) : "…"
+    }
+}
+
 enum KeySource: Equatable {
     case none, keychain, launch(String)
 }
@@ -106,13 +147,13 @@ final class CloudModelSettings {
     var model: String {
         didSet { d.set(model, forKey: "cloud.model") }
     }
-    /// The user agreed that questions send the data digest to the service.
+    /// The user agreed that questions send the data digest to the service (needed for 全部云端).
     var consented: Bool {
-        didSet { d.set(consented, forKey: "cloud.consented"); if !consented { enabled = false } }
+        didSet { d.set(consented, forKey: "cloud.consented"); if !consented && mode == .cloud { mode = .onDevice } }
     }
-    /// Use the cloud model for Health Agent answers.
-    var enabled: Bool {
-        didSet { d.set(enabled, forKey: "cloud.enabled") }
+    /// How Health Agent answers are produced, as the user chose it.
+    var mode: AnswerMode {
+        didSet { d.set(mode.rawValue, forKey: "agent.answerMode") }
     }
     var lastTestOK: Bool {
         didSet { d.set(lastTestOK, forKey: "cloud.lastTestOK") }
@@ -125,7 +166,11 @@ final class CloudModelSettings {
         baseURL = d.string(forKey: "cloud.baseURL") ?? CloudProvider.openRouter.defaultBaseURL
         model = d.string(forKey: "cloud.model") ?? CloudProvider.openRouter.defaultModel
         consented = d.bool(forKey: "cloud.consented")
-        enabled = d.bool(forKey: "cloud.enabled")
+        // Earlier versions had an on/off switch for answering in the cloud.
+        let chosen = AnswerMode(rawValue: d.string(forKey: "agent.answerMode") ?? "") ?? (d.bool(forKey: "cloud.enabled") ? .cloud : .onDevice)
+        mode = chosen
+        d.set(chosen.rawValue, forKey: "agent.answerMode")
+        d.removeObject(forKey: "cloud.enabled")
         lastTestOK = d.bool(forKey: "cloud.lastTestOK")
         // Earlier versions kept one key for all providers; it belonged to the provider saved then.
         if let old = KeychainStore.read(account: "cloud.apiKey") {
@@ -144,11 +189,19 @@ final class CloudModelSettings {
         return .none
     }
     var hasKey: Bool { keySource != .none }
+    /// The saved key's first and last characters, to tell which one it is.
+    var keyHint: String? { _ = keyRevision; return apiKey.map(APIKeyText.hint) }
     private var apiKey: String? { KeychainStore.read(account: Self.account(provider)) ?? LaunchKeys.key(for: provider) }
 
-    var isConfigured: Bool { hasKey && !model.trimmingCharacters(in: .whitespaces).isEmpty && URL(string: baseURL)?.scheme == "https" }
-    /// Cloud answers are used only when everything is set and the user opted in.
-    var isActive: Bool { enabled && consented && lastTestOK && isConfigured }
+    /// The service address and model are filled in (the key aside).
+    var endpointReady: Bool { !model.trimmingCharacters(in: .whitespaces).isEmpty && URL(string: baseURL)?.scheme == "https" }
+    var isConfigured: Bool { hasKey && endpointReady }
+    /// A key is saved and the connection test passed.
+    var cloudReady: Bool { lastTestOK && isConfigured }
+    /// The mode in effect: a chosen mode whose requirements are not met answers on the device.
+    var effectiveMode: AnswerMode { AnswerMode.effective(mode, cloudReady: cloudReady, digestConsented: consented) }
+    /// Whether a mode can be chosen now.
+    func canChoose(_ m: AnswerMode) -> Bool { m == .onDevice || (cloudReady && (m == .hybrid || consented)) }
 
     @discardableResult
     func saveKey(_ key: String) -> Bool {
@@ -167,7 +220,7 @@ final class CloudModelSettings {
         KeychainStore.delete(account: Self.account(provider))
         keyRevision += 1
         lastTestOK = false
-        enabled = false
+        mode = .onDevice
     }
 
     func client() -> CloudModelClient? {
@@ -349,12 +402,12 @@ struct CloudModelClient {
 extension HealthAgent {
     /// Cloud models have more room: answer from the digest, using the rules analysis as the facts.
     static let cloudInstructions = """
-    你是 Pulse 应用中的 Health Agent，帮助用户理解自己的健康数据，长期目标是降低静息心率，串联运动、睡眠、饮食、身体指标和恢复。
+    你是 Pulse 应用中的 Health Agent，帮助用户理解自己的健康数据，串联运动、睡眠、饮食、身体指标和恢复。
     要求：
-    1. 只依据【数据】和【要点】回答，引用其中的数字；没有的数据直接说明没有记录，不要编造。不要输出【】标题，也不要整段复述【数据】；问题和健康数据无关时直接说明。
+    1. 第一句直接回答用户问的事。【要点】是 Pulse 在本机根据记录得出的回答，事实、数字和结论以它为准；可以补充【数据】里和问题直接相关的内容和通用知识，但不要编造用户没有记录的数据，不相关的数据不要提。不要输出【】标题，也不要整段复述【数据】。
     2. 区分「观察到的关联」和「已确认的原因」；不做诊断；不建议开始、停止或调整任何药物和剂量。
     3. 用户描述紧急症状时，第一句建议立即拨打 120；否则不要提及急救。
-    4. 用简体中文，先给结论，再给 2–4 条具体、可执行的建议（每条以「• 」开头）。不超过 300 字，不用标题和表格。
+    4. 用口语化的简体中文，不夹英文单词（HRV、CGM 这类通用缩写除外）。需要用户去做的事列 2–4 条（每条以「• 」开头），要具体、马上能做。不超过 300 字，不用标题和表格。
     5. 需要专业判断时建议咨询医生，并提醒可以带上 Pulse 生成的就诊摘要。
     6. 注意摘要中的「现在」时间。给出【第一句】时，回答必须以它原样开头，后面的内容不能与它矛盾，不要输出「结论：」之类的标签；某天是否适合训练，分析要点没有结论时，说明要看当天早上的准备度，不要自行判断「适合」。
     """

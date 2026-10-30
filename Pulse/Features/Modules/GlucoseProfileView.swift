@@ -53,17 +53,18 @@ struct GlucoseProfileView: View {
     }
 
     private func summary(_ p: GlucoseProfile) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: p.level.glyph.icon).foregroundStyle(p.level.glyph.color).accessibilityHidden(true)
-                Text(p.title).font(.title3.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: Theme.Space.item) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.iconGap) {
+                Image(systemName: p.level.glyph.icon).imageScale(.small).foregroundStyle(p.level.glyph.color).accessibilityHidden(true)
+                Text(p.title).fixedSize(horizontal: false, vertical: true)
             }
+            .font(.title3.weight(.semibold))
             Text(p.summary).font(.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if !p.tests.isEmpty {
                 Text("\(Text("建议检查：").fontWeight(.semibold).foregroundStyle(.primary))\(p.tests)")
                     .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            Divider().padding(.top, 4)
+            Divider().padding(.top, Theme.Space.tight)
             Text(p.by).font(.footnote).foregroundStyle(.secondary)
         }
         .cardSurface()
@@ -71,18 +72,18 @@ struct GlucoseProfileView: View {
     }
 
     private func controlCard(_ p: GlucoseProfile) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
             CardTitle("血糖控制", detail: "近 \(p.days) 天")
             ForEach(Array(p.indicators.enumerated()), id: \.offset) { i, x in
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.block) {
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         Text(x.name).font(.subheadline)
                         Text(x.reference).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
-                    Spacer(minLength: 8)
+                    Spacer(minLength: Theme.Space.item)
                     statusValue(x)
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, Theme.Space.item)
                 .accessibilityElement(children: .combine)
                 if i < p.indicators.count - 1 { Divider() }
             }
@@ -101,32 +102,34 @@ struct GlucoseProfileView: View {
     }
 
     private func signsCard(_ p: GlucoseProfile) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        let glyphColumn: CGFloat = 22
+        return VStack(alignment: .leading, spacing: Theme.Space.tight) {
             CardTitle(p.hasDiabetes ? "代谢迹象" : "胰岛素抵抗迹象", detail: "\(p.signs.filter(\.present).count)/\(p.signs.count) 项")
             ForEach(Array(p.signs.enumerated()), id: \.offset) { i, s in
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.iconGap) {
                     Image(systemName: s.present ? (s.strong ? "exclamationmark.triangle.fill" : "exclamationmark.circle.fill") : "checkmark.circle.fill")
+                        .font(.subheadline).imageScale(.small)
                         .foregroundStyle(s.present ? (s.strong ? Color.red : Color.orange) : Color.green)
-                        .frame(width: 22).padding(.top, 1)
-                    VStack(alignment: .leading, spacing: 2) {
+                        .frame(width: glyphColumn)
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         Text(s.present ? s.title : s.absent).font(.subheadline.weight(s.present ? .semibold : .regular))
                         Text(s.evidence).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, Theme.Space.item)
                 .accessibilityElement(children: .combine)
-                if i < p.signs.count - 1 { Divider().padding(.leading, 34) }
+                if i < p.signs.count - 1 { Divider().padding(.leading, glyphColumn + Theme.Space.iconGap) }
             }
             Text(p.hasDiabetes ? "这些迹象可以和医生一起看；是否调整治疗由医生决定。"
                                : "CGM 只能看到迹象。胰岛素抵抗要通过空腹血糖和胰岛素（HOMA-IR）或口服糖耐量试验来确认。")
-                .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.top, 4)
+                .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.top, Theme.Space.tight)
         }
         .cardSurface()
     }
 
     private func mealsCard(_ p: GlucoseProfile) -> some View {
         let colors: [MealKind: Color] = [.breakfast: .orange, .lunch: Theme.nutrition, .dinner: Theme.glucose]
-        return VStack(alignment: .leading, spacing: 10) {
+        return VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("饭后反应", detail: "比饭前升高多少")
             Chart {
                 ForEach(p.meals) { m in
@@ -144,9 +147,11 @@ struct GlucoseProfileView: View {
             .frame(height: 150)
             .accessibilityLabel("各餐饭后 3 小时的平均血糖升高曲线")
             ForEach(p.meals) { m in
-                HStack(spacing: 8) {
-                    Circle().fill(colors[m.kind] ?? .gray).frame(width: 8, height: 8).accessibilityHidden(true)
-                    Text(m.kind.label).font(.subheadline.weight(.semibold))
+                HStack(spacing: Theme.Space.item) {
+                    HStack(spacing: Theme.Space.iconGap) {
+                        Circle().fill(colors[m.kind] ?? .gray).frame(width: 8, height: 8).accessibilityHidden(true)
+                        Text(m.kind.label).font(.subheadline.weight(.semibold))
+                    }
                     Text("+\(m.rise.oneDecimal) · \(m.peakMinutes) 分钟达峰 · " + (m.backMinutes.map { "\(RuleGlucoseModel.duration($0))回落" } ?? "3 小时内未回落"))
                         .font(.footnote).foregroundStyle(.secondary).monospacedDigit()
                     Spacer(minLength: 0)
@@ -163,7 +168,7 @@ struct GlucoseProfileView: View {
         let typical = Stats.median(past).map { ($0 / 5).rounded() * 5 }
         let prediction = model.predict(input, kind: kind, carbs: carbs ?? typical, at: nil)
         let line = p.hasDiabetes ? 10.0 : 7.8
-        return VStack(alignment: .leading, spacing: 10) {
+        return VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("饭后血糖预测")
             Picker("餐次", selection: $kind) {
                 ForEach([MealKind.breakfast, .lunch, .dinner], id: \.self) { Text($0.label).tag($0) }
@@ -214,31 +219,20 @@ struct GlucoseProfileEntry: View {
         let input = GlucoseModelInput(vitals: vitals.map(\.point), meals: meals, profile: snap)
         if input.glucose.count >= 48, let p = GlucoseModels.current.profile(input) {
             NavigationLink { GlucoseProfileView() } label: {
-                HStack(spacing: 12) {
+                HStack(spacing: Theme.Space.block) {
                     IconTile(icon: "chart.xyaxis.line", color: Theme.glucose)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         Text("血糖代谢画像").font(.headline)
-                        Label(p.title, systemImage: p.level.glyph.icon)
-                            .labelStyle(TintedIconLabel(color: p.level.glyph.color))
-                            .font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                        StatusLabel(text: p.title, icon: p.level.glyph.icon, color: p.level.glyph.color, secondaryText: true)
+                            .font(.subheadline).lineLimit(2)
                     }
-                    Spacer(minLength: 4)
+                    Spacer(minLength: Theme.Space.tight)
                     Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
                 }
                 .cardSurface()
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-        }
-    }
-}
-
-private struct TintedIconLabel: LabelStyle {
-    let color: Color
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 4) {
-            configuration.icon.foregroundStyle(color)
-            configuration.title
         }
     }
 }

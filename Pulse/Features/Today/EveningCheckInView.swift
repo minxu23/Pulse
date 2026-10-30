@@ -75,11 +75,11 @@ struct EveningCheckInView: View {
     private var planMinutes: Int { (wake.minutesOfDay - bedtime.minutesOfDay + 1440) % 1440 }
 
     private func labeled<C: View>(_ title: String, @ViewBuilder _ c: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Space.item) {
             Text(title).font(.subheadline.weight(.medium))
             c()
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Theme.Space.tight)
     }
 
     private func load() {

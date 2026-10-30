@@ -53,17 +53,18 @@ struct DayRow: View {
     let r: DailyRecord
     var body: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 Text(r.day.formatted(.dateTime.month().day().weekday())).font(.subheadline.weight(.medium))
-                HStack(spacing: 8) {
+                // Inline glyphs inside the row's own content (the row label itself keeps the List style).
+                HStack(spacing: Theme.Space.item) {
                     if let h = r.restingHR { Label("\(h.noDecimal)", systemImage: "heart.fill") }
                     if let s = r.sleepMinutes { Label((s / 60).oneDecimal, systemImage: "bed.double.fill") }
                     if let st = r.steps { Label("\(st)", systemImage: "figure.walk") }
                 }
-                .font(.caption).labelStyle(.titleAndIcon)
+                .font(.caption).labelStyle(.inline)
             }
             Spacer()
-            HStack(spacing: 3) {
+            HStack(spacing: Theme.Space.tight) {
                 ForEach(Array(r.tags).prefix(4)) { Image(systemName: $0.icon).font(.caption2).foregroundStyle(.secondary) }
                 if !r.manualFields.isEmpty { Image(systemName: "pencil").font(.caption2).foregroundStyle(.secondary) }
             }
@@ -109,12 +110,12 @@ struct DayEditorView: View {
                 Toggle("晚餐过晚", isOn: $record.lateMeal)
             }
             Section("状况标签") {
-                FlowLayout(spacing: 8) {
+                FlowLayout(spacing: Theme.Space.item) {
                     ForEach(ContextTag.allCases) { t in
                         ToggleChip(text: t.label, icon: t.icon, isOn: Binding(get: { record.tags.contains(t) }, set: { record.toggle(t, on: $0) }))
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, Theme.Space.tight)
             }
             Section {
                 ForEach(daySessions) { s in

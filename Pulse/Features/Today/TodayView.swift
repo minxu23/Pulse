@@ -61,7 +61,7 @@ struct TodayView: View {
                             if DayClock.canUndoEarlyStart(d.now, d.p), let s = DayClock.earlyStart { EarlyStartUndoRow(start: s) }
                             ForEach(HomeLayout.rows(cards), id: \.self) { row in
                                 if row[0].isTile {
-                                    HStack(alignment: .top, spacing: 12) {
+                                    HStack(alignment: .top, spacing: Theme.Space.cardGap) {
                                         ForEach(row) { c in
                                             TodayModuleCard(data: d, card: c, onRemove: { save(cards.filter { $0 != c }, available) },
                                                             onEdit: { edit(cards) })
@@ -100,7 +100,8 @@ struct TodayView: View {
         case .now: NowCard(data: d, sheet: $sheet, tab: $tab)
         case .glucose, .bloodPressure, .race: TodayModuleCard(data: d, card: c, onEdit: { edit(HomeLayout.visible(order: order, seen: seen, available: HomeLayout.available(d.profile))) })
         case .phases:
-            VStack(alignment: .leading, spacing: 12) {
+            // The same spacing as the card stack, so the title sits as it does above any other cards.
+            VStack(alignment: .leading, spacing: Theme.Space.cardGap) {
                 SectionTitle(title: "全天安排", subtitle: "起床 → 入睡")
                 PhaseGrid(data: d, tab: $tab, sheet: $sheet)
             }
@@ -125,7 +126,7 @@ struct TodayView: View {
         let source: String = d.profile?.useHealthKit == true ? "手表已连接"
             : (d.profile?.usesDemoData == true ? (DemoClock.isShifted ? "示例数据 · 演示 \(Clock.text(d.now.minutesOfDay))" : "示例数据") : "手动记录")
         return HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 Text("\(d.day.formatted(.dateTime.month().day().weekday(.wide)))\(d.window.kind.map { " · \($0.label)" } ?? "")\(DayClock.startedEarly(d.now, d.p) ? DayClock.earlyStart.map { " · \(Clock.text($0.minutesOfDay)) 开始" } ?? "" : "") · \(source)\(cgm ? " · CGM" : "")")
                     .font(.footnote).foregroundStyle(.secondary)
                 Text("\(greeting(d))，\(d.profile?.displayName ?? "你")").font(.title2.bold())
@@ -137,12 +138,12 @@ struct TodayView: View {
                 }
             } label: {
                 Image(systemName: "plus").font(.body.weight(.semibold)).foregroundStyle(.primary)
-                    .frame(width: 44, height: 44).background(Theme.card, in: Circle())
+                    .frame(width: Theme.Size.tap, height: Theme.Size.tap).background(Theme.card, in: Circle())
             }
             .accessibilityLabel("快速记录")
         }
-        .padding(.horizontal, 4)
-        .padding(.top, 8)
+        .padding(.horizontal, Theme.Space.tight)
+        .padding(.top, Theme.Space.item)
     }
 
     private func greeting(_ d: TodayData) -> String {
@@ -174,7 +175,8 @@ struct StateCard: View {
 
         // After bedtime (and until 5 am) the morning's score no longer says what to do; the next one comes after sleep.
         let night = data.phase == .review
-        VStack(alignment: .leading, spacing: 16) {
+        // The dividers split the card into panes; each pane keeps the card padding on every side.
+        VStack(alignment: .leading, spacing: Theme.Space.cardPadding) {
             HStack(alignment: .top, spacing: 0) {
                 if night {
                     let left = max(0, Int(data.window.nextWake.timeIntervalSince(data.now) / 60) - 15)
@@ -193,7 +195,7 @@ struct StateCard: View {
                     .buttonStyle(.plain)
                 }
 
-                Rectangle().fill(Color(.separator)).frame(width: 0.5).padding(.horizontal, 16)
+                Rectangle().fill(Color(.separator)).frame(width: 0.5).padding(.horizontal, Theme.Space.cardPadding)
 
                 Button(action: onHeart) {
                     metric(label: "静息心率 · 7 日均值",
@@ -213,15 +215,14 @@ struct StateCard: View {
                 advice("恢复", night ? "现在去睡" : data.guidance.recoveryShort)
             }
         }
-        .padding(18)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .cardSurface()
     }
 
     private func metric<Visual: View>(label: String, value: String, unit: String, unitDot: Color? = nil, footnote: String,
                                       @ViewBuilder visual: () -> Visual) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
             Text(label).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                 Text(value).font(.system(.largeTitle, design: .rounded).weight(.bold)).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.6)
                 if let dot = unitDot {
@@ -233,7 +234,7 @@ struct StateCard: View {
                 }
             }
             visual().frame(height: 22, alignment: .center)
-            Text(footnote).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            Text(footnote).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
@@ -260,7 +261,7 @@ struct StateCard: View {
     }
 
     private func advice(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
             Text(title).font(.caption).foregroundStyle(.secondary)
             Text(value).font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
         }
@@ -298,38 +299,37 @@ struct NowCard: View {
             main(ph)
             // From 3 am someone who is up for the day can start it early; quiet so it never nudges anyone awake.
             if ph == .review && DayClock.canStartEarly(data.now, data.p) {
-                Divider().padding(.top, 12)
+                Divider().padding(.top, Theme.Space.block)
                 HStack {
                     Text("已经起床了？").font(.subheadline).foregroundStyle(.secondary)
                     Spacer()
                     Button("开始今天") { sheet = .earlyStart }
                         .buttonStyle(.bordered).tint(Theme.accent)
                 }
-                .padding(.top, 8)
+                .padding(.top, Theme.Space.block)
             }
         }
-        .padding(16)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .cardSurface()
     }
 
     private func main(_ ph: DayPhase) -> some View {
         let c = content(ph)
-        return HStack(alignment: .center, spacing: 14) {
+        return HStack(alignment: .center, spacing: Theme.Space.block) {
             NavigationLink { TodayPhaseView(phase: ph, tab: $tab) } label: {
-                HStack(alignment: .center, spacing: 14) {
+                HStack(alignment: .center, spacing: Theme.Space.block) {
                     Image(systemName: c.icon)
                         .font(.title3.weight(.semibold)).foregroundStyle(.white)
-                        .frame(width: 46, height: 46)
-                        .background(ph.color, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    VStack(alignment: .leading, spacing: 3) {
+                        .frame(width: Theme.Size.tileIcon, height: Theme.Size.tileIcon)
+                        .background(ph.color, in: RoundedRectangle(cornerRadius: Theme.Radius.tile(Theme.Size.tileIcon), style: .continuous))
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         Text("现在 · \(ph.title)").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                         Text(c.title).font(.headline).lineLimit(1)
-                        Text(c.detail).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                        Text(c.detail).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         if let w = c.weather {
                             StatusLabel(text: w.short, icon: w.icon, color: .orange, secondaryText: true)
                                 .font(.footnote).lineLimit(1).symbolRenderingMode(.multicolor)
                         }
-                        if let p = c.progress { ProgressBar(value: p, color: ph.color, height: 4).padding(.top, 3) }
+                        if let p = c.progress { ProgressBar(value: p, color: ph.color, height: 4).padding(.top, Theme.Space.hairline) }
                     }
                     Spacer(minLength: 0)
                 }
@@ -343,7 +343,7 @@ struct NowCard: View {
             } else if let a = c.action {
                 Button(action: a.run) {
                     Text(a.label).font(.subheadline.weight(.semibold)).foregroundStyle(.white)
-                        .padding(.horizontal, 16).frame(minHeight: 44)
+                        .padding(.horizontal, Theme.Space.cardPadding).frame(minHeight: Theme.Size.tap)
                         .background(Theme.accent, in: Capsule())
                 }
                 .buttonStyle(.plain)
@@ -468,7 +468,7 @@ struct PhaseGrid: View {
     @Binding var sheet: TodaySheet?
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+        MetricGrid {
             ForEach(DayPhase.allCases) { ph in
                 NavigationLink { TodayPhaseView(phase: ph, tab: $tab) } label: {
                     PhaseTile(info: PhaseTileInfo.make(ph, data))
@@ -498,25 +498,26 @@ struct PhaseTile: View {
                 Image(systemName: info.phase.icon)
                     .font(.headline)
                     .foregroundStyle(.white)
-                    .frame(width: 40, height: 40)
-                    .background(color.gradient, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .frame(width: Theme.Size.tileIcon, height: Theme.Size.tileIcon)
+                    .background(color.gradient, in: RoundedRectangle(cornerRadius: Theme.Radius.tile(Theme.Size.tileIcon), style: .continuous))
                 Spacer()
                 badge
             }
-            Spacer(minLength: 10)
+            Spacer(minLength: Theme.Space.block)
             Text(info.phase.title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                 Text(info.metric).font(.system(.title2, design: .rounded).weight(.bold)).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.7)
                 if !info.unit.isEmpty { Text(info.unit).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
             }
-            .padding(.top, 2)
-            Text(info.caption).font(.caption).foregroundStyle(.secondary).lineLimit(1).padding(.top, 2)
+            .padding(.top, Theme.Space.hairline)
+            Text(info.caption).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+                .padding(.top, Theme.Space.hairline)
         }
-        .padding(14)
+        .padding(Theme.Space.cardPadding)
         .frame(maxWidth: .infinity, minHeight: 156, alignment: .topLeading)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(current ? color : .clear, lineWidth: 1.5))
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous).stroke(current ? color : .clear, lineWidth: 1.5))
     }
 
     @ViewBuilder
@@ -528,7 +529,7 @@ struct PhaseTile: View {
         } else if info.state == .current {
             StatusLabel(text: "现在", icon: "circle.fill", color: info.phase.color)
                 .font(.caption.weight(.semibold)).imageScale(.small)
-                .padding(.horizontal, 8).padding(.vertical, 4).background(Theme.subtle, in: Capsule())
+                .padding(.horizontal, Theme.Space.item).padding(.vertical, Theme.Space.tight).background(Theme.subtle, in: Capsule())
         }
     }
 }
@@ -538,22 +539,23 @@ struct QuickLogTile: View {
         VStack(alignment: .leading, spacing: 0) {
             Image(systemName: "plus")
                 .font(.headline).foregroundStyle(Theme.accent)
-                .frame(width: 40, height: 40)
-                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            Spacer(minLength: 10)
+                .frame(width: Theme.Size.tileIcon, height: Theme.Size.tileIcon)
+                .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: Theme.Radius.tile(Theme.Size.tileIcon), style: .continuous))
+            Spacer(minLength: Theme.Space.block)
             Text("快速记录").font(.subheadline.weight(.semibold))
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.Space.item) {
                 ForEach(["fork.knife", "drop", "gauge.with.dots.needle.33percent", "drop.fill", "figure.run"], id: \.self) {
                     Image(systemName: $0).font(.subheadline).foregroundStyle(.secondary)
                 }
             }
-            .padding(.top, 8)
-            Text("饮食 · 饮水 · 指标 · 运动").font(.caption).foregroundStyle(.secondary).padding(.top, 6)
+            .padding(.top, Theme.Space.item)
+            Text("饮食 · 饮水 · 指标 · 运动").font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+                .padding(.top, Theme.Space.tight)
         }
-        .padding(14)
+        .padding(Theme.Space.cardPadding)
         .frame(maxWidth: .infinity, minHeight: 156, alignment: .topLeading)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Theme.accent.opacity(0.25), style: StrokeStyle(lineWidth: 1.2, dash: [5, 4])))
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous).strokeBorder(Theme.accent.opacity(0.25), style: StrokeStyle(lineWidth: 1.2, dash: [5, 4])))
     }
 }
 

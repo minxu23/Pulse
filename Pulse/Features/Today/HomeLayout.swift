@@ -126,7 +126,7 @@ struct HomeEditor: View {
                         Button {
                             withAnimation { cards.append(c) }
                         } label: {
-                            HStack(spacing: 12) {
+                            HStack(spacing: Theme.Space.block) {
                                 Image(systemName: "plus.circle.fill").font(.title3).foregroundStyle(.green)
                                     .accessibilityHidden(true)
                                 row(c)
@@ -147,15 +147,14 @@ struct HomeEditor: View {
     }
 
     private func row(_ c: HomeCard) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: c.icon).font(.body.weight(.semibold)).foregroundStyle(c.color)
-                .frame(width: 32, height: 32).background(c.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: Theme.Space.block) {
+            IconTile(icon: c.icon, color: c.color)
+            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 Text(c.title).font(.body)
                 Text(c.detail).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Theme.Space.hairline)
         .accessibilityElement(children: .combine)
     }
 }
@@ -171,13 +170,13 @@ struct WeekProgressCard: View {
             .map { $0.completedMinutes ?? $0.minutes }.reduce(0, +)
         let target = data.p.weeklyTargetMinutes
         NavigationLink { WeeklyPlanView().navigationTitle("运动计划").navigationBarTitleDisplayMode(.inline).calmStyle() } label: {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: Theme.Space.block) {
                 HStack {
-                    Label("本周进度", systemImage: "calendar").font(.headline).labelStyle(.titleAndIcon)
+                    Label("本周进度", systemImage: "calendar").font(.headline).labelStyle(.inline)
                     Spacer()
                     Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
                 }
-                HStack(alignment: .firstTextBaseline, spacing: 16) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.block) {
                     stat("训练", "\(done)/\(trainings.count)", "次")
                     stat("活动", "\(minutes)/\(target)", "分钟")
                 }
@@ -190,9 +189,9 @@ struct WeekProgressCard: View {
     }
 
     private func stat(_ label: String, _ value: String, _ unit: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
             Text(label).font(.caption).foregroundStyle(.secondary)
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                 Text(value).font(.system(.title3, design: .rounded).weight(.semibold)).monospacedDigit()
                 Text(unit).font(.footnote).foregroundStyle(.secondary)
             }

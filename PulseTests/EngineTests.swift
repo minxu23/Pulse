@@ -866,7 +866,7 @@ struct HealthAgentTests {
         let c = try demoContext()
         let r = HealthAgent.reply(to: "我可以停药吗", context: c)
         #expect(r.intent == .meds)
-        #expect(r.text.contains("不能提供"))
+        #expect(r.text.contains("医生") && r.text.contains("别自己停"))
     }
 
     @Test func assessmentIsGroundedInDemoData() throws {
@@ -1660,6 +1660,33 @@ struct NextHourForecastTests {
         #expect(steady?.message.contains("平稳") == true)
         // The last reading is an hour old: no forecast.
         #expect(NextHourForecaster.glucose(cgm(endingAt: 7, slope: 0), profile: ProfileSnapshot(), now: now.addingTimeInterval(3600)) == nil)
+    }
+
+    @Test func aQuietHourAfterMealsIsNotALow() throws {
+        // A week at 5.0 with three meals a day; now is three hours after lunch, drifting down slowly.
+        let start = now.adding(days: -7)
+        let g = stride(from: 0, through: 7 * 24 * 60, by: 15).map { m -> VitalPoint in
+            let t = start.addingTimeInterval(Double(m) * 60), h = Double(t.minutesOfDay) / 60
+            let v = [(7.5, 2.6), (12.0, 3.0), (19.0, 3.3)].reduce(5.0) { g, meal in
+                let dt = h - meal.0
+                return dt > 0 && dt < 3.5 ? g + meal.1 * (dt / 0.75) * exp(1 - dt / 0.75) : g
+            }
+            return VitalPoint(time: t, kind: .glucose, value: v, value2: nil, context: .random)
+        }
+        let f = try #require(NextHourForecaster.glucose(g, profile: ProfileSnapshot(), now: now))
+        #expect(f.alert == nil)
+        #expect(f.message.contains("平稳"))
+        // The swings after meals widen the band above, not below.
+        #expect(f.end.low > 4.5)
+    }
+
+    @Test func aSteadyReadingOnANewSensorIsNotALow() throws {
+        let g = stride(from: 0, through: 120, by: 5).map { m in
+            VitalPoint(time: now.addingTimeInterval(Double(m - 120) * 60), kind: .glucose, value: 5.6, value2: nil, context: .random)
+        }
+        let f = try #require(NextHourForecaster.glucose(g, profile: ProfileSnapshot(), now: now))
+        #expect(f.alert == nil)
+        #expect(f.message.contains("平稳"))
     }
 
     @Test func bloodPressureFollowsTheTimeOfDay() throws {

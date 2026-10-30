@@ -82,7 +82,8 @@ final class ReviewWriter {
 
     private func generate(_ facts: ReviewFacts) async throws -> (ReviewCopy, String) {
         let settings = CloudModelSettings.shared
-        if settings.isActive, let client = settings.client() {
+        // 复盘 cards are made of the user's records: only 全部云端 sends them.
+        if settings.effectiveMode == .cloud, let client = settings.client() {
             let raw = try await client.stream(system: ReviewCoach.writerInstructions + "\n" + ReviewCoach.writerJSONFormat,
                                               prompt: facts.text, maxTokens: 900) { _ in }
             guard let copy = ReviewCoach.copy(fromJSON: raw) else { throw CloudModelError.empty }
@@ -97,7 +98,7 @@ final class ReviewWriter {
                     "Apple 智能根据你的记录撰写")
         }
         #endif
-        throw WriterError.noModel("\(OnDeviceModel.unavailableReason)，云端模型未启用")
+        throw WriterError.noModel("\(OnDeviceModel.unavailableReason)；云端模型只在「全部云端」时撰写复盘")
     }
 
     // MARK: Kept on this device, so a page isn't rewritten on every visit

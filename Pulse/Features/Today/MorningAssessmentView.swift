@@ -25,7 +25,7 @@ struct MorningAssessmentView: View {
         if !night { ArrangementCard(guidance: data.guidance) }
 
         SectionTitle(title: "昨夜", subtitle: nightSubtitle(d))
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+        MetricGrid {
             sleepCard(d)
             rhrCard(d)
             hrvCard(d)
@@ -37,10 +37,7 @@ struct MorningAssessmentView: View {
 
         WakeFeelingCard(record: data.record, canCheckIn: !night, onCheckIn: onCheckIn)
 
-        Text("各项指标都与你自己近 4 周的数据比较。设备信号和自述线索用于提示关注，不能代替医疗诊断。")
-            .font(.footnote).foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 4)
+        PageFootnote("各项指标都与你自己近 4 周的数据比较。设备信号和自述线索用于提示关注，不能代替医疗诊断。")
     }
 
     private func nightSubtitle(_ d: DayData?) -> String? {
@@ -65,7 +62,10 @@ struct MorningAssessmentView: View {
             if let total = d?.sleepMinutes, total > 0 {
                 SleepStagesBar(total: total, deep: d?.deepMinutes, rem: r?.remMinutes, awake: r?.awakeMinutes)
             } else {
-                Button("补记睡眠") { onLog(.sleep) }.font(.subheadline).frame(minHeight: 44)
+                Button { onLog(.sleep) } label: {
+                    Text("补记睡眠").frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
+                }
+                .font(.subheadline)
             }
         }
     }
@@ -124,7 +124,7 @@ struct SleepStagesBar: View {
         let core = max(0, total - deepM - remM)
         let parts: [(String, Double, Color)] = [("深睡", deepM, .indigo), ("核心", core, .blue), ("快速眼动", remM, .cyan), ("清醒", awakeM, .orange)]
         let sum = max(1, parts.map(\.1).reduce(0, +))
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
             GeometryReader { geo in
                 HStack(spacing: 2) {
                     ForEach(parts.filter { $0.1 > 0 }, id: \.0) { part in
@@ -135,7 +135,7 @@ struct SleepStagesBar: View {
             .frame(height: 8)
             .clipShape(Capsule())
             if deep != nil {
-                HStack(spacing: 10) {
+                HStack(spacing: Theme.Space.item) {
                     legend("深睡", deepM, .indigo)
                     if rem != nil { legend("快速眼动", remM, .cyan) }
                 }
@@ -147,7 +147,7 @@ struct SleepStagesBar: View {
     }
 
     private func legend(_ name: String, _ minutes: Double, _ color: Color) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: Theme.Space.tight) {
             Circle().fill(color).frame(width: 7, height: 7)
             Text("\(name) \(Int(minutes)) 分")
         }
@@ -165,13 +165,13 @@ struct ReadinessHeroCard: View {
 
     var body: some View {
         let color = Theme.readiness(result.score == nil ? nil : result.level)
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             HStack {
                 Text("身体准备度").font(.headline)
                 Spacer()
                 Text(result.confidence.label).font(.footnote).foregroundStyle(.secondary)
             }
-            HStack(spacing: 18) {
+            HStack(spacing: Theme.Space.block) {
                 ScoreRing(progress: Double(result.score ?? 0) / 100, color: color, lineWidth: 10) {
                     Text(result.score.map(String.init) ?? "—")
                         .font(.system(.title, design: .rounded).weight(.bold)).monospacedDigit()
@@ -179,7 +179,7 @@ struct ReadinessHeroCard: View {
                 }
                 .frame(width: 88, height: 88)
                 .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Theme.Space.tight) {
                     if result.score != nil {
                         StatusLabel(text: result.level.label, icon: "circle.fill", color: color)
                             .font(.title3.weight(.semibold)).imageScale(.small)
@@ -206,13 +206,12 @@ struct ReadinessHeroCard: View {
                     Spacer()
                     Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
                 }
-                .frame(minHeight: 44)
+                .frame(minHeight: Theme.Size.tap)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
-        .padding(16)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .cardSurface()
     }
 
     private var reason: String {
@@ -227,19 +226,18 @@ struct ArrangementCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("今日安排").font(.headline).padding(.bottom, 8)
+            Text("今日安排").font(.headline).padding(.bottom, Theme.Space.tight)
             row("运动", "figure.run", Theme.activity, guidance.exercise)
-            Divider().padding(.leading, 44)
+            Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block)
             row("负荷", "gauge.with.dots.needle.50percent", Theme.heartData, guidance.load)
-            Divider().padding(.leading, 44)
+            Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block)
             row("恢复", "bed.double.fill", Theme.sleep, guidance.recovery)
         }
-        .padding(16)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .cardSurface()
     }
 
     private func row(_ title: String, _ icon: String, _ color: Color, _ text: String) -> some View {
-        IconTextRow(icon: icon, color: color, title: title, text: text).padding(.vertical, 10)
+        IconTextRow(icon: icon, color: color, title: title, text: text).padding(.vertical, Theme.Space.item)
     }
 }
 
@@ -262,18 +260,18 @@ struct BloodPressureNightCard: View {
                          value: bp.morning.map { "\(Int($0.value))/\(Int($0.value2 ?? 0))" } ?? "—", unit: "mmHg",
                          status: status) {
             if let b = bp.bedtime, let m = bp.morning, let rise = bp.riseSys {
-                HStack(spacing: 10) {
+                HStack(spacing: Theme.Space.item) {
                     reading("昨晚睡前", b)
                     Image(systemName: "arrow.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
                     reading("今晨", m)
                     Spacer()
                     Text("\(rise > 0 ? "+" : "")\(Int(rise))")
                         .font(.subheadline.weight(.semibold)).monospacedDigit()
-                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .padding(.horizontal, Theme.Space.item).padding(.vertical, Theme.Space.tight)
                         .background(Theme.subtle, in: Capsule())
                         .accessibilityLabel("晨起收缩压变化 \(Int(rise)) 毫米汞柱")
                 }
-                .padding(.top, 2)
+                .padding(.top, Theme.Space.hairline)
             }
             if bp.series.count >= 3 { chart }
             if bp.morning == nil {
@@ -285,7 +283,7 @@ struct BloodPressureNightCard: View {
     }
 
     private func reading(_ label: String, _ v: VitalPoint) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
             Text(label).font(.caption).foregroundStyle(.secondary)
             Text("\(Int(v.value))/\(Int(v.value2 ?? 0))").font(.subheadline.weight(.semibold)).monospacedDigit()
         }
@@ -293,7 +291,7 @@ struct BloodPressureNightCard: View {
 
     private var chart: some View {
         let values = bp.series.map(\.value) + [bp.bedtime?.value].compactMap { $0 } + [135]
-        return VStack(alignment: .leading, spacing: 4) {
+        return VStack(alignment: .leading, spacing: Theme.Space.tight) {
             Chart {
                 RuleMark(y: .value("参考", 135))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray.opacity(0.7))
@@ -318,7 +316,7 @@ struct BloodPressureNightCard: View {
             Text("近 14 天晨起收缩压\(bp.bedtime != nil ? " · ◆ 昨晚睡前" : "") · 虚线 135 为家庭血压参考值")
                 .font(.footnote).foregroundStyle(.secondary)
         }
-        .padding(.top, 4)
+        .padding(.top, Theme.Space.tight)
     }
 }
 
@@ -384,14 +382,14 @@ struct BreathingNightCard: View {
                          value: count == 0 ? "无明显线索" : "\(count) 项线索",
                          status: breathing.needsAttention ? .attention("建议持续记录，必要时进行专业睡眠评估") : nil,
                          valueFont: .title3.weight(.semibold)) {
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Space.item) {
                 ForEach(cues, id: \.0) { cue in
                     StatusLabel(text: cue.0, icon: cue.1 ? "exclamationmark.circle.fill" : "checkmark.circle", color: cue.1 ? .orange : .gray,
                                 secondaryText: !cue.1)
                         .font(.footnote).lineLimit(1).minimumScaleFactor(0.8)
-                        .padding(.horizontal, 8).padding(.vertical, 6)
+                        .padding(Theme.Space.item)
                         .frame(maxWidth: .infinity)
-                        .background(Theme.subtle.opacity(0.7), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .background(Theme.subtle.opacity(0.7), in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
                 }
             }
             if let dist = breathing.disturbances {
@@ -416,13 +414,13 @@ struct NightNoticeCard: View {
         let p = data.p
         let left = max(0, Int(data.window.nextWake.timeIntervalSince(data.now) / 60) - 15)
         let next = data.day.adding(days: 1)
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             Label("现在\(data.now.hour < 5 ? "是凌晨" : "") \(Clock.text(data.now.minutesOfDay))", systemImage: "moon.stars.fill")
                 .font(.headline)
             Text("下面是 \(data.day.formatted(.dateTime.month().day())) \(p.shift == nil ? "早上" : "起床时")的评估。\(next.formatted(.dateTime.month().day())) 的晨起评估在你睡醒后进行，到 \(Clock.text(data.window.nextWake.minutesOfDay)) 起床还能睡约 \((Double(left) / 60).oneDecimal) 小时。")
                 .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if DayClock.canStartEarly(data.now, data.p) {
-                Divider().padding(.vertical, 4)
+                Divider()
                 HStack {
                     Text("已经起床了？").font(.subheadline).foregroundStyle(.secondary)
                     Spacer()
@@ -442,10 +440,14 @@ struct WakeFeelingCard: View {
     var onCheckIn: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
             HStack {
-                Image(systemName: "face.smiling").font(.headline).foregroundStyle(Theme.mind)
-                Text("醒后感受").font(.headline)
+                Label {
+                    Text("醒后感受")
+                } icon: {
+                    Image(systemName: "face.smiling").foregroundStyle(Theme.mind)
+                }
+                .font(.headline)
                 if let t = record?.checkInAt { Text(Clock.text(t.minutesOfDay)).font(.footnote).foregroundStyle(.secondary) }
                 Spacer()
                 if record?.hasCheckIn == true {
@@ -472,12 +474,11 @@ struct WakeFeelingCard: View {
                 Text("这一天早上没有记录。下一次醒后感受在你睡醒后记录。").font(.subheadline).foregroundStyle(.secondary)
             }
         }
-        .padding(16)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .cardSurface()
     }
 
     private func item(_ label: String, _ value: String?) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
             Text(label).font(.caption).foregroundStyle(.secondary)
             Text(value ?? "—").font(.headline).monospacedDigit()
         }

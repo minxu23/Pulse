@@ -81,6 +81,81 @@ enum Theme {
     }
 }
 
+// MARK: - Layout scale
+
+/// One scale of spacings, corners and sizes for every page. Space grows with the distance between
+/// things — lines of one text block < a glyph and its text < items of one group < blocks in a card
+/// < cards < sections — so a group always sits tighter than the space around it.
+extension Theme {
+    enum Space {
+        /// Lines of one text block: a title and its detail line.
+        static let hairline: CGFloat = 2
+        /// A label and its value, a number and its unit.
+        static let tight: CGFloat = 4
+        /// An inline glyph and its text (every icon + text pair).
+        static let iconGap: CGFloat = 6
+        /// Rows, chips and tiles of one group.
+        static let item: CGFloat = 8
+        /// Blocks inside a card; an icon tile and its text; padding inside a nested tile.
+        static let block: CGFloat = 12
+        /// Padding inside a card.
+        static let cardPadding: CGFloat = 16
+        /// Between cards, in a stack or a grid.
+        static let cardGap: CGFloat = 16
+        /// Page side margins, the same on every page, list and sheet.
+        static let gutter: CGFloat = 16
+        /// Between groups of cards: the space above a section title.
+        static let section: CGFloat = 28
+    }
+
+    enum Radius {
+        /// Every panel at page level: cards, tiles, banners.
+        static let panel: CGFloat = 20
+        /// Anything inside a panel: metric tiles, callouts, fields, selectable cells.
+        static let inner: CGFloat = 12
+        /// Chat bubbles.
+        static let bubble: CGFloat = 18
+        /// Legend swatches and other small marks.
+        static let mark: CGFloat = 4
+        /// Icon tiles keep one proportion at every size.
+        static func tile(_ side: CGFloat) -> CGFloat { side / 4 }
+    }
+
+    enum Size {
+        /// Minimum tap target (HIG): every button, link and tappable row.
+        static let tap: CGFloat = 44
+        /// Label height inside a `.bordered` button: with the style's own padding the button reaches `tap`.
+        static let borderedLabel: CGFloat = 32
+        /// Icon tile in rows and card headers.
+        static let iconTile: CGFloat = 32
+        /// Icon tile on page-level tiles (今日 全天安排, 专项管理).
+        static let tileIcon: CGFloat = 40
+        /// Filled tile on hero cards.
+        static let hero: CGFloat = 56
+    }
+}
+
+/// Glyph and text on one line: the glyph slightly smaller than the text, the same gap everywhere.
+struct InlineLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.iconGap) {
+            configuration.icon.imageScale(.small)
+            configuration.title
+        }
+    }
+}
+
+extension LabelStyle where Self == InlineLabelStyle {
+    static var inline: InlineLabelStyle { InlineLabelStyle() }
+}
+
+extension View {
+    /// The same side margins for every scrolling page, list and form.
+    func pageMargins() -> some View {
+        contentMargins(.horizontal, Theme.Space.gutter, for: .scrollContent)
+    }
+}
+
 // MARK: - Calm colour mode for secondary pages
 
 private struct CalmColorsKey: EnvironmentKey { static let defaultValue = false }
@@ -120,13 +195,13 @@ extension Theme {
 // MARK: - Containers
 
 struct Card<Content: View>: View {
-    var padding: CGFloat = 16
+    var padding: CGFloat = Theme.Space.cardPadding
     @ViewBuilder var content: Content
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) { content }
+        VStack(alignment: .leading, spacing: Theme.Space.block) { content }
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
     }
 }
 
@@ -139,17 +214,13 @@ struct CardHeader<Trailing: View>: View {
     @Environment(\.calmColors) private var calm
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Image(systemName: icon)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(calm ? Color.secondary : color)
-                .frame(width: 30, height: 30)
-                .background(calm ? Theme.subtle : color.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            VStack(alignment: .leading, spacing: 1) {
+        HStack(alignment: .center, spacing: Theme.Space.block) {
+            IconTile(icon: icon, color: calm ? .secondary : color)
+            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 Text(title).font(.headline)
                 if let subtitle { Text(subtitle).font(.footnote).foregroundStyle(.secondary) }
             }
-            Spacer(minLength: 8)
+            Spacer(minLength: Theme.Space.item)
             trailing
         }
     }
@@ -165,10 +236,11 @@ struct ScreenScroll<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
         ScrollView {
-            VStack(spacing: 14) { content }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+            VStack(spacing: Theme.Space.cardGap) { content }
+                .padding(.vertical, Theme.Space.block)
+                .labelStyle(.inline)
         }
+        .pageMargins()
         .background(Theme.page)
     }
 }
@@ -202,13 +274,13 @@ struct MetricTile: View {
     var footnote: String? = nil
     @Environment(\.calmColors) private var calm
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 4) {
-                Image(systemName: icon).foregroundStyle(Theme.tone(color, calm: calm))
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
+            HStack(spacing: Theme.Space.iconGap) {
+                Image(systemName: icon).imageScale(.small).foregroundStyle(Theme.tone(color, calm: calm))
                 Text(label).foregroundStyle(.secondary)
             }
             .font(.caption)
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                 Text(value).font(.title3.weight(.semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
                 if !unit.isEmpty { Text(unit).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
             }
@@ -216,8 +288,8 @@ struct MetricTile: View {
             if let footnote { Text(footnote).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(12)
-        .background(Theme.subtle.opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(Theme.Space.block)
+        .background(Theme.subtle.opacity(0.6), in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
     }
 }
 
@@ -225,7 +297,7 @@ struct MetricTile: View {
 struct MetricRow<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
-        HStack(alignment: .top, spacing: 8) { content }.fixedSize(horizontal: false, vertical: true)
+        HStack(alignment: .top, spacing: Theme.Space.item) { content }.fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -238,13 +310,13 @@ struct Chip: View {
     var body: some View {
         let c = Theme.tone(color, calm: calm)
         let neutral = c == .secondary
-        HStack(spacing: 4) {
+        HStack(spacing: Theme.Space.iconGap) {
             if let icon { Image(systemName: icon).font(.caption2.weight(.semibold)).foregroundStyle(c) }
             Text(text).font(.caption.weight(filled ? .semibold : .medium)).lineLimit(1)
                 .foregroundStyle(neutral ? Color.secondary : Color.primary)
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 5)
+        .padding(.horizontal, Theme.Space.item)
+        .padding(.vertical, Theme.Space.tight)
         .background(c.opacity(filled ? 0.24 : 0.12), in: Capsule())
     }
 }
@@ -277,17 +349,17 @@ struct Callout: View {
     var body: some View {
         // In calm mode only caution and urgent keep their colour.
         let color = calm && ![.caution, .urgent].contains(kind) ? Color.secondary : kind.color
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: kind.icon).foregroundStyle(color).font(.subheadline)
-            VStack(alignment: .leading, spacing: 3) {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.iconGap) {
+            Image(systemName: kind.icon).foregroundStyle(color).font(.subheadline).imageScale(.small)
+            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 if let title { Text(title).font(.subheadline.weight(.semibold)) }
                 Text(text).font(.subheadline).foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
-        .padding(12)
-        .background(color.opacity(calm && color == .secondary ? 0.08 : 0.09), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(Theme.Space.block)
+        .background(color.opacity(calm && color == .secondary ? 0.08 : 0.09), in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
     }
 }
 
@@ -312,7 +384,7 @@ struct BulletText: View {
     var color: Color = .secondary
     @Environment(\.calmColors) private var calm
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.item) {
             Circle().fill(Theme.tone(color, calm: calm)).frame(width: 5, height: 5).offset(y: -2)
             Text(text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
         }
@@ -343,7 +415,7 @@ struct Disclaimer: View {
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
+            .padding(.vertical, Theme.Space.item)
     }
 }
 
@@ -351,12 +423,12 @@ struct EmptyHint: View {
     let icon: String
     let text: String
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: Theme.Space.item) {
             Image(systemName: icon).font(.title2).foregroundStyle(.secondary)
             Text(text).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 18)
+        .padding(.vertical, Theme.Space.cardPadding)
     }
 }
 
@@ -372,8 +444,8 @@ struct RatingPicker: View {
 
     var body: some View {
         let color = Theme.accent
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: Theme.Space.tight) {
+            HStack(spacing: Theme.Space.item) {
                 ForEach(Array(range), id: \.self) { v in
                     let selected = value == v
                     Button {
@@ -381,9 +453,9 @@ struct RatingPicker: View {
                     } label: {
                         Text(labels.map { $0[v - range.lowerBound] } ?? "\(v)")
                             .font(.subheadline.weight(selected ? .semibold : .regular))
-                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .frame(maxWidth: .infinity, minHeight: Theme.Size.tap)
                             .foregroundStyle(selected ? Color.white : Color.primary)
-                            .background(selected ? color : Theme.subtle, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .background(selected ? color : Theme.subtle, in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
@@ -403,7 +475,7 @@ struct RatingPicker: View {
 
 /// Simple wrapping layout for chips.
 struct FlowLayout: Layout {
-    var spacing: CGFloat = 6
+    var spacing: CGFloat = Theme.Space.item
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let maxW = proposal.width ?? .infinity
         var x: CGFloat = 0, y: CGFloat = 0, rowH: CGFloat = 0, widest: CGFloat = 0
@@ -435,7 +507,7 @@ struct ToggleChip: View {
     var body: some View {
         Button { isOn.toggle() } label: {
             Chip(text: text, icon: isOn ? "checkmark" : icon, color: isOn ? Theme.accent : .secondary, filled: isOn)
-                .frame(minHeight: 44)
+                .frame(minHeight: Theme.Size.tap)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

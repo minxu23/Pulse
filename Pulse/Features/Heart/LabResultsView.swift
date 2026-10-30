@@ -18,9 +18,10 @@ struct LabResultsView: View {
             Button { adding = true } label: {
                 Label("记录化验结果", systemImage: "plus")
                     .font(.subheadline.weight(.medium))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .padding(.vertical, Theme.Space.item)
+                    .frame(maxWidth: .infinity, minHeight: Theme.Size.tap)
+                    .contentShape(Rectangle())
+                    .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
                     .foregroundStyle(Theme.accent)
             }
             .buttonStyle(.plain)
@@ -34,7 +35,8 @@ struct LabResultsView: View {
                     LabKindCard(kind: k, labs: points, profile: p)
                 }
                 NavigationLink { LabHistoryView() } label: {
-                    Label("全部化验记录", systemImage: "list.bullet").font(.subheadline).frame(maxWidth: .infinity, minHeight: 44)
+                    Label("全部化验记录", systemImage: "list.bullet").font(.subheadline)
+                        .frame(maxWidth: .infinity, minHeight: Theme.Size.tap).contentShape(Rectangle())
                 }
             }
             Disclaimer(text: "解读按常见的成人参考范围和 KDIGO 肾功能分期，不能代替医生的判断。\(LabAnalyzer.rangeNote)")
@@ -129,8 +131,8 @@ private struct LabValueRow: View {
     let status: LabStatus
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+        VStack(alignment: .leading, spacing: Theme.Space.item) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                 Text(point.kind.label).font(.subheadline.weight(.semibold))
                 Spacer()
                 Text(point.valueText).font(.system(.title2, design: .rounded).weight(.semibold)).monospacedDigit()
@@ -167,7 +169,7 @@ struct LabHistoryView: View {
         List {
             ForEach(labs) { l in
                 HStack {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         Text(l.kind.label).font(.subheadline)
                         Text(l.date.formatted(.dateTime.year().month().day()) + (l.estimated ? " · 按肌酐估算" : "") + (l.note.isEmpty ? "" : " · \(l.note)"))
                             .font(.footnote).foregroundStyle(.secondary)
