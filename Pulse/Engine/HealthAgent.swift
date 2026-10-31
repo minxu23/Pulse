@@ -237,6 +237,10 @@ struct AgentReply: Equatable {
     /// Plan changes for the user to adopt (none is adopted while the answer is shown).
     var proposals: [PlanChangeProposal] { blocks.compactMap(\.proposal) }
     var proposesPlan: Bool { !proposals.isEmpty }
+    /// Shown as the rules wrote it when the on-device model would answer: it turns 「25 → 20 分钟」
+    /// into reasons of its own, and 「从你的记录看，可能有关的（不一定是原因）」 into causes
+    /// (「睡得少一点」), while the card or the cautious wording is the point.
+    var readsAsWrittenOnDevice: Bool { intent == .planChange || intent == .symptom }
 }
 
 enum AgentIntent: String, CaseIterable {
@@ -1909,6 +1913,13 @@ enum HealthAgent {
                 t = k + "\n\n" + t
             }
         }
+        // The verdict opens the answer: a few words before it (「我最近血压还没达标」, the question
+        // echoed) go.
+        if let head = r.conclusion?.split(separator: "。").first.map(String.init), head.count >= 6,
+           let at = t.range(of: head), at.lowerBound > t.startIndex {
+            let lead = t[..<at.lowerBound]
+            if lead.count <= 12, !lead.contains(where: { "。！？!?\n".contains($0) }) { t.removeSubrange(..<at.lowerBound) }
+        }
         // A list item that only repeats a sentence already given (a small model turns the verdict's
         // second half into bullets) goes.
         let said = t.components(separatedBy: "\n").filter { !$0.hasPrefix("•") }.joined().filter { !$0.isWhitespace }
@@ -1939,14 +1950,17 @@ enum HealthAgent {
     /// Whether an answer already gives the safety line, perhaps in its own words: its opening as
     /// written, or nearly all of its clauses, the last one (what to do) among them.
     static func says(_ text: String, safety s: String) -> Bool {
-        func squeeze(_ x: String) -> String { x.filter { !$0.isWhitespace } }
+        // Spacing and fillers (「还」「也」「要」) aside; what's in brackets only gives examples.
+        func squeeze(_ x: String) -> String { x.filter { !$0.isWhitespace && !"还也要".contains($0) } }
         let t = squeeze(text)
-        if t.contains(squeeze(String(s.prefix(14)))) { return true }
-        let clauses = s.split(whereSeparator: { "，、；。,;".contains($0) })
-            .map { squeeze(String($0)).replacingOccurrences(of: #"^(如果|若|或者|或|有|出现|并且|且|又|还)+"#, with: "", options: .regularExpression) }
+        let line = s.replacingOccurrences(of: #"（[^）]*）|\([^)]*\)"#, with: "", options: .regularExpression)
+        if t.contains(squeeze(String(line.prefix(14)))) { return true }
+        let clauses = line.split(whereSeparator: { "，、；。,;".contains($0) })
+            .map { squeeze(String($0)).replacingOccurrences(of: #"^(如果|若|或者|或|有|出现|伴有|伴随|同时|并且|且|又)+"#, with: "", options: .regularExpression) }
             .filter { $0.count >= 2 }
-        guard let action = clauses.last, t.contains(action) else { return false }
-        return Double(clauses.filter { t.contains($0) }.count) >= Double(clauses.count) * 0.75
+        // What to do may come shorter: 「去看医生」 for 「去看医生查一下」.
+        guard let action = clauses.last, t.contains(action) || t.contains(String(action.prefix(4))) else { return false }
+        return Double(clauses.dropLast().filter { t.contains($0) }.count + 1) >= Double(clauses.count) * 0.75
     }
 
     /// Instructions for the on-device model (Apple Intelligence).

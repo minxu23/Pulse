@@ -27,6 +27,7 @@ struct CloudLiveTests {
         ["这周总结一下"],
         ["这周训练量减一点"],
         ["晚上睡不好怎么办"],
+        ["最近总觉得累"],
     ]
     /// The other sample users, 全部云端: `-only-testing:PulseTests/CloudLiveTests/otherPeople()`.
     private static let peopleQuestions: [(DemoPersona, [[String]])] = [
@@ -140,7 +141,6 @@ extension CloudLiveTests {
 @MainActor
 struct OnDeviceLiveTests {
     static let questions: [[String]] = CloudLiveTests.cloudQuestions + [
-        ["最近总觉得累"],
         ["我有点担心肾功能会变差"],
         ["今天吃了什么比较好"],
     ]

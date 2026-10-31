@@ -311,9 +311,8 @@ final class AgentConversation {
             break
         }
 
-        // A plan change on the device reads as the rules wrote it: the small model turns 「25 → 20 分钟」
-        // into reasons of its own, and the card under it holds the change anyway.
-        if usesOnDeviceModel, rule.intent == .planChange {
+        // Plan changes and symptoms on the device read as the rules wrote them (see `readsAsWrittenOnDevice`).
+        if usesOnDeviceModel, rule.readsAsWrittenOnDevice {
             try? await Task.sleep(for: .milliseconds(350))
             guard turn == mine else { return }
             messages.append(AgentMessage(role: .agent, text: rule.text, reply: rule, engine: .rules, note: fallbackNote, blocks: rule.blocks, privacy: privacy))

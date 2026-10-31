@@ -214,4 +214,33 @@ struct AgentCoverageTests {
         let moved = HealthAgent.finalize((bp.conclusion ?? "") + "\n\n要记下的话，点下面的「记下」：血压 138/88 mmHg。\n\n• 静坐 5 分钟再测两次", of: bp, strict: false)
         #expect(moved.hasSuffix("要记下的话，点下面的「记下」：血压 138/88 mmHg。") && moved.components(separatedBy: "「记下」").count == 2)
     }
+
+    /// On the device, symptoms and plan changes keep the rules' wording; other answers are the model's.
+    @Test func onDeviceKeepsSymptomWording() throws {
+        let f = try fixture()
+        let c = f.make(f.base)
+        for q in ["最近总觉得累", "我最近老是头晕", "这周训练量减一点"] {
+            #expect(HealthAgent.reply(to: q, context: c).readsAsWrittenOnDevice, "\(q)")
+        }
+        for q in ["我最近血压怎么样", "有点累，还要去跑步吗", "晚上睡不好怎么办"] {
+            #expect(!HealthAgent.reply(to: q, context: c).readsAsWrittenOnDevice, "\(q)")
+        }
+        #expect(HealthAgent.reply(to: "最近总觉得累", context: c).text.contains("从你的记录看，可能有关的（不一定是原因）"))
+    }
+
+    /// Found in the cloud round of 2026-10-31 15:49.
+    @Test func modelLeadInsAndRewordedSafety() throws {
+        let f = try fixture()
+        let c = f.make(f.base)
+        // The safety line in the model's words (the examples in brackets left out) is not added again.
+        let tired = HealthAgent.reply(to: "最近总觉得累", context: c)
+        let s = try #require(tired.safety)
+        #expect(HealthAgent.says("如果累了两周以上不见好，或者出现体重下降、发烧、气短、心慌，要尽快去看医生。", safety: s))
+        #expect(!HealthAgent.says("累了两周以上不见好，或者出现体重下降、发烧、气短、心慌，要留意。", safety: s))
+        // The question echoed before the verdict goes.
+        let bp = HealthAgent.reply(to: "我最近血压怎么样", context: c)
+        let k = try #require(bp.conclusion)
+        let t = HealthAgent.finalize("我最近血压" + k + "\n\n• 每天固定时间吃药，别漏", of: bp)
+        #expect(t.hasPrefix(k))
+    }
 }
