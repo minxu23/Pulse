@@ -12,6 +12,10 @@ struct RecordProposal: Identifiable, Equatable {
         var foods: [String]
         var said: String
         var at: Date
+        /// Estimated from the portions, for a CGM's meal predictions.
+        var carbsG: Double? = nil
+        /// The foods as said (「米饭 ×2、鸡蛋」); empty when none was recognised.
+        var named = ""
     }
     /// A workout; `estimated` when the minutes come from the distance.
     struct Workout: Equatable {
@@ -65,9 +69,9 @@ struct RecordProposal: Identifiable, Equatable {
         case .foamyUrine: "泡沫尿"
         case .lab(let k, let v): "\(k.label) \(k.format(v)) \(k.unit)"
         case .reminder(let t, _, _, _): "提醒：\(t)"
-        case .meal(let m): "\(m.kind.label)：" + (m.foods.isEmpty ? m.said : ChatRecord.portions(m.foods))
+        case .meal(let m): "\(m.kind.label)：" + (m.named.isEmpty ? m.said : m.named)
         case .workout(let w):
-            w.type.label + (w.km.map { " \($0.cleanText) 公里" } ?? "") + (w.estimated ? " · 约 \(w.minutes) 分钟" : " \(w.minutes) 分钟")
+            w.type.label + (w.km.map { " \($0.cleanText) 公里 ·" } ?? "") + (w.estimated ? " 约 \(w.minutes) 分钟" : " \(w.minutes) 分钟")
         }
     }
 
@@ -146,70 +150,97 @@ enum ChatRecord {
 
     // MARK: Meals
 
-    /// Words for foods on the diet lists, longest first when read; a word that names nothing on
-    /// them (面包, 蛋糕) is read so that a shorter one inside it isn't.
-    static let foodWords: [(words: [String], foods: [String])] = [
-        (["鸡蛋", "鸭蛋", "荷包蛋", "煎蛋", "煮蛋", "茶叶蛋"], ["鸡蛋"]),
-        (["牛奶", "酸奶", "纯奶"], ["牛奶、酸奶"]),
-        (["瘦肉", "猪肉", "牛肉", "羊肉", "鸡肉", "鸭肉", "鸡腿", "鸡胸", "排骨", "肉片", "肉丝"], ["瘦肉"]),
-        (["鱼肉", "鱼片", "鱼", "虾仁", "虾"], ["鱼虾"]),
-        (["豆腐", "豆干", "腐竹", "千张", "豆制品"], ["豆腐、豆制品"]),
-        (["豆浆"], ["豆浆"]),
-        (["米饭", "白饭", "碗饭"], ["米饭"]),
-        (["馒头", "包子", "花卷", "烧饼", "煎饼", "饼"], ["馒头、包子、饼"]),
-        (["面条", "拉面", "挂面", "汤面", "碗面", "牛肉面", "炸酱面"], ["面条"]),
-        (["蔬菜", "青菜", "白菜", "菠菜", "生菜", "油麦菜"], ["蔬菜"]),
-        (["没焯水的绿叶菜", "没焯水的青菜"], ["没焯水的绿叶菜"]),
-        (["香蕉"], ["香蕉"]),
-        (["橙子", "橘子", "桔子"], ["橙子、橘子"]),
-        (["猕猴桃", "奇异果"], ["猕猴桃"]),
-        (["土豆", "红薯", "芋头", "地瓜", "马铃薯"], ["土豆、红薯、芋头"]),
-        (["蘑菇", "香菇", "菌菇", "金针菇", "木耳"], ["菌菇"]),
-        (["番茄", "西红柿"], ["番茄"]),
-        (["坚果", "核桃", "花生", "杏仁", "腰果", "瓜子"], ["坚果、干果", "坚果、瓜子"]),
-        (["干果", "红枣", "葡萄干"], ["坚果、干果"]),
-        (["绿豆", "红豆", "黄豆", "豆类", "扁豆"], ["豆类"]),
-        (["肉汤", "鸡汤", "浓汤", "老火汤"], ["浓汤、肉汤"]),
-        (["骨头汤"], ["浓汤、肉汤", "骨头汤、浓肉汤"]),
-        (["果汁", "橙汁", "苹果汁"], ["果汁"]),
-        (["低钠盐", "代盐"], ["低钠盐、代盐"]),
-        (["香肠", "火腿", "午餐肉", "腊肉", "培根", "腊肠"], ["香肠、午餐肉等加工食品", "香肠、火腿、腊肉"]),
-        (["可乐", "汽水"], ["可乐等深色汽水"]),
-        (["奶酪", "芝士"], ["奶酪、奶制品较多"]),
-        (["内脏", "猪肝", "鸡肝", "腰子", "肥肠"], ["动物内脏"]),
-        (["咸菜", "榨菜", "腌菜", "泡菜", "酸菜", "咸鸭蛋", "腐乳"], ["咸菜、腌制品"]),
-        (["方便面", "泡面", "速冻"], ["方便面、速冻食品"]),
-        (["外卖", "下馆子", "在外面吃"], ["外卖或在外吃"]),
-        (["薯片", "辣条"], ["咸味零食"]),
-        (["面包", "饼干", "蛋糕", "奶茶", "鱼香"], []),
+    /// Words for foods, with the diet-list foods (`DietFoods`) they count as and the carbohydrate in
+    /// one portion (g). A food off the lists (面包, 粥) counts only for carbs; a word read first keeps a
+    /// shorter one inside it (鱼香 → not 鱼) from counting.
+    static let foodWords: [(words: [String], foods: [String], carbs: Double)] = [
+        (["鸡蛋", "鸭蛋", "荷包蛋", "煎蛋", "煮蛋", "茶叶蛋"], ["鸡蛋"], 0),
+        (["牛奶", "酸奶", "纯奶"], ["牛奶、酸奶"], 12),
+        (["瘦肉", "猪肉", "牛肉", "羊肉", "鸡肉", "鸭肉", "鸡腿", "鸡胸", "排骨", "肉片", "肉丝"], ["瘦肉"], 0),
+        (["鱼肉", "鱼片", "鱼", "虾仁", "虾"], ["鱼虾"], 0),
+        (["豆腐", "豆干", "腐竹", "千张", "豆制品"], ["豆腐、豆制品"], 3),
+        (["豆浆"], ["豆浆"], 5),
+        (["米饭", "白饭", "碗饭"], ["米饭"], 40),
+        (["馒头", "包子", "花卷", "烧饼", "煎饼", "饼"], ["馒头、包子、饼"], 45),
+        (["面条", "拉面", "挂面", "汤面", "碗面", "牛肉面", "炸酱面"], ["面条"], 50),
+        (["蔬菜", "青菜", "白菜", "菠菜", "生菜", "油麦菜"], ["蔬菜"], 5),
+        (["没焯水的绿叶菜", "没焯水的青菜"], ["没焯水的绿叶菜"], 3),
+        (["香蕉"], ["香蕉"], 25),
+        (["橙子", "橘子", "桔子"], ["橙子、橘子"], 15),
+        (["猕猴桃", "奇异果"], ["猕猴桃"], 12),
+        (["土豆", "红薯", "芋头", "地瓜", "马铃薯"], ["土豆、红薯、芋头"], 25),
+        (["蘑菇", "香菇", "菌菇", "金针菇", "木耳"], ["菌菇"], 3),
+        (["番茄", "西红柿"], ["番茄"], 5),
+        (["坚果", "核桃", "花生", "杏仁", "腰果", "瓜子"], ["坚果、干果", "坚果、瓜子"], 5),
+        (["干果", "红枣", "葡萄干"], ["坚果、干果"], 20),
+        (["绿豆", "红豆", "黄豆", "豆类", "扁豆"], ["豆类"], 20),
+        (["肉汤", "鸡汤", "浓汤", "老火汤"], ["浓汤、肉汤"], 3),
+        (["骨头汤"], ["浓汤、肉汤", "骨头汤、浓肉汤"], 2),
+        (["果汁", "橙汁", "苹果汁"], ["果汁"], 25),
+        (["低钠盐", "代盐"], ["低钠盐、代盐"], 0),
+        (["香肠", "火腿", "午餐肉", "腊肉", "培根", "腊肠"], ["香肠、午餐肉等加工食品", "香肠、火腿、腊肉"], 3),
+        (["可乐", "汽水"], ["可乐等深色汽水"], 35),
+        (["奶酪", "芝士"], ["奶酪、奶制品较多"], 1),
+        (["内脏", "猪肝", "鸡肝", "腰子", "肥肠"], ["动物内脏"], 2),
+        (["咸菜", "榨菜", "腌菜", "泡菜", "酸菜", "咸鸭蛋", "腐乳"], ["咸菜、腌制品"], 1),
+        (["方便面", "泡面"], ["方便面、速冻食品"], 55),
+        (["速冻"], ["方便面、速冻食品"], 30),
+        (["外卖", "下馆子", "在外面吃"], ["外卖或在外吃"], 0),
+        (["薯片", "辣条"], ["咸味零食"], 15),
+        (["面包"], [], 25),
+        (["蛋糕"], [], 30),
+        (["饼干"], [], 20),
+        (["奶茶"], [], 45),
+        (["粥", "稀饭"], [], 25),
+        (["饺子", "馄饨", "汤圆"], [], 6),
+        (["苹果", "梨"], [], 20),
+        (["玉米"], [], 30),
+        (["西瓜"], [], 10),
+        (["鱼香"], [], 0),
     ]
 
-    /// Foods named, one entry per portion: 「两碗米饭、一个鸡蛋」 → 米饭, 米饭, 鸡蛋. High-salt foods once.
-    static func foods(in q: String) -> [String] {
-        let words = foodWords.flatMap { e in e.words.map { ($0, e.foods) } }.sorted { $0.0.count > $1.0.count }
+    /// Each food word in the sentence with its portions: 「两碗」「3 个」「一根」 right before it.
+    private static func portionsSaid(in q: String) -> [(entry: Int, n: Int, word: String)] {
+        let words = foodWords.enumerated().flatMap { i, e in e.words.map { ($0, i) } }.sorted { $0.0.count > $1.0.count }
         var taken: [Range<String.Index>] = []
-        var found: [(at: String.Index, foods: [String], n: Int)] = []
-        for (w, foods) in words {
+        var found: [(at: String.Index, entry: Int, n: Int, word: String)] = []
+        for (w, i) in words {
             var from = q.startIndex
             while let r = q.range(of: w, range: from..<q.endIndex) {
                 from = r.upperBound
                 guard !taken.contains(where: { $0.overlaps(r) }) else { continue }
                 taken.append(r)
-                // 「两碗」「3 个」「一根」 right before the food.
                 let before = String(q[q.index(r.lowerBound, offsetBy: -min(5, q.distance(from: q.startIndex, to: r.lowerBound)))..<r.lowerBound])
                 let n = AgentQuestion.groups(#"([0-9一二两三四五六七八九十半]+)\s*小?(?:碗|个|根|杯|两|块|份|盒|瓶|片|把|罐|只|串|袋|包|勺)?$"#, before)
                     .flatMap { AgentQuestion.number($0[0]) }.map { max(1, Int($0.rounded(.up))) } ?? 1
-                found.append((r.lowerBound, foods, min(n, 6)))
+                found.append((r.lowerBound, i, min(n, 20), ["碗饭": "米饭", "碗面": "面条"][w] ?? w))
             }
         }
+        return found.sorted { $0.at < $1.at }.map { ($0.entry, $0.n, $0.word) }
+    }
+
+    /// The foods as said, with portions: 「米饭 ×2、鸡蛋、牛肉面」.
+    static func named(in q: String) -> String {
+        portionsSaid(in: q).filter { !foodWords[$0.entry].foods.isEmpty || foodWords[$0.entry].carbs > 0 }
+            .map { $0.n > 1 ? "\($0.word) ×\($0.n)" : $0.word }.joined(separator: "、")
+    }
+
+    /// Diet-list foods named, one entry per portion: 「两碗米饭、一个鸡蛋」 → 米饭, 米饭, 鸡蛋. High-salt foods once.
+    static func foods(in q: String) -> [String] {
         var out: [String] = []
-        for f in found.sorted(by: { $0.at < $1.at }) {
-            for name in f.foods {
+        for (i, n, _) in portionsSaid(in: q) {
+            for name in foodWords[i].foods {
                 if DietFoods.salt.contains(name) { if !out.contains(name) { out.append(name) } }
-                else { out += Array(repeating: name, count: f.n) }
+                else { out += Array(repeating: name, count: min(n, 6)) }
             }
         }
         return out
+    }
+
+    /// Carbohydrate in the foods named, by their portions (g); nil when none has any.
+    static func carbs(in q: String) -> Double? {
+        let g = portionsSaid(in: q).reduce(0.0) { $0 + foodWords[$1.entry].carbs * Double($1.n) }
+        return g > 0 ? g : nil
     }
 
     /// 「米饭 ×2、鸡蛋」.
@@ -221,13 +252,13 @@ enum ChatRecord {
     static func meal(_ a: AgentQuestion, now: Date) -> RecordProposal.Meal? {
         let q = a.text
         guard a.has(["吃了", "刚吃", "吃完", "吃过", "喝了", "刚喝"]) else { return nil }
-        let named: [(String, MealKind)] = [("早饭", .breakfast), ("早餐", .breakfast), ("早点", .breakfast), ("午饭", .lunch), ("午餐", .lunch),
+        let meals: [(String, MealKind)] = [("早饭", .breakfast), ("早餐", .breakfast), ("早点", .breakfast), ("午饭", .lunch), ("午餐", .lunch),
                                            ("中饭", .lunch), ("晚饭", .dinner), ("晚餐", .dinner), ("夜宵", .snack), ("宵夜", .snack),
                                            ("加餐", .snack), ("零食", .snack), ("下午茶", .snack)]
-        let kindNamed = named.first { q.contains($0.0) }?.1
-        let foods = foods(in: q)
+        let kindNamed = meals.first { q.contains($0.0) }?.1
+        let foods = foods(in: q), carbs = carbs(in: q)
         // Something eaten Pulse knows, or a meal named; 「吃了布洛芬」 is neither.
-        guard !foods.isEmpty || kindNamed != nil else { return nil }
+        guard !foods.isEmpty || carbs != nil || kindNamed != nil else { return nil }
         let day = a.has(["昨天", "昨晚"]) ? now.adding(days: -1) : now
         let hour = Calendar.pulse.component(.hour, from: now)
         let kind = kindNamed ?? (q.contains("早上") ? .breakfast : q.contains("中午") ? .lunch : q.contains("晚上") ? .dinner
@@ -242,7 +273,7 @@ enum ChatRecord {
         var said = q
         for w in ["帮我记一下", "帮我记录", "记录一下", "记一下", "记下来", "帮我记", "记上", "我"] { said = said.replacingOccurrences(of: w, with: "") }
         said = said.trimmingCharacters(in: CharacterSet(charactersIn: " ，,。.！!、"))
-        return RecordProposal.Meal(kind: kind, foods: foods, said: String(said.prefix(60)), at: at)
+        return RecordProposal.Meal(kind: kind, foods: foods, said: String(said.prefix(60)), at: at, carbsG: carbs, named: named(in: q))
     }
 
     // MARK: Workouts
@@ -288,6 +319,18 @@ enum ChatRecord {
             if t.adding(minutes: Int(minutes)) <= now { start = t }
         }
         return RecordProposal.Workout(type: type, minutes: Int(minutes), km: km, effort: min(max(effort, 1), 9), estimated: estimated, start: start)
+    }
+
+    /// The workout as changed on the card: it still ends when it did; minutes set by hand are no estimate.
+    static func changed(_ w: RecordProposal.Workout, type: WorkoutType? = nil, minutes: Int? = nil) -> RecordProposal.Workout {
+        var out = w
+        if let type { out.type = type }
+        if let m = minutes, m != w.minutes {
+            out.start = w.start.adding(minutes: w.minutes - m)
+            out.minutes = m
+            out.estimated = false
+        }
+        return out
     }
 
     /// Whether a workout counts for a planned session of this kind.
@@ -343,15 +386,23 @@ enum ChatRecord {
         else if ["睡", "呼吸机"].contains(where: q.contains) { area = .sleep }
         else { area = .general }
         return RecordProposal(id: UUID(), items: [.reminder(title: title, area: area, due: due, timed: clock != nil)], time: now,
-                              repeats: repeats, repeatAsked: repeats == nil && a.has(["每次", "每隔", "每两", "每三", "每半"]))
+                              repeats: repeats, repeatAsked: repeats == nil && a.has(["每次", "每回", "每隔", "每半"]))
     }
 
     /// 「每天」「每晚」「每周一三五」「每周一和周四」「每个月 5 号」.
-    static let repeatWords = #"每(?:天|日|晚|早)|天天|每个?(?:周|星期|礼拜)(?:[一二三四五六日天、和及]|周|星期|礼拜)*|每个?月(?:\s*\d{1,2}\s*[号日])?"#
+    static let repeatWords = #"每隔\s*[0-9一二两三四五六七八九十]+\s*天|每\s*[0-9两三四五六七]\s*天|隔一?天|每(?:天|日|晚|早)|天天|每个?(?:周|星期|礼拜)(?:[一二三四五六日天、和及]|周|星期|礼拜)*|每个?月(?:\s*\d{1,2}\s*[号日])?"#
 
     /// The repeat a reminder asks for; a weekly or monthly one without its day has an empty day
     /// (filled in by `reminder`).
     static func repeating(_ q: String) -> CareRepeat? {
+        // 「每隔两天」 is every third day; 「每两天」「隔天」 every other day.
+        if let g = AgentQuestion.groups(#"每隔\s*([0-9一二两三四五六七八九十]+)\s*天"#, q), let n = AgentQuestion.number(g[0]), (1...29).contains(Int(n)) {
+            return .everyDays(Int(n) + 1)
+        }
+        if let g = AgentQuestion.groups(#"每\s*([0-9两三四五六七])\s*天"#, q), let n = AgentQuestion.number(g[0]), (2...30).contains(Int(n)) {
+            return .everyDays(Int(n))
+        }
+        if q.range(of: #"隔一?天"#, options: .regularExpression) != nil { return .everyDays(2) }
         if q.range(of: #"每(?:天|日|晚|早)|天天"#, options: .regularExpression) != nil { return .daily }
         if let r = q.range(of: #"每个?(?:周|星期|礼拜)(?:[一二三四五六日天、和及]|周|星期|礼拜)*"#, options: .regularExpression) {
             let names: [Character: Int] = ["一": 2, "二": 3, "三": 4, "四": 5, "五": 6, "六": 7, "日": 1, "天": 1]

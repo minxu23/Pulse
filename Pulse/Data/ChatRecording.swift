@@ -87,6 +87,7 @@ extension DataHub {
             case .meal(let m):
                 let log = MealLog(time: m.at, kind: m.kind)
                 log.note = m.said
+                log.carbsG = m.carbsG
                 ctx.insert(log)
                 undo.meals.append(log.id)
                 // Kidney diet: the foods count as in the diet form, in the order of its lists.
@@ -125,8 +126,8 @@ extension DataHub {
                 undo.sessions.append(s.id)
             case .reminder(let title, let area, let due, let timed):
                 var when = reminderDue ?? due
-                // A repeating one starts at its next time, at the time shown on the card.
-                if let r = p.repeats { when = r.first(onOrAfter: .app, minutes: timed ? when.minutesOfDay : nil) }
+                // A repeating one starts at its next time, at the time shown on the card (9 when none was said).
+                if let r = p.repeats { when = r.first(onOrAfter: .app, minutes: timed || reminderDue != nil ? when.minutesOfDay : nil) }
                 let t = CareTask(title: title, area: area, due: when, note: "在对话里添加", repeats: p.repeats)
                 t.createdAt = .app
                 ctx.insert(t)

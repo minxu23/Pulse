@@ -320,35 +320,60 @@ struct RecordCard: View {
     @Environment(\.modelContext) private var ctx
     @State private var convo = AgentConversation.shared
     @State private var due: Date
+    /// A workout's type and minutes can be put right before it is recorded.
+    @State private var workout: RecordProposal.Workout?
     @AppStorage(CareReminders.enabledKey) private var careReminders = false
 
     init(proposal: RecordProposal) {
         self.proposal = proposal
-        _due = State(initialValue: proposal.reminder?.due ?? proposal.time)
+        _workout = State(initialValue: proposal.items.lazy.compactMap { if case .workout(let w) = $0 { w } else { nil } }.first)
+        // A repeating reminder without a time starts at 9, the time it would ring.
+        let r = proposal.reminder
+        _due = State(initialValue: r.map { proposal.repeats != nil && !$0.timed ? $0.due.startOfDay.adding(minutes: 9 * 60) : $0.due } ?? proposal.time)
+    }
+
+    /// What 记下 records: the proposal with the workout as changed here.
+    private var edited: RecordProposal {
+        var p = proposal
+        if let workout { p.items = p.items.map { if case .workout = $0 { .workout(workout) } else { $0 } } }
+        return p
     }
 
     var body: some View {
         let reminder = proposal.reminder
+        let meal = proposal.items.lazy.compactMap { if case .meal(let m) = $0 { m } else { nil } }.first
+        // When it happened: a workout's start, a meal's time, else when it was said.
+        let when = workout?.start ?? meal?.at ?? proposal.time
         VStack(alignment: .leading, spacing: Theme.Space.block) {
             BlockHeader(title: reminder == nil ? "记下来" : "加一条提醒", icon: reminder == nil ? "square.and.pencil" : "bell",
-                        trailing: reminder == nil ? proposal.time.formatted(.dateTime.month().day().hour().minute()) : nil)
+                        trailing: reminder == nil ? when.formatted(.dateTime.month().day().hour().minute()) : nil)
             VStack(alignment: .leading, spacing: Theme.Space.item) {
-                ForEach(Array(proposal.items.enumerated()), id: \.offset) { _, item in
+                ForEach(Array(edited.items.enumerated()), id: \.offset) { _, item in
                     Label(RecordProposal.label(item), systemImage: RecordProposal.icon(item))
                         .font(.subheadline).fixedSize(horizontal: false, vertical: true)
                 }
+            }
+            if let w = workout, convo.recordOutcomes[proposal.id] == nil {
+                LabeledContent("类型") {
+                    Picker("类型", selection: Binding(get: { w.type }, set: { workout = ChatRecord.changed(w, type: $0) })) {
+                        ForEach(WorkoutType.allCases) { Label($0.label, systemImage: $0.icon).tag($0) }
+                    }
+                    .labelsHidden()
+                }
+                .font(.subheadline)
+                Stepper("时长 \(w.minutes) 分钟", value: Binding(get: { w.minutes }, set: { workout = ChatRecord.changed(w, minutes: $0) }),
+                        in: 5...360, step: 5)
+                    .font(.subheadline)
             }
             if let rep = proposal.repeats {
                 Label("重复：\(rep.label)", systemImage: "repeat").font(.subheadline)
             }
             if let r = reminder, convo.recordOutcomes[proposal.id] == nil {
                 // A repeating reminder's days follow its rule: only the time can change.
-                if proposal.repeats == nil || r.timed {
-                    DatePicker("时间", selection: $due, in: Date.app.startOfDay...,
-                               displayedComponents: proposal.repeats != nil ? [.hourAndMinute] : (r.timed ? [.date, .hourAndMinute] : [.date]))
-                        .font(.subheadline)
-                }
-                if !r.timed { Text(proposal.repeats == nil ? "当天上午 9 点提醒" : "每次上午 9 点提醒").font(.footnote).foregroundStyle(.secondary) }
+                DatePicker("时间", selection: $due, in: Date.app.startOfDay...,
+                           displayedComponents: proposal.repeats != nil ? [.hourAndMinute] : (r.timed ? [.date, .hourAndMinute] : [.date]))
+                    .font(.subheadline)
+                if !r.timed, proposal.repeats == nil { Text("当天上午 9 点提醒").font(.footnote).foregroundStyle(.secondary) }
             }
             actions
         }
@@ -359,7 +384,7 @@ struct RecordCard: View {
         case nil:
             HStack(spacing: Theme.Space.item) {
                 Button {
-                    convo.recordOutcomes[proposal.id] = .recorded(DataHub.applyRecord(proposal, reminderDue: due, in: ctx))
+                    convo.recordOutcomes[proposal.id] = .recorded(DataHub.applyRecord(edited, reminderDue: due, in: ctx))
                 } label: { Text("记下").fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel) }
                 .buttonStyle(.borderedProminent)
                 Button { convo.recordOutcomes[proposal.id] = .dismissed } label: { Text("不用了").frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel) }

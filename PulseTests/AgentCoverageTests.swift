@@ -87,6 +87,12 @@ struct AgentCoverageTests {
         says("两次透析之间体重涨多少合适", hd) { $0.text.hasPrefix("你的干体重是 70.0 kg") && $0.text.contains("72.8 kg") }
         says("我的干体重是多少", hd) { $0.text.hasPrefix("你的干体重是 70.0 kg") }
         says("透析后很累正常吗", hd) { $0.text.hasPrefix("透析后觉得累很常见") }
+        // Reminders on dialysis days, as set in 我的; every day for peritoneal dialysis.
+        says("每次透析后提醒我称体重", hd) { $0.text.hasPrefix("可以帮你加一条重复提醒：「每次透析后称体重」，每周一、三、五上午 9 点") && $0.text.contains("透析一般几点结束") }
+        says("每次透析后提醒我记录透出液", f.make(peritoneal(f.base))) { $0.blocks.first?.record?.repeats == .daily }
+        var noDays = hemo(f.base)
+        noDays.dialysisWeekdays = []
+        says("每次透析后提醒我称体重", f.make(noDays)) { $0.text.contains("还不知道你哪几天透析") && $0.blocks.first?.record?.repeats == nil }
         says("我的干体重是多少", c) { $0.text.hasPrefix("你还没有记录在做透析") }
         // Weight, plan, settings.
         says("我的体重有变化吗", c) { $0.text.hasPrefix("最近一次体重") || $0.text.hasPrefix("还没有体重记录") }

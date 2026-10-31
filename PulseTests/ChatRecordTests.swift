@@ -55,6 +55,9 @@ struct ChatRecordTests {
         #expect(monthly.repeats == .monthly(5) && monthly.reminder?.title == "复查血钾"
                 && monthly.reminder?.due == Calendar.pulse.date(from: DateComponents(year: 2026, month: 11, day: 5))!)
         #expect(r("每周提醒我称体重").repeats == .weekly([4]), "the weekday it was asked on")
+        let dressing = r("每隔两天提醒我换药")
+        #expect(dressing.repeats == .everyDays(3) && dressing.reminder?.title == "换药", "「每隔两天」 is every third day")
+        #expect(r("隔天提醒我量体重").repeats == .everyDays(2) && r("每两天提醒我量体重").repeats == .everyDays(2))
         #expect(r("每次透析后提醒我称体重").repeatAsked && r("每次透析后提醒我称体重").repeats == nil)
         #expect(r("3天后提醒我复查血钾").reminder.map { ($0.title, $0.due) } ?? ("", .distantPast) == ("复查血钾", evening.startOfDay.adding(days: 3)))
     }
@@ -87,6 +90,10 @@ struct ChatRecordTests {
         #expect(lunch.kind == .lunch && lunch.foods == ["米饭", "米饭", "鸡蛋", "香蕉"] && lunch.at == evening.startOfDay.adding(minutes: 12 * 60))
         #expect(ChatRecord.foods(in: "吃了一碗牛肉面和咸菜，喝了骨头汤") == ["面条", "咸菜、腌制品", "浓汤、肉汤", "骨头汤、浓肉汤"])
         #expect(ChatRecord.foods(in: "早上吃了面包和蛋糕").isEmpty, "foods not on the lists")
+        // Carbohydrate, foods off the lists included: 2 × 25 + 12.
+        #expect(ChatRecord.carbs(in: "早饭吃了两片面包和一杯牛奶") == 62 && ChatRecord.named(in: "早饭吃了两片面包和一杯牛奶") == "面包 ×2、牛奶")
+        #expect(ChatRecord.carbs(in: "吃了十个饺子") == 60 && ChatRecord.carbs(in: "吃了一个鸡蛋") == nil)
+        #expect(lunch.carbsG == 105 && lunch.named == "米饭 ×2、鸡蛋、香蕉")
         #expect(items("我吃了布洛芬") == nil, "a medicine is not a meal")
         guard case .meal(let dinner)? = items("刚吃完晚饭")?.first else { Issue.record("no dinner"); return }
         #expect(dinner.kind == .dinner && dinner.foods.isEmpty && dinner.at == evening)
@@ -100,6 +107,9 @@ struct ChatRecordTests {
         guard case .workout(let hiit)? = items("间歇跑了20分钟，很累")?.first else { Issue.record("no intervals"); return }
         #expect(hiit.type == .hiit && hiit.effort == 9)
         #expect(items("今天走了8000步") == nil, "steps come from Apple Health")
+        // Changed on the card: it still ends when it did.
+        let longer = ChatRecord.changed(run, type: .walk, minutes: 45)
+        #expect(longer.type == .walk && longer.minutes == 45 && !longer.estimated && longer.start == run.start.adding(minutes: -15))
         #expect(items("散步能降血压吗") == nil, "a question")
 
         // What the answer says: the meal's protein for a kidney diet; the workout's week.
@@ -109,6 +119,12 @@ struct ChatRecordTests {
                                   baselineSetAt: nil, raceName: "", now: evening)
         let said = HealthAgent.reply(to: "午饭吃了两碗米饭、一个鸡蛋", context: c)
         #expect(said.text.hasPrefix("好的，午餐：米饭 ×2、鸡蛋。") && said.text.contains("这顿蛋白质约 14 g") && said.blocks.first?.record != nil, "\(said.text)")
+        var dm = ProfileSnapshot()
+        dm.conditions = [.diabetesT2]
+        let cd = AgentContext.make(profile: dm, name: "", days: [], plan: [], workouts: [], vitals: [], events: [], stopBang: [],
+                                   baselineSetAt: nil, raceName: "", now: evening)
+        let bread = HealthAgent.reply(to: "早饭吃了两片面包和一杯牛奶", context: cd)
+        #expect(bread.text.hasPrefix("好的，早餐：面包 ×2、牛奶。") && bread.text.contains("这顿碳水约 60 g"), "\(bread.text)")
         let walked = HealthAgent.reply(to: "刚快走了40分钟", context: c)
         #expect(walked.text.hasPrefix("好的，步行 40 分钟。") && walked.intent == .exercise && walked.blocks.first?.record != nil, "\(walked.text)")
         #expect(AgentFollowUps.suggest(after: walked, question: "刚快走了40分钟", context: c, asked: []) == ["这周的训练完成得怎么样？", "明天能运动吗？"])
@@ -161,6 +177,16 @@ struct ChatRecordTests {
         let missed = CareTask(title: "吃药", area: .general, due: evening.startOfDay.adding(days: -1).adding(minutes: 21 * 60), repeats: .daily)
         missed.complete(now: evening.startOfDay.adding(minutes: 8 * 60))
         #expect(missed.due == evening.startOfDay.adding(minutes: 21 * 60))
+        // Every other day keeps its step, from the time it was due.
+        let other = CareTask(title: "换药", area: .general, due: evening.startOfDay.adding(minutes: 9 * 60), repeats: .everyDays(2))
+        other.complete(now: evening)
+        #expect(other.due == evening.startOfDay.adding(days: 2).adding(minutes: 9 * 60))
+        other.reopen()
+        #expect(other.due == evening.startOfDay.adding(minutes: 9 * 60))
+        let skips = CareReminders.plan([.init(id: "e", title: "换药", note: "", due: evening.startOfDay.adding(days: -3).adding(minutes: 21 * 60), done: false,
+                                              repeats: .everyDays(2))], now: evening)
+        #expect(skips.first?.fire == evening.startOfDay.adding(days: 1).adding(minutes: 21 * 60) && skips.dropFirst().first?.fire == evening.startOfDay.adding(days: 3).adding(minutes: 21 * 60),
+                "missed: the next time in step, not today")
         let once = CareTask(title: "复查", area: .kidney, due: evening.startOfDay)
         once.complete(now: evening)
         #expect(once.done && once.isDone(now: evening))

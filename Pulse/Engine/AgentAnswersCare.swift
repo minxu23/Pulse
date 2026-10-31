@@ -399,18 +399,34 @@ extension HealthAgent {
     /// 「提醒我明天早上量血压」: a 照护与随访 task with a card to confirm; the date can be changed on it.
     static func reminderRequest(_ a: AgentQuestion, context c: AgentContext) -> AgentReply? {
         guard ChatRecord.asksReminder(a) else { return nil }
-        let p = ChatRecord.reminder(a, now: c.now)
-        guard let r = p.reminder else { return nil }
+        var p = ChatRecord.reminder(a, now: c.now)
+        guard var r = p.reminder else { return nil }
+        // 「每次透析后提醒我称体重」: on the dialysis days set in 我的 (every day for peritoneal dialysis).
+        let dialysis = p.repeats == nil && a.has(["透析"]) && a.has(["每次", "每回", "透析日", "透析那天", "透析的日子"]) && c.profile.onDialysis
+        if dialysis {
+            let days = c.profile.dialysisWeekdays
+            if c.profile.onPeritoneal { p.repeats = .daily }
+            else if !days.isEmpty { p.repeats = .weekly(Weekday.mondayFirst.filter(days.contains)) }
+            if let rep = p.repeats {
+                r.due = rep.first(onOrAfter: c.now, minutes: r.timed ? r.due.minutesOfDay : nil)
+                p.items = [.reminder(title: r.title, area: .kidney, due: r.due, timed: r.timed)]
+                p.repeatAsked = false
+            }
+        }
         let df = Date.FormatStyle().month().day().weekday(.abbreviated).locale(Locale(identifier: "zh_CN"))
         let first: String
         if let rep = p.repeats {
             let at = r.timed ? " " + Clock.text(r.due.minutesOfDay) : "上午 9 点"
-            first = "可以帮你加一条重复提醒：「\(r.title)」，\(rep.label)\(at)，第一次在 \(r.due.formatted(df))。点「记下」后生效\(r.timed ? "，时间可以在卡片上改" : "")。"
+            first = "可以帮你加一条重复提醒：「\(r.title)」，\(rep.label)\(at)，第一次在 \(r.due.formatted(df))。点「记下」后生效，时间可以在卡片上改。"
         } else {
             let when = r.due.formatted(df) + (r.timed ? " " + Clock.text(r.due.minutesOfDay) : "，当天上午 9 点提醒")
             first = "可以帮你加一条提醒：「\(r.title)」，\(when)。点「记下」后生效，日期可以在卡片上改。"
         }
-        return AgentReply(text: lines([first, p.repeatAsked ? "这种重复方式还不支持（可以按每天、每周几或每月几号重复），这里先加一次。" : nil,
+        let unknownDays = dialysis && p.repeats == nil
+        return AgentReply(text: lines([first,
+                                       dialysis && !unknownDays && !r.timed ? "透析一般几点结束，就把卡片上的时间改到那之后。" : nil,
+                                       unknownDays ? "还不知道你哪几天透析：在「我的 › 健康状况与用药 › 透析」里选好透析日，再说一次就能按透析日重复。这里先加一次。" : nil,
+                                       p.repeatAsked && !unknownDays ? "这种重复方式还不支持（可以按每天、隔几天、每周几或每月几号重复），这里先加一次。" : nil,
                                        p.repeats == nil ? "它会出现在「趋势 › 异常跟进 › 照护与随访事项」里，完成后在那里打个勾。"
                                            : "它会出现在「趋势 › 异常跟进 › 照护与随访事项」里，每次完成后打个勾，会自动排到下一次。"]),
                           sources: ["照护与随访事项"], intent: .about, blocks: [.record(p)], conclusion: first, verbatim: true)
@@ -425,12 +441,15 @@ extension HealthAgent {
             switch item {
             case .meal(let m):
                 let kidney = prof.proteinTargetG != nil || prof.conditions.contains(.ckd) || prof.onDialysis
-                if m.foods.isEmpty {
+                if m.named.isEmpty {
                     out.append("好的，记一顿\(m.kind.label)。")
-                    if kidney { out.append("说出吃了什么、吃了多少（比如「两碗米饭、一个鸡蛋」），Pulse 能按份数帮你算蛋白质和钾。") }
+                    if kidney || prof.hasDiabetes {
+                        out.append("说出吃了什么、吃了多少（比如「两碗米饭、一个鸡蛋」），Pulse 能按份数帮你算\(kidney ? "蛋白质和钾" : "碳水")。")
+                    }
                 } else {
-                    out.append("好的，\(m.kind.label)：\(ChatRecord.portions(m.foods))。")
+                    out.append("好的，\(m.kind.label)：\(m.named)。")
                 }
+                if prof.hasDiabetes, let g = m.carbsG { out.append("按份数估算，这顿碳水约 \(Int((g / 5).rounded() * 5)) g。") }
                 let protein = m.foods.reduce(0.0) { sum, f in sum + (DietFoods.proteinFoods.first { $0.name == f }?.proteinG ?? 0) }
                 if kidney, protein > 0 {
                     let today = c.days.first { $0.day == m.at.startOfDay }.flatMap(KidneyDiet.proteinG) ?? 0

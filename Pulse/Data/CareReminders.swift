@@ -57,7 +57,7 @@ enum CareReminders {
             let note = t.note == "在对话里添加" ? "" : t.note
             if let r = t.repeats {
                 // Missed times are not caught up: from the next one on.
-                var next = at < now ? r.first(onOrAfter: now, minutes: timed ? at.minutesOfDay : nil) : at
+                var next = at < now ? r.next(after: (timed ? now : now.startOfDay).addingTimeInterval(-1), at: at) : at
                 var n = 0
                 while n < repeatsAhead, next < now.adding(days: 35) {
                     let fire = timed ? next : next.startOfDay.adding(minutes: hour * 60)
