@@ -127,7 +127,7 @@ struct RHRTrendView: View {
         return Card {
             CardHeader(title: "趋势", subtitle: "点：每日数值 · 线：7 日均值 · 带：日常波动范围", icon: "chart.xyaxis.line", color: Theme.heartData)
             Picker("范围", selection: $range) {
-                Text("30 天").tag(30); Text("90 天").tag(90); Text("180 天").tag(180)
+                Text("30 天").tag(30); Text("90 天").tag(90); Text("180 天").tag(180); Text("1 年").tag(365)
             }
             .pickerStyle(.segmented)
             if pts.isEmpty {

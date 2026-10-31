@@ -1,11 +1,13 @@
 import Foundation
 import SwiftData
 
-/// Sample users for demos and testing. 晓林 is the original, well-adhering persona; the others have
-/// average health and poor adherence, so the plan, review and Health Agent can be seen handling
-/// skipped sessions, irregular sleep, missing data and care plans that are not followed.
+/// Sample users for demos and testing. 晓林 is the original, well-adhering persona; 陈杰, 林悦 and 王建国
+/// have average health and poor adherence, so the plan, review and Health Agent can be seen handling
+/// skipped sessions, irregular sleep, missing data and care plans that are not followed. 孙浩, 周敏,
+/// 赵立强 and 何静 cover a whole year and the care Pulse offers for a diagnosis: a breathing machine,
+/// dialysis, heart failure on a beta blocker, type 1 diabetes.
 enum DemoPersona: String, CaseIterable, Identifiable {
-    case xiaolin, chenjie, linyue, wangjianguo
+    case xiaolin, chenjie, linyue, wangjianguo, sunhao, zhoumin, zhaoliqiang, hejing
     var id: String { rawValue }
     var name: String {
         switch self {
@@ -13,6 +15,10 @@ enum DemoPersona: String, CaseIterable, Identifiable {
         case .chenjie: "陈杰"
         case .linyue: "林悦"
         case .wangjianguo: "王建国"
+        case .sunhao: "孙浩"
+        case .zhoumin: "周敏"
+        case .zhaoliqiang: "赵立强"
+        case .hejing: "何静"
         }
     }
     var summary: String {
@@ -21,8 +27,26 @@ enum DemoPersona: String, CaseIterable, Identifiable {
         case .chenjie: "45 岁 · 久坐、血压偏高、熬夜饮酒，计划常落空"
         case .linyue: "34 岁 · 倒班护士，作息混乱，记录断断续续"
         case .wangjianguo: "57 岁 · 2 型糖尿病与高血压，漏服药、运动少"
+        case .sunhao: "41 岁 · 重度睡眠呼吸暂停，8 个月前开始用呼吸机"
+        case .zhoumin: "52 岁 · 血液透析（周一三五），限水，周末后体重常涨多"
+        case .zhaoliqiang: "63 岁 · 心梗放支架后心衰，吃 β 受体阻滞剂，坚持康复"
+        case .hejing: "29 岁 · 1 型糖尿病，练半马，跑步后夜里偶有低血糖"
         }
     }
+    var spec: PersonaSpec? {
+        switch self {
+        case .xiaolin: nil
+        case .chenjie: .chenjie
+        case .linyue: .linyue
+        case .wangjianguo: .wangjianguo
+        case .sunhao: .sunhao
+        case .zhoumin: .zhoumin
+        case .zhaoliqiang: .zhaoliqiang
+        case .hejing: .hejing
+        }
+    }
+    /// How many days of records the sample user has.
+    var days: Int { spec?.days ?? 120 }   // 晓林: `DemoDataGenerator.days`
 }
 
 extension DemoDataGenerator {
@@ -37,12 +61,7 @@ extension DemoDataGenerator {
     }
 
     static func populate(_ ctx: ModelContext, persona: DemoPersona, now: Date = .app) {
-        switch persona {
-        case .xiaolin: populate(ctx, now: now)
-        case .chenjie: PersonaGenerator.populate(ctx, spec: .chenjie, now: now)
-        case .linyue: PersonaGenerator.populate(ctx, spec: .linyue, now: now)
-        case .wangjianguo: PersonaGenerator.populate(ctx, spec: .wangjianguo, now: now)
-        }
+        if let spec = persona.spec { PersonaGenerator.populate(ctx, spec: spec, now: now) } else { populate(ctx, now: now) }
         DataHub.profile(in: ctx)?.demoPersona = persona.rawValue
         try? ctx.save()
     }
@@ -64,6 +83,8 @@ struct BPSpec {
     var everyDays: Int
     var missedMedBump: Double
     var eveningP: Double
+    /// Change in systolic pressure by day index (diastolic moves 60% as much): treatment taking effect.
+    var shift: (Int) -> Double = { _ in 0 }
 }
 
 struct GlucoseSpec {
@@ -74,13 +95,17 @@ struct GlucoseSpec {
     var nightLowsDaysAgo: [Int]
     var fingerstickEvery: Int
     var fastingMean: Double
+    /// Day-to-day spread of the CGM curve.
+    var variability = 0.6
+    /// How far glucose falls in the hours after an evening workout.
+    var exerciseDrop = 0.0
 }
 
-/// Kidney disease: lab reports and a kidney-diet record for the last weeks.
+/// Kidney disease: a kidney-diet record for the last weeks.
 struct KidneySpec {
-    var labs: [(daysAgo: Int, kind: LabKind, value: Double)]
     var proteinTargetG: Int?
     var potassiumLimit: Bool
+    var phosphorusLimit = false
     /// Chance a day's kidney diet is recorded, and what such a day looks like.
     var loggedP: Double
     var recordDays: Int
@@ -91,8 +116,49 @@ struct KidneySpec {
     var phosphorusFoods: ClosedRange<Int>
 }
 
+/// Home weight on mornings: a slow trend, and short rises from retained fluid.
+struct WeightSpec {
+    var start: Double
+    var end: Double
+    var everyDays: Int
+    var sd: Double
+    /// Gains over three days that go again over the next four (days ago the rise began, kg at the top).
+    var episodes: [(daysAgo: Int, kg: Double)] = []
+}
+
+/// 血液透析 on set weekdays: weight climbs between sessions with what is drunk and falls back to about
+/// the dry weight after each one.
+struct DialysisSpec {
+    var weekdays: [Int]
+    /// Dry weight a year ago and now (the doctor lowered it).
+    var dryStart: Double
+    var dry: Double
+}
+
+/// A breathing machine for sleep apnoea from `startDay` on: used on most nights, which brings oxygen
+/// up, breathing disturbances and snoring down; nights without it are as before.
+struct CPAPSpec {
+    var startDay: Int
+    var useP: Double
+    var hours: Double
+}
+
+/// Something that happened before: an alert that was looked into and resolved, or a symptom.
+struct PastEvent {
+    var daysAgo: Int
+    var kind: EventKind
+    var severity: Severity
+    var title: String
+    var detail: String
+    var guidance: String
+    var value = ""
+    var followUps: [String] = []
+    var resolvedAfterDays: Int? = nil
+}
+
 struct PersonaSpec {
     var nickname: String
+    var days = 120
     var age: Int
     var sex: Sex
     var heightCm: Double
@@ -120,20 +186,26 @@ struct PersonaSpec {
     var alcoholLimit: Double
     var stopBang: [Bool] = []
     var apnea: ApneaStatus = .unknown
+    /// The rest of the profile: fluid limit, treatment, what the doctor cleared.
+    var setUp: (UserProfile) -> Void = { _ in }
 
     // Physiology
     var rhrStart: Double
     var rhrEnd: Double
     var rhrNoise: Double
     var hrvBase: Double
+    var hrvEnd: Double? = nil
     var spo2Mean: Double
     var sleep: (_ i: Int, _ day: Date, _ weekend: Bool, _ rng: inout SeededRandom) -> SleepNight
     var rhrShift: (_ i: Int, _ day: Date) -> Double = { _, _ in 0 }
+    var cpap: CPAPSpec? = nil
+    var vo2Max = 33.0
+    var vo2MaxEnd: Double? = nil
 
     // Behaviour
     var doneP: Double
     var partialP: Double
-    /// How much motivation fades over the 120 days (0 = steady, 1 = gone by the end):
+    /// How much motivation fades over the days (0 = steady, 1 = gone by the end):
     /// completion, check-ins and steps drift down, as they often do after a keen start.
     var fade: Double = 0
     var extraSkip: (_ i: Int, _ weekday: Int) -> Double = { _, _ in 0 }
@@ -148,9 +220,11 @@ struct PersonaSpec {
     var cups: ClosedRange<Int>
     var lateCaffeineP: Double
     var waterMean: Double
+    var waterSD = 300.0
     var lateMealP: Double
     var balancedP: Double
     var stepsMean: Double
+    var stepsEnd: Double? = nil
     var stressMean: Double
     var energyMean: Double
     var snoringP: Double
@@ -160,14 +234,24 @@ struct PersonaSpec {
     var medsTakenP: Double? = nil
     var menstrual = false
     var meals: [(minute: Int, kind: MealKind, carbs: Double, note: String)]
+    /// What the planned cardio sessions are (walks or rides when nil), and the heart rate in them
+    /// against the usual (a beta blocker keeps it down, a fit runner's easy pace is higher).
+    var aerobic: WorkoutType? = nil
+    var workoutHR = 0.0
 
     // Vitals and care
     var bp: BPSpec?
     var glucose: GlucoseSpec?
     var kidney: KidneySpec? = nil
+    var labs: [(daysAgo: Int, kind: LabKind, value: Double)] = []
+    var weight: WeightSpec? = nil
+    var dialysis: DialysisSpec? = nil
     var tasks: [(title: String, area: CareArea, dueInDays: Int, done: Bool, note: String)] = []
+    /// Repeating 照护与随访 tasks, first due `inDays` from now at `minutes` past midnight.
+    var repeating: [(title: String, area: CareArea, repeats: CareRepeat, minutes: Int?, inDays: Int, note: String)] = []
     var reviews: [(weeksAgo: Int, summary: String, keep: String, change: String, focus: String)] = []
     var symptoms: [(daysAgo: Int, title: String, detail: String)] = []
+    var events: [PastEvent] = []
 }
 
 // MARK: - The three low-adherence personas
@@ -252,13 +336,12 @@ extension PersonaSpec {
         bp: BPSpec(sys: 142, dia: 88, sd: 6, everyDays: 3, missedMedBump: 8, eveningP: 0.15),
         glucose: GlucoseSpec(cgmDays: 14, baseline: 7.6, meals: [(7.5, 4.8), (12.2, 5.6), (18.9, 5.2)], dawnRise: 1.4,
                              nightLowsDaysAgo: [3, 8, 12], fingerstickEvery: 4, fastingMean: 8.4),
-        kidney: KidneySpec(
-            labs: [(520, .egfr, 63), (520, .creatinine, 116), (380, .egfr, 62), (380, .uacr, 42), (200, .egfr, 60), (200, .potassium, 4.6),
-                   (200, .hba1c, 7.8), (125, .hba1c, 8.1), (100, .egfr, 58), (100, .uacr, 68), (100, .potassium, 4.9), (100, .hemoglobin, 131),
-                   (12, .egfr, 57), (12, .creatinine, 127), (12, .uacr, 86), (12, .potassium, 5.4), (12, .phosphorus, 1.32),
-                   (12, .hemoglobin, 127), (12, .uricAcid, 452), (12, .hba1c, 7.6)],
-            proteinTargetG: 55, potassiumLimit: true, loggedP: 1.0, recordDays: 21,
-            saltSources: 0...3, proteinPortions: 3...7, potassiumFoods: 0...3, phosphorusFoods: 0...2),
+        kidney: KidneySpec(proteinTargetG: 55, potassiumLimit: true, loggedP: 1.0, recordDays: 21,
+                           saltSources: 0...3, proteinPortions: 3...7, potassiumFoods: 0...3, phosphorusFoods: 0...2),
+        labs: [(520, .egfr, 63), (520, .creatinine, 116), (380, .egfr, 62), (380, .uacr, 42), (200, .egfr, 60), (200, .potassium, 4.6),
+               (200, .hba1c, 7.8), (125, .hba1c, 8.1), (100, .egfr, 58), (100, .uacr, 68), (100, .potassium, 4.9), (100, .hemoglobin, 131),
+               (12, .egfr, 57), (12, .creatinine, 127), (12, .uacr, 86), (12, .potassium, 5.4), (12, .phosphorus, 1.32),
+               (12, .hemoglobin, 127), (12, .uricAcid, 452), (12, .hba1c, 7.6)],
         // The slipped follow-up is one no lab result answers: rechecks are ticked off by the result (化验复查提醒).
         tasks: [("眼底检查", .diabetes, -18, false, "糖尿病每年一次，上次是去年秋天"),
                 ("心内科复诊", .cardio, 10, false, "带上家庭血压记录"),
@@ -266,12 +349,206 @@ extension PersonaSpec {
         symptoms: [(9, "疑似低血糖（出汗、手抖）", "凌晨醒来出汗、手抖，测指尖血糖 3.6 mmol/L，吃了饼干后好转。")])
 }
 
+// MARK: - A year with a diagnosis
+
+extension PersonaSpec {
+    /// The same tests on each of these days: `values[k]` on `daysAgo[k]`.
+    static func labSeries(_ daysAgo: [Int], _ results: [(LabKind, [Double])]) -> [(daysAgo: Int, kind: LabKind, value: Double)] {
+        results.flatMap { kind, values in zip(daysAgo, values).map { (daysAgo: $0, kind: kind, value: $1) } }
+    }
+
+    /// 重度阻塞性睡眠呼吸暂停：前 4 个月没治疗，打鼾、夜间血氧低、白天犯困，血压偏高；8 个月前开始用呼吸机，
+    /// 大多数晚上戴够 4 小时，静息心率、血压和体重慢慢下来，没戴的晚上又回到原样。
+    static let sunhao = PersonaSpec(
+        nickname: "孙浩", days: 365, age: 41, sex: .male, heightCm: 178, weightKg: 89, neckCm: 43, level: .light,
+        conditions: [.sleepApnea, .hypertension],
+        meds: [("缬沙坦", .otherAntihypertensive, "80 mg 每日一次")],
+        modules: [.cardioCare],
+        goals: [.lowerRHR, .energy], goalNote: "确诊重度睡眠呼吸暂停后开始用呼吸机，想看看心率、血压和白天的精神能不能慢慢好起来。",
+        weekdays: [3, 5, 7], sessionMinutes: 40, preferredTime: .evening, weeklyBudget: 180, startTarget: 90,
+        targetRHR: 66, bedtimeTarget: 23 * 60 + 15, wakeTarget: 7 * 60, sleepNeedHours: 7.5,
+        waterTarget: 2000, stepsTarget: 8000, caffeineCutoff: 14, alcoholLimit: 4,
+        apnea: .diagnosed,
+        setUp: { p in p.apneaTreatment = .cpap; p.cpapTargetHours = 4 },
+        rhrStart: 75, rhrEnd: 75, rhrNoise: 2.0, hrvBase: 26, hrvEnd: 35, spo2Mean: 83,
+        sleep: { _, _, weekend, rng in
+            SleepNight(start: Int(rng.normal(weekend ? 0 : -35, 35)), minutes: max(300, min(500, rng.normal(410, 35))))
+        },
+        rhrShift: { i, _ in i < 125 ? 0 : -9 * min(1, Double(i - 125) / 150) },
+        cpap: CPAPSpec(startDay: 125, useP: 0.8, hours: 5.6),
+        vo2Max: 34, vo2MaxEnd: 37,
+        doneP: 0.66, partialP: 0.12, fade: 0.1,
+        extraSkip: { i, _ in i < 125 ? 0.15 : 0 },   // too tired to train before the machine
+        slumpWeeks: [8, 30],
+        wearP: 0.9, gaps: [200...204],
+        checkInP: 0.6, eveningP: 0.25,
+        alcoholWeekdayP: 0.1, alcoholWeekendP: 0.4, alcoholUnits: 1...4,
+        cups: 2...3, lateCaffeineP: 0.35, waterMean: 1600, lateMealP: 0.25, balancedP: 0.4,
+        stepsMean: 6200, stepsEnd: 8200, stressMean: 3.0, energyMean: 2.6,
+        snoringP: 0.85, gaspP: 0.25, sleepyP: 0.6, headacheP: 0.3, medsTakenP: 0.88,
+        meals: [(7 * 60 + 40, .breakfast, 60, "鸡蛋饼、豆浆"), (12 * 60 + 20, .lunch, 95, "公司食堂"), (19 * 60 + 30, .dinner, 85, "米饭、炒菜")],
+        bp: BPSpec(sys: 141, dia: 92, sd: 5, everyDays: 3, missedMedBump: 6, eveningP: 0.15,
+                   shift: { i in i < 125 ? 0 : -12 * min(1, Double(i - 125) / 120) }),
+        // Yearly check-ups on a blood pressure pill; losing weight brings uric acid and HbA1c down.
+        labs: labSeries([330, 40], [(.creatinine, [78, 81]), (.egfr, [104, 101]), (.potassium, [4.2, 4.4]),
+                                    (.uricAcid, [468, 412]), (.hba1c, [5.9, 5.6])]),
+        weight: WeightSpec(start: 96, end: 89, everyDays: 3, sd: 0.4),
+        tasks: [("多导睡眠监测", .sleep, -250, true, "AHI 38 次/小时，重度"),
+                ("睡眠门诊复查：呼吸机压力和面罩", .sleep, 18, false, "带上呼吸机的使用记录"),
+                ("社区医院复查血压", .cardio, 30, false, "带上家庭血压记录")],
+        repeating: [("清洗呼吸机面罩和水盒", .sleep, .weekly([1]), 20 * 60 + 30, 0, ""),
+                    ("更换呼吸机过滤棉", .sleep, .monthly(1), nil, 0, "")],
+        reviews: [(30, "呼吸机戴满了 6 晚，白天不怎么犯困了。", "睡前把面罩放在枕边", "周四加班那次训练", "每晚戴够 4 小时"),
+                  (6, "血压比夏天低了一截。", "周六骑车", "周四的训练挪到周日", "体重再减 2 kg")],
+        events: [PastEvent(daysAgo: 262, kind: .spo2Low, severity: .consult, title: "夜间血氧多次低于 85%",
+                           detail: "连续一周夜间最低血氧在 80–84% 之间，呼吸紊乱次数明显偏多。",
+                           guidance: "这是睡眠呼吸暂停的常见线索，建议到睡眠门诊做睡眠监测。", value: "81%",
+                           followUps: ["睡眠门诊：安排多导睡眠监测", "监测 AHI 38 次/小时，诊断重度阻塞性睡眠呼吸暂停，开始用呼吸机"],
+                           resolvedAfterDays: 22)])
+
+    /// 慢性肾病 5 期，血液透析每周一、三、五：限水 800 ml，周末两天不透析，周一透析前体重常涨到干体重的 4% 以上；
+    /// 血钾、血磷偏高，靠促红素纠正贫血；半年前内瘘狭窄住院一周。
+    static let zhoumin = PersonaSpec(
+        nickname: "周敏", days: 365, age: 52, sex: .female, heightCm: 158, weightKg: 55, neckCm: nil, level: .sedentary,
+        conditions: [.ckd, .hypertension, .anemia],
+        meds: [("硝苯地平控释片", .otherAntihypertensive, "30 mg 每日一次"), ("碳酸司维拉姆", .other, "0.8 g 随餐"),
+               ("重组人促红素", .other, "每次透析时注射"), ("骨化三醇", .other, "0.25 μg 每日一次")],
+        modules: [.cardioCare],
+        goals: [.careAligned, .energy], goalNote: "透析两年多了，想把两次透析之间的体重和血钾管住，体力能好一点。",
+        weekdays: [3, 5, 7], sessionMinutes: 25, preferredTime: .morning, weeklyBudget: 90, startTarget: 50,
+        targetRHR: nil, bedtimeTarget: 22 * 60 + 30, wakeTarget: 6 * 60 + 20, sleepNeedHours: 7,
+        waterTarget: 800, stepsTarget: 5000, caffeineCutoff: 12, alcoholLimit: 0,
+        rhrStart: 80, rhrEnd: 77, rhrNoise: 2.2, hrvBase: 19, hrvEnd: 21, spo2Mean: 90,
+        sleep: { _, day, _, rng in
+            // Up early for the dialysis centre.
+            SleepNight(start: -80 + Int(rng.normal(0, 30)), minutes: max(270, rng.normal([2, 4, 6].contains(day.weekday) ? 360 : 400, 40)))
+        },
+        // Most fluid on board the morning before a session, and most of all after the weekend.
+        rhrShift: { _, day in day.weekday == 2 ? 3 : ([4, 6].contains(day.weekday) ? 1.5 : 0) },
+        vo2Max: 20, vo2MaxEnd: 21.5,
+        doneP: 0.55, partialP: 0.2, fade: 0.2,
+        slumpWeeks: [14, 15, 33],
+        wearP: 0.8, gaps: [150...156],
+        checkInP: 0.55, eveningP: 0.1,
+        alcoholWeekdayP: 0, alcoholWeekendP: 0, alcoholUnits: 1...1,
+        cups: 0...1, lateCaffeineP: 0.05, waterMean: 900, waterSD: 160, lateMealP: 0.1, balancedP: 0.45,
+        stepsMean: 3600, stepsEnd: 4300, stressMean: 2.9, energyMean: 2.4,
+        snoringP: 0.1, gaspP: 0.01, sleepyP: 0.4, headacheP: 0.08, medsTakenP: 0.9,
+        meals: [(7 * 60, .breakfast, 50, "馒头、蛋白"), (12 * 60 + 30, .lunch, 70, "米饭、清炒冬瓜、鸡肉"), (18 * 60, .dinner, 60, "面条、青菜")],
+        workoutHR: -4,
+        bp: BPSpec(sys: 146, dia: 84, sd: 7, everyDays: 1, missedMedBump: 6, eveningP: 0.1),
+        kidney: KidneySpec(proteinTargetG: 60, potassiumLimit: true, phosphorusLimit: true, loggedP: 0.7, recordDays: 60,
+                           saltSources: 0...2, proteinPortions: 4...7, potassiumFoods: 0...2, phosphorusFoods: 0...2),
+        // The dialysis centre draws blood once a month.
+        labs: labSeries([355, 325, 295, 265, 235, 205, 175, 145, 115, 85, 55, 25], [
+            (.hemoglobin, [96, 98, 101, 103, 104, 97, 99, 102, 105, 107, 106, 108]),
+            (.potassium, [5.4, 5.6, 5.2, 5.8, 5.3, 5.1, 5.5, 5.0, 5.3, 5.6, 5.2, 5.7]),
+            (.phosphorus, [2.05, 1.98, 1.92, 1.86, 1.80, 1.95, 1.88, 1.74, 1.70, 1.66, 1.72, 1.64]),
+            (.creatinine, [742, 768, 755, 781, 760, 748, 790, 772, 758, 765, 749, 770])]),
+        dialysis: DialysisSpec(weekdays: [2, 4, 6], dryStart: 55, dry: 54),
+        tasks: [("肾内科门诊：评估干体重", .kidney, 9, false, "带上透析前后的体重记录"),
+                ("内瘘超声复查", .kidney, -160, true, "")],
+        repeating: [("透析", .kidney, .weekly([2, 4, 6]), 7 * 60 + 30, 0, "带上透析记录本"),
+                    ("透析中心月度抽血", .kidney, .monthly(25), nil, 0, "查血钾、血磷、血红蛋白")],
+        reviews: [(20, "周末喝水没控制住，周一透析前涨了 2.6 kg。", "用固定的杯子分好一天的水", "周末出门吃饭", "周末每天喝水不超过 800 ml"),
+                  (4, "体重比上个月控制得好。", "透析后第二天散步 20 分钟", "周六的散步常忘", "少吃咸菜")],
+        events: [PastEvent(daysAgo: 265, kind: .labAbnormal, severity: .consult, title: "血钾 5.8 mmol/L 偏高",
+                           detail: "月度化验血钾 5.8 mmol/L，高于透析中心定的范围。",
+                           guidance: "少吃高钾的食物（香蕉、橙子、土豆、菌菇），按透析中心的建议调整；心慌、手脚发麻请立即就医。", value: "5.8",
+                           followUps: ["透析中心：调整透析液，饮食少吃高钾的", "下个月复查 5.3 mmol/L"], resolvedAfterDays: 30),
+                 PastEvent(daysAgo: 215, kind: .other, severity: .consult, title: "内瘘震颤变弱",
+                           detail: "早上摸内瘘，震颤比平时弱，透析时血流量不够。",
+                           guidance: "内瘘不通畅要当天联系透析中心，别在这只手臂上测血压、提重物。",
+                           followUps: ["当天到透析中心，超声提示内瘘狭窄", "住院做球囊扩张，一周后出院"], resolvedAfterDays: 7)])
+
+    /// 心梗放支架后心功能下降（心衰），吃 β 受体阻滞剂，静息心率被药压在 60 左右、运动心率也不高；限水 1.5 L、
+    /// 每天称体重，坚持心脏康复。两个多月前 3 天涨了 2.4 kg，门诊加了几天利尿剂后回落。
+    static let zhaoliqiang = PersonaSpec(
+        nickname: "赵立强", days: 365, age: 63, sex: .male, heightCm: 172, weightKg: 72.6, neckCm: 40, level: .light,
+        conditions: [.coronaryDisease, .heartFailure, .hypertension],
+        meds: [("美托洛尔缓释片", .betaBlocker, "47.5 mg 每日一次"), ("沙库巴曲缬沙坦", .otherAntihypertensive, "100 mg 每日两次"),
+               ("螺内酯", .other, "20 mg 每日一次"), ("阿司匹林", .other, "100 mg 每日一次"), ("阿托伐他汀", .other, "20 mg 每晚一次")],
+        modules: [.cardioCare],
+        goals: [.careAligned, .fitness], goalNote: "去年心梗放了支架，心功能差了一些。按心脏康复的要求慢慢练，体重每天称。",
+        weekdays: [2, 4, 6, 1], sessionMinutes: 35, preferredTime: .morning, weeklyBudget: 180, startTarget: 90,
+        targetRHR: nil, bedtimeTarget: 22 * 60, wakeTarget: 6 * 60, sleepNeedHours: 7,
+        waterTarget: 1500, stepsTarget: 7000, caffeineCutoff: 12, alcoholLimit: 0,
+        setUp: { p in p.fluidLimit = true; p.clinicianCleared = true; p.exerciseHRCap = 112 },
+        rhrStart: 64, rhrEnd: 58, rhrNoise: 1.6, hrvBase: 21, hrvEnd: 27, spo2Mean: 91,
+        sleep: { _, _, _, rng in SleepNight(start: -110 + Int(rng.normal(0, 25)), minutes: max(320, rng.normal(410, 30))) },
+        vo2Max: 21, vo2MaxEnd: 25,
+        doneP: 0.84, partialP: 0.08, fade: 0.05,
+        slumpWeeks: [42],
+        wearP: 0.95,
+        checkInP: 0.85, eveningP: 0.5,
+        alcoholWeekdayP: 0, alcoholWeekendP: 0, alcoholUnits: 1...1,
+        cups: 0...1, lateCaffeineP: 0, waterMean: 1350, waterSD: 150, lateMealP: 0.05, balancedP: 0.7,
+        stepsMean: 5200, stepsEnd: 7800, stressMean: 2.2, energyMean: 3.1,
+        snoringP: 0.2, gaspP: 0.02, sleepyP: 0.15, headacheP: 0.03, medsTakenP: 0.97,
+        meals: [(6 * 60 + 50, .breakfast, 50, "燕麦粥、鸡蛋"), (11 * 60 + 50, .lunch, 70, "杂粮饭、鱼、青菜"), (17 * 60 + 50, .dinner, 55, "小米粥、豆腐、青菜")],
+        workoutHR: -18,
+        bp: BPSpec(sys: 121, dia: 72, sd: 5, everyDays: 1, missedMedBump: 5, eveningP: 0.3),
+        labs: labSeries([350, 260, 170, 80, 15], [
+            (.egfr, [70, 68, 66, 65, 63]), (.creatinine, [92, 95, 98, 100, 103]),
+            (.potassium, [4.3, 4.7, 4.9, 5.1, 4.8]), (.hemoglobin, [134, 136, 137, 136, 138])]),
+        weight: WeightSpec(start: 75, end: 72.6, everyDays: 1, sd: 0.3, episodes: [(72, 2.4)]),
+        tasks: [("心内科复诊", .cardio, 16, false, "带上体重和血压记录"),
+                ("复查心脏超声", .cardio, 45, false, "看射血分数有没有回升"),
+                ("心脏康复评估（运动试验）", .cardio, -300, true, "医生给的运动心率上限 112")],
+        repeating: [("早上称体重（排尿后、早餐前）", .cardio, .daily, 6 * 60 + 10, 0, "3 天内涨 2 kg 要联系医生")],
+        reviews: [(40, "康复训练一次没落下。", "早上去公园快走", "周日的力量练习有点累", "力量练习减到两组"),
+                  (9, "前些天体重涨了一回，调了药后好了。", "每天称体重", "包饺子那天吃得咸", "少吃咸的")],
+        events: [PastEvent(daysAgo: 69, kind: .weightGain, severity: .consult, title: "3 天内体重增加 2.4 kg",
+                           detail: "三天里体重涨了 2.4 kg，脚踝有点肿，夜里平躺有点憋气。",
+                           guidance: "联系心内科医生；不要自己加减利尿剂。休息时也气短、躺下更喘，请立即就医。", value: "+2.4 kg",
+                           followUps: ["心内科门诊：加用呋塞米 3 天", "三天后体重回落，脚踝不肿了"], resolvedAfterDays: 5)])
+
+    /// 1 型糖尿病 12 年，用胰岛素笔，上个月开始戴 CGM；在练半程马拉松，傍晚跑完后夜里偶尔低血糖。坚持得好，
+    /// 糖化血红蛋白一年里从 7.6% 降到 6.8%。
+    static let hejing = PersonaSpec(
+        nickname: "何静", days: 365, age: 29, sex: .female, heightCm: 165, weightKg: 56, neckCm: nil, level: .active,
+        conditions: [.diabetesT1],
+        meds: [("门冬胰岛素", .insulin, "三餐前，按碳水计算剂量"), ("甘精胰岛素", .insulin, "12 U 每晚 22:00")],
+        modules: [.diabetesCare],
+        goals: [.fitness, .careAligned], goalNote: "1 型糖尿病 12 年。明年 4 月想跑完第一个半程马拉松，跑步时血糖别掉太低。",
+        weekdays: [3, 5, 7, 1], sessionMinutes: 45, preferredTime: .evening, weeklyBudget: 260, startTarget: 150,
+        targetRHR: nil, bedtimeTarget: 23 * 60, wakeTarget: 7 * 60, sleepNeedHours: 7.5,
+        waterTarget: 2000, stepsTarget: 9000, caffeineCutoff: 14, alcoholLimit: 3,
+        rhrStart: 60, rhrEnd: 55, rhrNoise: 1.8, hrvBase: 52, hrvEnd: 60, spo2Mean: 93,
+        sleep: { _, _, weekend, rng in
+            SleepNight(start: Int(rng.normal(weekend ? 20 : -40, 30)), minutes: max(330, min(510, rng.normal(445, 30))))
+        },
+        vo2Max: 41, vo2MaxEnd: 45,
+        doneP: 0.8, partialP: 0.08, fade: 0.1,
+        slumpWeeks: [20],
+        wearP: 0.95,
+        checkInP: 0.7, eveningP: 0.3,
+        alcoholWeekdayP: 0.03, alcoholWeekendP: 0.15, alcoholUnits: 1...2,
+        cups: 1...2, lateCaffeineP: 0.15, waterMean: 1900, lateMealP: 0.15, balancedP: 0.65,
+        stepsMean: 9500, stepsEnd: 10500, stressMean: 2.6, energyMean: 3.4,
+        snoringP: 0.03, gaspP: 0, sleepyP: 0.12, headacheP: 0.06, medsTakenP: 0.98, menstrual: true,
+        meals: [(7 * 60 + 30, .breakfast, 45, "全麦面包、鸡蛋、牛奶"), (12 * 60 + 15, .lunch, 70, "米饭、鸡腿、青菜"), (18 * 60, .dinner, 60, "荞麦面、牛肉")],
+        aerobic: .run, workoutHR: 14,
+        bp: BPSpec(sys: 112, dia: 70, sd: 4, everyDays: 30, missedMedBump: 0, eveningP: 0),
+        glucose: GlucoseSpec(cgmDays: 30, baseline: 6.6, meals: [(7.6, 4.0), (12.4, 4.4), (18.1, 4.2)], dawnRise: 1.2,
+                             nightLowsDaysAgo: [2, 5, 9, 16, 23, 27], fingerstickEvery: 1, fastingMean: 7.4,
+                             variability: 1.1, exerciseDrop: 1.8),
+        labs: labSeries([350, 260, 170, 80, 10], [(.hba1c, [7.6, 7.3, 7.1, 7.0, 6.8])]) + [(170, .egfr, 112), (170, .uacr, 12)],
+        tasks: [("内分泌科复诊", .diabetes, 21, false, "带上 CGM 报告，问跑步前怎么减胰岛素"),
+                ("眼底检查", .diabetes, -95, true, "")],
+        repeating: [("更换 CGM 探头", .diabetes, .everyDays(14), 21 * 60, 12, "")],
+        reviews: [(12, "跑量加到每周 25 km，长跑后半夜低过一次。", "长跑前少打 2 U 速效胰岛素", "跑完不加餐", "长跑后睡前测一次血糖"),
+                  (2, "这两周夜里低血糖多了。", "跑前测血糖", "晚上跑完直接睡", "跑完睡前加一份 15 g 碳水")],
+        events: [PastEvent(daysAgo: 9, kind: .glucoseLow, severity: .consult, title: "夜间低血糖",
+                           detail: "傍晚跑了 10 km，凌晨 2 点多 CGM 报警，最低 3.3 mmol/L，出汗、心慌。",
+                           guidance: "先吃 15 g 快速碳水，15 分钟后复测；跑步当天睡前测血糖，和医生商量怎么调胰岛素。", value: "3.3",
+                           followUps: ["喝了半瓶果汁，20 分钟后回到 5.2"], resolvedAfterDays: 1)])
+}
+
 // MARK: - Generator
 
 @MainActor
 enum PersonaGenerator {
-    static let days = 120
-
     /// `n` different items from `list`, in list order.
     static func pick(_ list: [String], _ n: Int, _ rng: inout SeededRandom) -> [String] {
         var chosen = Set<Int>()
@@ -286,6 +563,7 @@ enum PersonaGenerator {
 
     static func populate(_ ctx: ModelContext, spec s: PersonaSpec, now: Date = .app) {
         DataHub.deleteAll(in: ctx)
+        let days = s.days
         // Deterministic per persona (Swift's String hashing is randomised per run, so derive the seed by hand).
         var rng = SeededRandom(seed: UInt64(s.nickname.unicodeScalars.reduce(0) { $0 &* 31 &+ UInt64($1.value) }))
         // Meals logged before the last four days draw from their own sequence, so the rest of the history stays as it was.
@@ -330,6 +608,13 @@ enum PersonaGenerator {
         p.stopBangAnswers = s.stopBang
         p.apneaStatus = s.apnea
         if s.modules.contains(.cardioCare) { p.bpTargetSys = 130; p.bpTargetDia = 80 }
+        if let dz = s.dialysis {
+            p.dialysis = true
+            p.dialysisWeekdays = dz.weekdays
+            p.dryWeightKg = dz.dry
+            p.fluidLimit = true
+        }
+        s.setUp(p)
         ctx.insert(p)
         for m in s.meds { ctx.insert(MedicationEntry(name: m.name, category: m.category, dose: m.dose, startDate: start.adding(days: -400))) }
 
@@ -381,12 +666,14 @@ enum PersonaGenerator {
         // Daily physiology and behaviour
         var prevAlcohol = 0.0, prevStress = 0, prevHard = false
         var takenByDay: [Date: Bool] = [:]
+        var waterByDay: [Date: Int] = [:]
         for i in 0...days {
             let day = start.adding(days: i)
             let isToday = day == today
             let progress = Double(i) / Double(days)
             let motivation = Self.motivation(s.fade, progress)
             let weekend = [1, 7].contains(day.weekday)
+            let steps = s.stepsMean + ((s.stepsEnd ?? s.stepsMean) - s.stepsMean) * progress
             if inGap(i) && !isToday {
                 prevAlcohol = 0; prevHard = false
                 continue
@@ -415,11 +702,22 @@ enum PersonaGenerator {
             }
             if sleepMin < 330 { tags.insert(.poorSleep) }
 
+            // The breathing machine, once prescribed: most nights on it, for a few hours.
+            var treated = false
+            if let c = s.cpap, i >= c.startDay {
+                treated = rng.chance(c.useP)
+                r.cpapHours = treated ? min(sleepMin / 60, max(4, rng.normal(c.hours, 0.9))).rounded(to: 0.1)
+                    : (rng.chance(0.4) ? rng.normal(1.6, 0.6).rounded(to: 0.1) : 0)
+            }
+            // Apnoea left untreated: oxygen dips deeper and breathing stops more often.
+            let apnea = s.cpap == nil ? 1.0 : (treated ? 0.5 : 2.8)
+
             // Resting HR & HRV
             var rhr = s.rhrStart + (s.rhrEnd - s.rhrStart) * progress + rng.normal(0, s.rhrNoise)
             rhr += 1.5 * prevAlcohol + (sleepMin < 330 ? 2.5 : 0) + (prevStress >= 4 ? 1.5 : 0) + (prevHard ? 1.5 : 0)
-            rhr += s.rhrShift(i, day) + (menstrualDay ? 1.5 : 0)
-            var lnHRV = log(s.hrvBase) + rng.normal(0, 0.13) - 0.07 * prevAlcohol - (sleepMin < 330 ? 0.1 : 0) - (night.nightShift ? 0.15 : 0)
+            rhr += s.rhrShift(i, day) + (menstrualDay ? 1.5 : 0) + (s.cpap.map { i >= $0.startDay && !treated } == true ? 2.5 : 0)
+            var lnHRV = log(s.hrvBase + ((s.hrvEnd ?? s.hrvBase) - s.hrvBase) * progress) + rng.normal(0, 0.13)
+                - 0.07 * prevAlcohol - (sleepMin < 330 ? 0.1 : 0) - (night.nightShift ? 0.15 : 0)
             if isToday { lnHRV -= 0.02 }
             if wear {
                 r.restingHR = rhr.rounded()
@@ -427,16 +725,16 @@ enum PersonaGenerator {
                 r.hrv = exp(lnHRV).rounded()
                 r.respiratoryRate = rng.normal(15.6, 0.7).rounded(to: 0.1)
                 r.spo2Avg = rng.normal(94.6, 0.9).rounded()
-                r.spo2Min = (s.spo2Mean - (prevAlcohol > 0 ? 2.2 : 0) + rng.normal(0, 1.6)).rounded()
-                r.breathingDisturbances = max(1, rng.normal(prevAlcohol > 0 ? 12 : 8, 2.4)).rounded(to: 0.1)
-                if i % 10 == 0 { r.vo2Max = (33 + rng.normal(0, 0.4)).rounded(to: 0.1) }
+                r.spo2Min = (s.spo2Mean - (prevAlcohol > 0 ? 2.2 : 0) + rng.normal(0, 1.6) + (treated ? 7 : 0)).rounded()
+                r.breathingDisturbances = (max(1, rng.normal(prevAlcohol > 0 ? 12 : 8, 2.4)) * apnea).rounded(to: 0.1)
+                if i % 10 == 0 { r.vo2Max = (s.vo2Max + ((s.vo2MaxEnd ?? s.vo2Max) - s.vo2Max) * progress + rng.normal(0, 0.4)).rounded(to: 0.1) }
             }
 
             // Self-reported cues
-            r.snoring = rng.chance(min(0.95, s.snoringP + (prevAlcohol > 0 ? 0.25 : 0)))
-            r.gasping = rng.chance(s.gaspP)
-            r.daytimeSleepy = rng.chance(s.sleepyP)
-            r.morningHeadache = rng.chance(s.headacheP)
+            r.snoring = rng.chance(treated ? 0.06 : min(0.95, s.snoringP + (prevAlcohol > 0 ? 0.25 : 0)))
+            r.gasping = rng.chance(treated ? 0 : s.gaspP)
+            r.daytimeSleepy = rng.chance(treated ? s.sleepyP / 3 : s.sleepyP)
+            r.morningHeadache = rng.chance(treated ? 0.01 : s.headacheP)
 
             // Morning check-in (often skipped)
             var stress = Int(rng.normal(s.stressMean + (day.weekday == 2 ? 0.4 : 0), 0.9).rounded())
@@ -445,6 +743,7 @@ enum PersonaGenerator {
                 r.checkInAt = day.adding(minutes: s.wakeTarget + rng.int(10...70))
                 var energy = s.energyMean - 0.5 * s.fade * progress + rng.normal(0, 0.7) - (sleepMin < 330 ? 0.7 : 0) - (prevAlcohol > 2 ? 0.5 : 0)
                 if night.nightShift { energy -= 0.6 }
+                if treated { energy += 0.6 }
                 r.energy = max(1, min(5, Int(energy.rounded())))
                 r.sleepFeel = max(1, min(5, Int((sleepMin / 100 + rng.normal(0, 0.6)).rounded())))
                 r.soreness = prevHard ? rng.int(1...2) : (rng.chance(0.15) ? 1 : 0)
@@ -464,16 +763,16 @@ enum PersonaGenerator {
                     r.lastCaffeineHour = rng.chance(s.lateCaffeineP) ? rng.int(s.caffeineCutoff...(s.shiftWork ? 22 : 18)) : rng.int(8...(s.caffeineCutoff - 1))
                     if (r.lastCaffeineHour ?? 0) >= s.caffeineCutoff { tags.insert(.lateCaffeine) }
                 }
-                r.waterMl = max(400, Int(rng.normal(s.waterMean, 300))).roundedTo5()
+                r.waterMl = max(400, Int(rng.normal(s.waterMean, s.waterSD))).roundedTo5()
                 r.lateMeal = rng.chance(s.lateMealP)
                 if r.lateMeal { tags.insert(.lateMeal) }
                 r.dietQuality = rng.chance(s.balancedP) ? 3 : (rng.chance(0.55) ? 2 : 1)
-                r.steps = max(1200, Int(rng.normal(s.stepsMean * (0.9 + 0.15 * motivation), 1700)))
+                r.steps = max(1200, Int(rng.normal(steps * (0.9 + 0.15 * motivation), 1700)))
             } else {
                 r.caffeineCups = s.cups.lowerBound > 0 ? 1 : 0
                 r.lastCaffeineHour = r.caffeineCups > 0 ? 9 : nil
                 r.waterMl = 400
-                r.steps = Int(Double(max(1200, Int(rng.normal(s.stepsMean, 1200)))) * min(1, Double(now.hour) / 21))
+                r.steps = Int(Double(max(1200, Int(rng.normal(steps, 1200)))) * min(1, Double(now.hour) / 21))
             }
             if let p = s.medsTakenP, !isToday {
                 let taken = rng.chance(p)
@@ -482,17 +781,20 @@ enum PersonaGenerator {
             }
             r.tags = tags
             r.manualFields = []
+            waterByDay[day] = r.waterMl
 
             // Workouts from completed plan items, plus the occasional unplanned walk
             var dayMinutes = 0.0, dayHard = false
             for (item, minutes) in completedByDay[day] ?? [] {
-                let type: WorkoutType = item.kind == .strength ? .strength : (item.kind == .quality ? .run : (rng.chance(0.75) ? .walk : .cycle))
+                let type: WorkoutType = item.kind == .strength ? .strength
+                    : (s.aerobic ?? (item.kind == .quality ? .run : (rng.chance(0.75) ? .walk : .cycle)))
                 let s0 = ActivitySession(start: day.adding(minutes: 19 * 60 + rng.int(0...90)), type: type, minutes: minutes, source: .demo)
                 s0.planItemID = item.id
-                s0.rpe = type == .strength ? 6 : (type == .run ? 7 : 4)
-                s0.avgHR = (type == .walk ? 116 : (type == .cycle ? 132 : 128) + rng.normal(0, 4)).rounded()
+                s0.rpe = type == .strength ? 6 : (type == .run ? (item.kind == .quality ? 7 : 4) : 4)
+                s0.avgHR = ((type == .walk ? 116 : (type == .cycle ? 132 : 128) + rng.normal(0, 4)) + s.workoutHR).rounded()
                 if type == .walk { s0.distanceKm = (minutes / 12).rounded(to: 0.1) }
                 if type == .cycle { s0.distanceKm = (minutes / 3.2).rounded(to: 0.1) }
+                if type == .run { s0.distanceKm = (minutes / 6.2).rounded(to: 0.1) }
                 s0.feeling = rng.chance(0.4) ? .hard : (rng.chance(0.6) ? .ok : .good)
                 if s0.isHard { dayHard = true }
                 dayMinutes += minutes
@@ -565,8 +867,10 @@ enum PersonaGenerator {
                 guard !inGap(days - i) else { continue }
                 let missed = takenByDay[d] == false
                 let t = d.adding(minutes: 7 * 60 + rng.int(0...60))
+                let shift = bp.shift(days - i)
                 if t <= now {
-                    let sys = rng.normal(bp.sys + (missed ? bp.missedMedBump : 0), bp.sd), dia = rng.normal(bp.dia + (missed ? bp.missedMedBump / 2 : 0), bp.sd * 0.7)
+                    let sys = rng.normal(bp.sys + shift + (missed ? bp.missedMedBump : 0), bp.sd)
+                    let dia = rng.normal(bp.dia + shift * 0.6 + (missed ? bp.missedMedBump / 2 : 0), bp.sd * 0.7)
                     let v = VitalReading(time: t, kind: .bloodPressure, value: sys.rounded(), value2: dia.rounded(), context: .morning)
                     v.pulse = rng.normal(s.rhrStart + 4, 3).rounded()
                     if s.medsTakenP != nil { v.medsTaken = !missed }
@@ -574,7 +878,8 @@ enum PersonaGenerator {
                 }
                 if i >= 1 && rng.chance(bp.eveningP) {
                     let v = VitalReading(time: d.adding(minutes: 22 * 60 + rng.int(0...50)), kind: .bloodPressure,
-                                         value: rng.normal(bp.sys - 6, bp.sd).rounded(), value2: rng.normal(bp.dia - 4, bp.sd * 0.7).rounded(), context: .bedtime)
+                                         value: rng.normal(bp.sys + shift - 6, bp.sd).rounded(), value2: rng.normal(bp.dia + shift * 0.6 - 4, bp.sd * 0.7).rounded(),
+                                         context: .bedtime)
                     ctx.insert(v)
                 }
             }
@@ -596,7 +901,7 @@ enum PersonaGenerator {
             for k in 0..<((g.cgmDays + 1) * 96) {
                 let t = cgmStart.addingTimeInterval(Double(k) * 900)
                 guard t <= now else { break }
-                if !t.isSameDay(lastDay) { dayOffset = rng.normal(0, 0.6); lastDay = t }
+                if !t.isSameDay(lastDay) { dayOffset = rng.normal(0, g.variability); lastDay = t }
                 let h = Double(t.minutesOfDay) / 60
                 var v = g.baseline + dayOffset + rng.normal(0, 0.25)
                 if h >= 4 && h < 8 { v += g.dawnRise * min(1, (h - 4) / 3) }
@@ -604,10 +909,51 @@ enum PersonaGenerator {
                     let dt = h - meal.hour
                     if dt > 0 && dt < 4 { v += meal.peak * (dt / 1.0) * exp(1 - dt / 1.0) }
                 }
+                // Muscles keep taking up sugar for hours after an evening workout.
+                if g.exerciseDrop > 0, completedByDay[t.startOfDay] != nil, h >= 20.5 { v -= g.exerciseDrop * min(1, (h - 20.5) / 1.5) }
                 if lowDays.contains(t.startOfDay), h >= 1.5 && h < 4 {
                     v = min(v, 3.3 + abs(h - 2.6) * 0.9 + rng.normal(0, 0.1))
                 }
                 ctx.insert(VitalReading(time: t, kind: .glucose, value: max(2.9, v).rounded(to: 0.1), context: .random, source: .demo))
+            }
+        }
+
+        // Home weight in the morning
+        if let w = s.weight {
+            for i in stride(from: 0, through: days, by: w.everyDays) where !inGap(i) {
+                let t = start.adding(days: i).adding(minutes: s.wakeTarget + 10 + rng.int(0...25))
+                guard t <= now else { continue }
+                var kg = w.start + (w.end - w.start) * Double(i) / Double(days) + rng.normal(0, w.sd)
+                for e in w.episodes {
+                    let since = e.daysAgo - (days - i)
+                    if (0...3).contains(since) { kg += e.kg * Double(since) / 3 } else if (4...7).contains(since) { kg += e.kg * Double(7 - since) / 4 }
+                }
+                ctx.insert(VitalReading(time: t, kind: .weight, value: kg.rounded(to: 0.1), context: .morning))
+            }
+        }
+
+        // Dialysis: the morning weight at home, and the weight after each session
+        if let dz = s.dialysis {
+            var fluid = 0.4
+            for i in 0...days where !inGap(i) {
+                let day = start.adding(days: i)
+                let dry = dz.dryStart + (dz.dry - dz.dryStart) * Double(i) / Double(days)
+                let session = dz.weekdays.contains(day.weekday)
+                let morning = day.adding(minutes: 6 * 60 + 30 + rng.int(0...20))
+                if morning <= now, session || rng.chance(0.8) {
+                    ctx.insert(VitalReading(time: morning, kind: .weight, value: (dry + fluid + rng.normal(0, 0.1)).rounded(to: 0.1), context: .morning))
+                }
+                if session {
+                    fluid = max(0, rng.normal(0.3, 0.15))
+                    let after = day.adding(minutes: 12 * 60 + rng.int(0...30))
+                    if after <= now {
+                        let v = VitalReading(time: after, kind: .weight, value: (dry + fluid).rounded(to: 0.1), context: .random)
+                        v.note = "透析后"
+                        ctx.insert(v)
+                    }
+                }
+                // What is drunk and eaten stays until the next session: more water, more weight.
+                fluid += max(0.2, 0.6 + Double((waterByDay[day] ?? 850) - 850) / 1000 + rng.normal(0, 0.12))
             }
         }
 
@@ -617,12 +963,25 @@ enum PersonaGenerator {
             if task.done { t.done = true; t.doneAt = today.adding(days: task.dueInDays) }
             ctx.insert(t)
         }
+        for task in s.repeating {
+            let due = task.repeats.first(onOrAfter: now.adding(days: task.inDays), minutes: task.minutes)
+            ctx.insert(CareTask(title: task.title, area: task.area, due: due, note: task.note, repeats: task.repeats))
+        }
         for sym in s.symptoms {
             let date = today.adding(days: -sym.daysAgo).adding(minutes: 3 * 60 + 20)
             let e = HealthEvent(kind: .symptom, severity: .consult, title: sym.title, detail: sym.detail,
                                 guidance: "按低血糖处理并复测；近期多次出现时，请尽快联系医生，评估降糖药物与运动安排。",
                                 relatedDate: date, dedupeKey: "demo-symptom-\(sym.daysAgo)")
             e.createdAt = date
+            ctx.insert(e)
+        }
+        for ev in s.events {
+            let date = today.adding(days: -ev.daysAgo).adding(minutes: s.wakeTarget + 20)
+            let e = HealthEvent(kind: ev.kind, severity: ev.severity, title: ev.title, detail: ev.detail, guidance: ev.guidance,
+                                relatedDate: date, valueText: ev.value, dedupeKey: "demo-\(ev.kind.rawValue)-\(ev.daysAgo)")
+            e.createdAt = date
+            e.followUpLog = ev.followUps
+            if let after = ev.resolvedAfterDays { e.status = .resolved; e.resolvedAt = date.adding(days: after) }
             ctx.insert(e)
         }
         for rv in s.reviews {
@@ -651,9 +1010,10 @@ enum PersonaGenerator {
             p.nutrientTracking = true
             p.proteinTargetG = k.proteinTargetG
             p.potassiumLimit = k.potassiumLimit
-            for l in k.labs where l.daysAgo >= 0 {
-                ctx.insert(LabResult(date: today.adding(days: -l.daysAgo).adding(minutes: 8 * 60), kind: l.kind, value: l.value))
-            }
+            p.phosphorusLimit = k.phosphorusLimit
+        }
+        for l in s.labs where l.daysAgo >= 0 {
+            ctx.insert(LabResult(date: today.adding(days: -l.daysAgo).adding(minutes: 8 * 60), kind: l.kind, value: l.value))
         }
         try? ctx.save()
         DataHub.updateBaselineIfNeeded(in: ctx)

@@ -143,7 +143,7 @@ struct ProfileView: View {
                             }
                         }
                     } header: { Text("示例用户") } footer: {
-                        Text(AgentNameSettings.shared.phrase("每位示例用户包含 120 天的模拟记录。陈杰、林悦、王建国的健康情况一般、计划遵从性较差，可用来查看 Pulse 和", "如何应对。载入会替换当前所有记录。"))
+                        Text(AgentNameSettings.shared.phrase("晓林、陈杰、林悦、王建国有 120 天的模拟记录；孙浩、周敏、赵立强、何静有一整年，各有一种需要长期照护的情况，适合看长期变化。陈杰、林悦、王建国的健康情况一般、计划遵从性较差，可用来查看 Pulse 和", "如何应对。载入会替换当前所有记录。"))
                     }
                     Section {
                         Disclaimer().listRowBackground(Color.clear)

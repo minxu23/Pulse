@@ -61,7 +61,12 @@ read_key_file() {
 }
 
 persona_name() {
-  case "$1" in chenjie) echo "陈杰" ;; linyue) echo "林悦" ;; wangjianguo) echo "王建国" ;; *) echo "晓林" ;; esac
+  case "$1" in chenjie) echo "陈杰" ;; linyue) echo "林悦" ;; wangjianguo) echo "王建国" ;; sunhao) echo "孙浩" ;;
+    zhoumin) echo "周敏" ;; zhaoliqiang) echo "赵立强" ;; hejing) echo "何静" ;; *) echo "晓林" ;; esac
+}
+
+persona_days() {
+  case "$1" in sunhao|zhoumin|zhaoliqiang|hejing) echo "一整年" ;; *) echo "120 天" ;; esac
 }
 
 load_cloud_keys() {
@@ -86,18 +91,25 @@ open_simulator_window() {
   fi
 }
 
-# Sample user for a fresh demo: PULSE_PERSONA=xiaolin|chenjie|linyue|wangjianguo, or pick interactively.
+# Sample user for a fresh demo: PULSE_PERSONA=xiaolin|chenjie|linyue|wangjianguo|sunhao|zhoumin|zhaoliqiang|hejing,
+# or pick interactively.
 choose_persona() {
   if [ -n "${PULSE_PERSONA:-}" ]; then echo "$PULSE_PERSONA"; return; fi
   printf "\n选择演示用户（10 秒内不选则使用 1）：\n" >&2
   printf "  1) 晓林    39 岁 · 坚持得不错，静息心率明显下降\n" >&2
   printf "  2) 陈杰    45 岁 · 久坐、血压偏高、熬夜饮酒，计划常落空\n" >&2
   printf "  3) 林悦    34 岁 · 倒班护士，作息混乱，记录断断续续\n" >&2
-  printf "  4) 王建国  57 岁 · 2 型糖尿病与高血压，漏服药、运动少\n请输入 1–4：" >&2
+  printf "  4) 王建国  57 岁 · 2 型糖尿病与高血压，漏服药、运动少\n" >&2
+  printf "  以下各有一整年的记录：\n" >&2
+  printf "  5) 孙浩    41 岁 · 重度睡眠呼吸暂停，8 个月前开始用呼吸机\n" >&2
+  printf "  6) 周敏    52 岁 · 血液透析（周一三五），限水，周末后体重常涨多\n" >&2
+  printf "  7) 赵立强  63 岁 · 心梗放支架后心衰，吃 β 受体阻滞剂，坚持康复\n" >&2
+  printf "  8) 何静    29 岁 · 1 型糖尿病，练半马，跑步后夜里偶有低血糖\n请输入 1–8：" >&2
   local c=""
   read -t 10 -n 1 c </dev/tty 2>/dev/null || true
   printf "\n" >&2
-  case "$c" in 2) echo chenjie ;; 3) echo linyue ;; 4) echo wangjianguo ;; *) echo xiaolin ;; esac
+  case "$c" in 2) echo chenjie ;; 3) echo linyue ;; 4) echo wangjianguo ;; 5) echo sunhao ;; 6) echo zhoumin ;;
+    7) echo zhaoliqiang ;; 8) echo hejing ;; *) echo xiaolin ;; esac
 }
 
 booted_iphones() {
@@ -135,7 +147,7 @@ run_demo() {
     local persona
     persona=$(choose_persona)
     args+=(-PulseReset -PulsePersona "$persona")
-    say "正在安装并打开 Pulse（载入示例用户「$(persona_name "$persona")」的 120 天数据）…"
+    say "正在安装并打开 Pulse（载入示例用户「$(persona_name "$persona")」的$(persona_days "$persona")数据）…"
   else
     say "正在安装并打开 Pulse（保留上次的数据）…"
   fi

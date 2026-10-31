@@ -857,6 +857,94 @@ struct DemoPersonaTests {
         #expect(tasks.contains { !$0.done && ($0.due ?? .distantFuture) < today })
         #expect(HealthAgent.reply(to: "我的血糖控制得怎么样？", context: c).text.contains("低于"))
     }
+
+    /// 孙浩、周敏、赵立强、何静 cover a whole year.
+    @Test(arguments: [DemoPersona.sunhao, .zhoumin, .zhaoliqiang, .hejing])
+    func yearLongPersonas(_ persona: DemoPersona) throws {
+        let clock = ContinuousClock.now
+        let (c, ctx, container) = try load(persona)
+        _ = container
+        let p = DataHub.profile(in: ctx)!
+        let first = try #require(c.days.map(\.day).min())
+        let vitals = (try? ctx.fetch(FetchDescriptor<VitalReading>())) ?? []
+        let labs = (try? ctx.fetch(FetchDescriptor<LabResult>())) ?? []
+        let events = (try? ctx.fetch(FetchDescriptor<HealthEvent>())) ?? []
+        let tasks = (try? ctx.fetch(FetchDescriptor<CareTask>())) ?? []
+        let plan = c.adherence("plan")
+        print("[\(persona.name)] \(c.days.count) 天 · 生成 \(ContinuousClock.now - clock) · 读数 \(vitals.count) · 化验 \(labs.count) · 事件 \(events.map { "\($0.title)（\($0.status.label)）" }.joined(separator: "、")) · 计划完成 \(Int((plan?.rate ?? 0) * 100))% · 静息心率 \(c.trend.avg28?.noDecimal ?? "-")（基线 \(c.trend.baseline?.noDecimal ?? "-")）· 血压 \(Int(c.bp.avgSys ?? 0))/\(Int(c.bp.avgDia ?? 0)) · 结论：\(HealthAgent.assess(c).headline)")
+        print("[\(persona.name)] 维度：\(c.progress.dimensions.map { "\($0.name)\($0.status.label) \($0.from ?? "")→\($0.to ?? "")" }.joined(separator: "；"))")
+        #expect(p.nickname == persona.name && p.demoPersona == persona.rawValue)
+        #expect(persona.days == 365)
+        #expect(first <= today.startOfDay.adding(days: -360))
+        #expect(c.days.count > 340)
+        #expect(!labs.isEmpty && !events.isEmpty)
+        #expect(tasks.contains { $0.repeats != nil && ($0.due ?? .distantPast) >= today.startOfDay })
+    }
+
+    @Test func sunhaoSleepsBetterOnTheMachine() throws {
+        let (c, ctx, container) = try load(.sunhao)
+        _ = container
+        let p = DataHub.profile(in: ctx)!
+        #expect(p.apneaStatus == .diagnosed && p.apneaTreatment == .cpap)
+        let recent = c.days.filter { $0.day >= today.startOfDay.adding(days: -30) }
+        #expect(recent.filter { ($0.cpapHours ?? 0) >= 4 }.count >= 18)
+        // The year starts untreated: oxygen dips deeper, the heart and blood pressure higher.
+        #expect(c.dimension("rhr")?.status == .improved)
+        let early = c.days.filter { $0.day < today.startOfDay.adding(days: -260) }
+        #expect((Stats.mean(early.compactMap(\.spo2Min)) ?? 99) < (Stats.mean(recent.compactMap(\.spo2Min)) ?? 0) - 4)
+        let bp = c.vitals.filter { $0.kind == .bloodPressure }
+        let before = Stats.mean(bp.filter { $0.time < today.adding(days: -260) }.map(\.value)) ?? 0
+        let now = Stats.mean(bp.filter { $0.time > today.adding(days: -60) }.map(\.value)) ?? 999
+        #expect(before - now >= 8)
+    }
+
+    @Test func zhouminWeighsInAroundDialysis() throws {
+        let (c, ctx, container) = try load(.zhoumin)
+        _ = container
+        #expect(c.profile.onHemodialysis && c.profile.fluidLimited && c.profile.dryWeightKg == 54)
+        #expect(c.profile.dialysisWeekdays == [2, 4, 6])
+        // No training on a dialysis day.
+        #expect(!c.plan.contains { $0.kind.isTraining && c.profile.dialysisWeekdays.contains($0.day.weekday) })
+        let weights = c.vitals.filter { $0.kind == .weight }
+        #expect(weights.count > 300)
+        // Mondays carry the weekend: about 4% of the dry weight before the session, now and then more.
+        let mondays = weights.filter { $0.time.weekday == 2 && $0.context == .morning }.map { $0.value - 54 }
+        let midweek = weights.filter { [4, 6].contains($0.time.weekday) && $0.context == .morning }.map { $0.value - 54 }
+        #expect((Stats.mean(mondays) ?? 0) > (Stats.mean(midweek) ?? 9) + 0.4)
+        #expect(mondays.contains { $0 >= 54 * Dialysis.gainPercent / 100 })
+        let labs = (try? ctx.fetch(FetchDescriptor<LabResult>())) ?? []
+        #expect(labs.filter { $0.kind == .potassium }.count == 12)
+        let tasks = (try? ctx.fetch(FetchDescriptor<CareTask>())) ?? []
+        #expect(tasks.contains { $0.title == "透析" && $0.repeats == .weekly([2, 4, 6]) })
+    }
+
+    @Test func zhaoliqiangKeepsUpRehabOnABetaBlocker() throws {
+        let (c, ctx, container) = try load(.zhaoliqiang)
+        _ = container
+        #expect(c.profile.onRateLoweringMeds() && c.profile.fluidLimited && c.profile.watchesWeight)
+        #expect((c.adherence("plan")?.rate ?? 0) >= 0.7)
+        #expect((c.trend.avg28 ?? 99) < 62)
+        // A rise in weight two months ago was looked into; nothing is open about it now.
+        let events = (try? ctx.fetch(FetchDescriptor<HealthEvent>())) ?? []
+        #expect(events.contains { $0.kind == .weightGain && $0.status == .resolved && !$0.followUpLog.isEmpty })
+        #expect(!events.contains { $0.kind == .weightGain && $0.status.isActive })
+        let weights = c.vitals.filter { $0.kind == .weight }.sorted { $0.time < $1.time }
+        let episode = weights.filter { $0.time > today.adding(days: -75) && $0.time < today.adding(days: -60) }.map(\.value)
+        #expect((episode.max() ?? 0) - (episode.min() ?? 0) >= 2)
+    }
+
+    @Test func hejingRunsWithType1Diabetes() throws {
+        let (c, ctx, container) = try load(.hejing)
+        _ = container
+        print("[何静] TIR \(Int((c.glucose.tir ?? 0) * 100))% TBR \(String(format: "%.1f", (c.glucose.tbr ?? 0) * 100))% 低血糖 \(c.lows.count) 次")
+        #expect(c.profile.conditions.contains(.diabetesT1))
+        #expect(c.glucose.isContinuous)
+        #expect(c.lows.count >= 2)
+        let sessions = (try? ctx.fetch(FetchDescriptor<ActivitySession>())) ?? []
+        #expect(sessions.filter { $0.type == .run }.count > 100)
+        let a1c = ((try? ctx.fetch(FetchDescriptor<LabResult>())) ?? []).filter { $0.kind == .hba1c }.sorted { $0.date < $1.date }
+        #expect(a1c.count == 5 && a1c.last!.value < a1c.first!.value)
+    }
 }
 
 // MARK: - Health Agent
