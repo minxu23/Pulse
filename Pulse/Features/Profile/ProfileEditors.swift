@@ -98,14 +98,16 @@ struct DietTargetsSection: View {
     }
 }
 
-/// 血液透析: the session days and the dry weight, from the dialysis centre. Turning it on also
-/// limits fluids; sessions are kept free of training.
+/// 透析: 血液透析 (the session days and the dry weight, from the dialysis centre) or 腹膜透析
+/// (every day at home). Turning it on also limits fluids; haemodialysis days are kept free of training.
 struct DialysisSection: View {
+    @Environment(\.modelContext) private var ctx
     @Bindable var p: UserProfile
     @State private var dryText = ""
     var body: some View {
+        let mode = DialysisMode(rawValue: p.dialysisModeRaw) ?? .hemo
         Section {
-            Toggle("在做血液透析", isOn: Binding(get: { p.dialysis }, set: { on in
+            Toggle("在做透析", isOn: Binding(get: { p.dialysis }, set: { on in
                 p.dialysis = on
                 if on {
                     p.fluidLimit = true
@@ -113,6 +115,12 @@ struct DialysisSection: View {
                 }
             }))
             if p.dialysis {
+                Picker("方式", selection: $p.dialysisModeRaw) {
+                    ForEach(DialysisMode.allCases) { Text($0.label).tag($0.rawValue) }
+                }
+                .pickerStyle(.segmented)
+            }
+            if p.dialysis && mode == .hemo {
                 VStack(alignment: .leading, spacing: Theme.Space.item) {
                     Text("透析日")
                     FlowLayout(spacing: Theme.Space.item) {
@@ -138,9 +146,21 @@ struct DialysisSection: View {
         } header: {
             Text("透析")
         } footer: {
-            Text(p.dialysis ? "透析日不安排训练；两次透析之间体重涨到干体重的 4% 以上时提醒你。干体重和每天喝多少水，按透析中心定的填（饮水在「恢复目标」里改）。"
-                 : "做血液透析时打开，Pulse 会避开透析日安排运动，并留意两次透析之间的体重。")
+            footer(mode)
         }
+        // Haemodialysis days come out of this week's plan as soon as they are set.
+        .onChange(of: [p.dialysis ? 1 : 0, mode == .hemo ? 1 : 0] + p.dialysisWeekdays) { DataHub.regenerateWeekPlan(in: ctx) }
+    }
+
+    @ViewBuilder private func footer(_ mode: DialysisMode) -> some View {
+            switch (p.dialysis, mode) {
+            case (false, _):
+                Text("做透析时打开，Pulse 会按透析安排运动，并留意体重和需要尽快处理的情况。")
+            case (true, .hemo):
+                Text("透析日不安排训练；两次透析之间体重涨到干体重的 4% 以上时提醒你。干体重和每天喝多少水，按透析中心定的填（饮水在「恢复目标」里改）。")
+            case (true, .peritoneal):
+                Text("每天称体重、记下尿量；运动不压肚子、不做大重量。透出液浑浊、肚子疼或发烧时，在「水肿与尿量」里记下，Pulse 会马上提醒你联系腹透中心。")
+            }
     }
 }
 

@@ -72,7 +72,7 @@ struct KidneyCareTests {
         }
         let kidney = ask("我能吃布洛芬吗", ckd())
         #expect(kidney.text.hasPrefix("布洛芬这类止痛消炎药（NSAIDs）可能让肾功能变差") && kidney.text.contains("肾内科医生或药师"), "\(kidney.text)")
-        #expect(ask("头疼吃点止痛药行吗", ckd()).text.contains("布洛芬这类药可能伤肾"))
+        #expect(ask("头疼吃点止痛药行吗", ckd()).text.hasPrefix("先别自己吃布洛芬这类止痛药"), "the question asked is answered first")
         #expect(ask("我能吃布洛芬吗", ProfileSnapshot()).text.hasPrefix(KidneyMeds.general))
         #expect(ask("膝盖疼怎么办", ckd()).text.contains("布洛芬这类药可能伤肾"))
     }
@@ -117,7 +117,43 @@ struct KidneyCareTests {
         u.dialysisWeekdays = [2, 4, 6]
         let s = u.snapshot(medications: [])
         #expect(s.availableWeekdays == [3, 5] && s.fluidLimited && s.watchesWeight && s.onDialysis)
+        // Every usual training day a session day: training moves to the days in between.
+        u.availableWeekdays = [2, 4, 6]
+        #expect(u.snapshot(medications: []).availableWeekdays == [3, 5, 7])
+        u.availableWeekdays = [2, 3, 5, 6]
         u.dialysis = false
         #expect(u.snapshot(medications: []).availableWeekdays == [2, 3, 5, 6])
+    }
+
+    @Test func peritonealDialysisWatchesForInfectionNotSessions() {
+        let u = UserProfile()
+        u.conditions = [.ckd]
+        u.availableWeekdays = [2, 3, 5, 6]
+        u.dialysis = true
+        u.dialysisWeekdays = [2, 4, 6]
+        u.dryWeightKg = 60
+        u.dialysisModeRaw = DialysisMode.peritoneal.rawValue
+        let p = u.snapshot(medications: [])
+        // Every day at home: no session days, no dry-weight rule; the usual weight and urine rules apply.
+        #expect(p.onPeritoneal && !p.onHemodialysis && p.fluidLimited && p.availableWeekdays == [2, 3, 5, 6])
+        #expect(!Dialysis.isDay(now, p) && Dialysis.gain([weight(0, 63)], profile: p, now: now) == nil)
+        #expect(AlertEngine.weightAlert([weight(3, 60), weight(0, 62.5)], profile: p, now: now) != nil)
+        #expect(KidneySigns.alert([day(1, urine: .less), day(0, urine: .less)], vitals: [], profile: p, now: now)?.guidance.contains("腹透中心") == true)
+
+        // Cloudy effluent, belly pain or fever: urgent, ahead of anything else.
+        var cloudy = day(0, edema: .marked)
+        cloudy.pdSigns = ["透出液浑浊", "肚子疼"]
+        let a = KidneySigns.alert([day(1, edema: .marked), cloudy], vitals: [], profile: p, now: now)
+        #expect(a?.severity == .urgent && a?.title == "腹透可能有感染" && a?.guidance.contains("透出液带上") == true)
+        #expect(KidneySigns.lines(cloudy).contains { $0.tone == .attention && $0.text == "腹透：透出液浑浊、肚子疼" })
+        var exit = day(0)
+        exit.pdSigns = ["导管出口红肿、有分泌物"]
+        #expect(KidneySigns.alert([exit], vitals: [], profile: p, now: now)?.severity == .consult)
+
+        // Exercise: nothing that presses on the belly; heavy lifting is out.
+        let c = AgentContext.make(profile: p, name: "", days: [], plan: [], workouts: [], vitals: [], events: [], stopBang: [],
+                                  baselineSetAt: nil, raceName: "", now: now.startOfDay.adding(minutes: 9 * 60))
+        #expect(TrainingCheck.reply("今天能做大重量深蹲吗", context: c).text.contains("腹膜透析"))
+        #expect(Dialysis.digest([], profile: p, now: now)?.hasPrefix("腹膜透析") == true)
     }
 }

@@ -16,9 +16,13 @@ extension UserProfile {
         s.goals = goals
         s.modules = modules
         s.journeyReached = journeyReached
-        // Training stays off dialysis days, unless every training day is one.
-        let free = availableWeekdays.filter { !dialysis || !dialysisWeekdays.contains($0) }
-        s.availableWeekdays = free.isEmpty ? availableWeekdays : free
+        // Training stays off haemodialysis days; when every usual training day is one, it moves to
+        // the days in between.
+        let mode = DialysisMode(rawValue: dialysisModeRaw) ?? .hemo
+        let sessions = dialysis && mode == .hemo ? dialysisWeekdays : []
+        let free = availableWeekdays.filter { !sessions.contains($0) }
+        let between = Array(Weekday.mondayFirst.filter { !sessions.contains($0) }.prefix(availableWeekdays.count))
+        s.availableWeekdays = !free.isEmpty ? free : (between.isEmpty ? availableWeekdays : between)
         s.sessionMinutes = sessionMinutes
         s.weeklyTimeBudget = weeklyTimeBudget
         s.weeklyTargetMinutes = weeklyTargetMinutes
@@ -31,9 +35,11 @@ extension UserProfile {
         s.weeklyAlcoholLimit = weeklyAlcoholLimit
         s.waterTargetMl = waterTargetMl
         // Dialysis always comes with a fluid limit, and sessions are not training days.
+        s.reviewPriorities = reviewPriorities
         s.onDialysis = dialysis
-        s.dialysisWeekdays = dialysis ? dialysisWeekdays : []
-        s.dryWeightKg = dialysis ? dryWeightKg : nil
+        s.dialysisMode = mode
+        s.dialysisWeekdays = sessions
+        s.dryWeightKg = sessions.isEmpty ? nil : dryWeightKg
         s.fluidLimited = fluidLimit || dialysis
         s.tracksNutrients = nutrientTracking
         s.saltLimitG = saltLimitG
@@ -125,6 +131,7 @@ enum DayBuilder {
             d.urineOutput = r.urineOutput
             d.urineMl = r.urineMl
             d.foamyUrine = r.foamyUrine
+            d.pdSigns = r.pdSigns
             d.snoring = r.snoring
             d.gasping = r.gasping
             d.witnessedApnea = r.witnessedApnea

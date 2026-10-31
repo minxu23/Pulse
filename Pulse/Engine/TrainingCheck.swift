@@ -84,7 +84,8 @@ enum TrainingCheck {
                                                        "强度课和大重量放到作息调回来、睡够的一天"].map { "• " + $0 }.joined(separator: "\n"),
                               sources: ["倒班安排"], followUps: ["夜班后怎么补觉？"], destination: .sleep, conclusion: first)
         }
-        if aboutNow, c.nearBedtime {
+        // A dialysis day weighs more than the time left before bed.
+        if aboutNow, c.nearBedtime, !Dialysis.isDay(c.logicalToday, p) {
             return nowReply(q, context: c)
         }
         let today = now.startOfDay
@@ -116,11 +117,20 @@ enum TrainingCheck {
         var blockers: [String] = []
         var cautions: [String] = []
         var weatherNotes: [String] = []
-        // A dialysis day: no training; light walking at most, after resting.
+        // 腹透: nothing that presses on the belly.
+        if p.onPeritoneal, [.heavyStrength, .strength, .intervals].contains(session) {
+            let line = "你在做腹膜透析：不做卷腹、仰卧起坐和大重量，避免憋气用力；运动前可以先放掉腹透液，按腹透护士的建议。"
+            if session == .heavyStrength { blockers.append(line) } else { cautions.append(line) }
+        }
+        // A dialysis day: no training — running, cycling and the like included; a slow walk at most, after resting.
+        var dialysisDay = false
         if Dialysis.isDay(target, p) {
             let line = "\(dayName)是透析日，透析前后身体负担大"
-            if session == .easy { cautions.append(line + "，透析后先休息，想活动就在家慢慢走几分钟。") }
-            else { blockers.append(line + "，不安排训练；把训练放到不透析的日子。") }
+            if Dialysis.gentle(q) || (defaulted && session == .easy) { cautions.append(line + "，透析后先休息，想活动就在家慢慢走几分钟。") }
+            else {
+                blockers.append(line + "，不安排\(namedActivity ? "跑步、骑车这类运动" : "训练")；放到不透析的日子。")
+                dialysisDay = true
+            }
         }
 
         // At 2 am the user's "明天" (or "今天") both mean the coming daytime; say how it was read.
@@ -257,7 +267,7 @@ enum TrainingCheck {
 
         // Verdict.
         let verdict: Verdict
-        if !blockers.isEmpty && session != .easy { verdict = .notAdvised }
+        if !blockers.isEmpty && (session != .easy || dialysisDay) { verdict = .notAdvised }
         else if !blockers.isEmpty || !cautions.isEmpty { verdict = .easier }
         else if !measured && target >= today { verdict = .morning }
         else { verdict = .go }

@@ -593,9 +593,11 @@ struct KidneySignsLogForm: View {
     @State private var urine: UrineAmount?
     @State private var urineMl: Double?
     @State private var foamy = false
+    @State private var pdSigns: Set<String> = []
 
     var body: some View {
         let dialysis = profiles.first?.dialysis == true
+        let peritoneal = dialysis && profiles.first?.dialysisModeRaw == DialysisMode.peritoneal.rawValue
         Form {
             DatePicker("日期", selection: $date, in: ...Date.app, displayedComponents: .date)
             Section {
@@ -635,7 +637,25 @@ struct KidneySignsLogForm: View {
             } header: {
                 Text("尿")
             } footer: {
-                Text(dialysis ? "透析后尿量少很常见，按透析中心的要求记。" : "尿量连续两天比平时少，或者同时脚肿、体重涨，要尽快联系医生。")
+                Text(peritoneal ? "腹透的人保住剩下的尿量很重要，尿明显变少要告诉腹透中心。"
+                     : (dialysis ? "透析后尿量少很常见，按透析中心的要求记。" : "尿量连续两天比平时少，或者同时脚肿、体重涨，要尽快联系医生。"))
+            }
+            if peritoneal {
+                Section {
+                    FlowLayout(spacing: Theme.Space.item) {
+                        ForEach(KidneySigns.pdWarnings, id: \.self) { f in
+                            ToggleChip(text: f, isOn: Binding(get: { pdSigns.contains(f) }, set: { if $0 { pdSigns.insert(f) } else { pdSigns.remove(f) } }))
+                        }
+                    }
+                    .padding(.vertical, Theme.Space.tight)
+                    if KidneySigns.peritonitis(Array(pdSigns)) {
+                        StatusLabel(.urgent("可能是腹膜炎，请立即联系腹透中心或去急诊")).font(.subheadline)
+                    }
+                } header: {
+                    Text("腹透")
+                } footer: {
+                    Text("透出液浑浊、肚子疼或发烧，可能是腹膜炎：保存后马上联系腹透中心，把那袋透出液带上。")
+                }
             }
         }
         .onAppear { date = initialDate; load(date) }
@@ -647,6 +667,7 @@ struct KidneySignsLogForm: View {
             r.urineOutput = urine?.rawValue
             r.urineMl = urineMl.flatMap { (50...6000).contains($0) ? Int($0) : nil }
             r.foamyUrine = foamy ? true : (edema != nil || urine != nil ? false : nil)
+            r.pdSigns = KidneySigns.pdWarnings.filter(pdSigns.contains)
             try? ctx.save()
             DataHub.refreshAlerts(in: ctx)
         }
@@ -659,6 +680,7 @@ struct KidneySignsLogForm: View {
         urine = r.urineOutput.flatMap(UrineAmount.init)
         urineMl = r.urineMl.map(Double.init)
         foamy = r.foamyUrine == true
+        pdSigns = Set(r.pdSigns)
     }
 }
 

@@ -64,6 +64,8 @@ final class DailyRecord {
     var urineOutput: Int? = nil
     var urineMl: Int? = nil
     var foamyUrine: Bool? = nil
+    /// 腹透: warning signs noticed today (`KidneySigns.pdWarnings`).
+    var pdSigns: [String] = []
 
     // Sleep-breathing cues for the night ending this morning
     var snoring: Bool = false

@@ -48,6 +48,8 @@ struct HealthAgentChatView: View {
             .agentRenameAlert(isPresented: $renaming)
             .confirmationDialog("清空当前对话？", isPresented: $confirmClear, titleVisibility: .visible) {
                 Button("清空对话", role: .destructive) { convo.clear() }
+            } message: {
+                Text("对话只保存在这台手机上，清空后无法恢复；已经记下的数据和采纳的计划不受影响。")
             }
         }
     }
@@ -134,7 +136,8 @@ private struct AgentChatContent: View {
     private var withdrawTitle: String {
         guard let m = withdrawing else { return "" }
         let plans = !convo.adoptedPlans(answering: m.id).isEmpty
-        let names = convo.recordedConditions(answering: m.id).map { "「\($0.info.name)」" }.joined(separator: "、")
+        let names = (convo.recordedConditions(answering: m.id).map { "「\($0.info.name)」" }
+            + convo.recordedItems(answering: m.id).flatMap { $0.0.items.map { "「\(RecordProposal.label($0))」" } }).joined(separator: "、")
         switch (plans, names.isEmpty) {
         case (true, true): return "这个问题的回答里有已采纳的计划调整"
         case (false, false): return "从这个回答里记下了\(names)"

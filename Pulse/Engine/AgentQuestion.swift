@@ -13,6 +13,10 @@ struct AgentQuestion {
         case glucose(Double, MeasureContext?)
         case sleepHours(Double)
         case weightChange(kg: Double)
+        /// 「体重 72.5 公斤」: a weight, not a change.
+        case weight(kg: Double)
+        /// 「糖化血红蛋白 53 mmol/mol」: a lab value as on the report; `unit` as typed or guessed.
+        case lab(LabKind, value: Double, unit: String, guessed: Bool)
     }
 
     let text: String
@@ -68,8 +72,37 @@ struct AgentQuestion {
         if let g = groups(#"睡了?\s*(?:不到|不足|才|只有|大概|约)?\s*([0-9一二两三四五六七八九十]+(?:\.\d)?)\s*个?(半)?\s*(?:多)?\s*(?:小时|钟头|h)"#, q), let h = number(g[0]) {
             return .sleepHours(h + (g.count > 1 && g[1] == "半" ? 0.5 : 0))
         }
-        if let g = groups(#"(?:涨|胖|长|重|增加|多)了?\s*([0-9一二两三四五六七八九十]+(?:\.\d)?)\s*(斤|公斤|千克|kg)"#, q), let n = number(g[0]) {
+        if let g = groups(#"(?:涨|胖|长|(?<!体)重|增加|多)了?\s*([0-9一二两三四五六七八九十]+(?:\.\d)?)\s*(斤|公斤|千克|kg)"#, q), let n = number(g[0]) {
             return .weightChange(kg: g[1] == "斤" ? n / 2 : n)
+        }
+        if let g = groups(#"(?:体重|称了|称出来)\D{0,4}(\d{2,3}(?:\.\d+)?)\s*(斤|公斤|千克|kg|KG)?"#, q), let n = Double(g[0]) {
+            let kg = g.count > 1 && g[1] == "斤" ? n / 2 : n
+            if (25...250).contains(kg) { return .weight(kg: kg) }
+        }
+        if let l = lab(in: q) { return l }
+        return nil
+    }
+
+    /// The names a lab report uses, longest first so 「糖化血红蛋白」 is not read as 血红蛋白.
+    static let labNames: [(LabKind, [String])] = [
+        (.hba1c, ["糖化血红蛋白", "HbA1c", "hba1c", "糖化"]), (.uacr, ["尿白蛋白肌酐比", "尿白蛋白/肌酐比", "尿微量白蛋白", "UACR", "ACR", "尿白蛋白"]),
+        (.egfr, ["eGFR", "egfr", "肾小球滤过率"]), (.creatinine, ["肌酐"]), (.potassium, ["血钾", "钾离子"]), (.phosphorus, ["血磷"]),
+        (.hemoglobin, ["血红蛋白"]), (.uricAcid, ["尿酸"]),
+    ]
+
+    /// 「肌酐 1.44 mg/dL」「糖化血红蛋白 53」: the test, the value, and its unit — as typed, or the
+    /// unit the value fits (1.44 is no creatinine in μmol/L; 53 is no HbA1c in %).
+    static func lab(in q: String) -> Reading? {
+        for (kind, names) in labNames {
+            guard let name = names.first(where: { q.contains($0) }) else { continue }
+            let units = #"(mg/dL|mg/dl|μmol/L|umol/L|µmol/L|mmol/mol|mmol/L|mg/mmol|mg/g|g/dL|g/dl|g/L|%)?"#
+            guard let g = groups(NSRegularExpression.escapedPattern(for: name) + #"[^0-9]{0,6}(\d+(?:\.\d+)?)\s*"# + units, q), let v = Double(g[0]) else { return nil }
+            let typed = g.count > 1 ? g[1].replacingOccurrences(of: "u", with: "μ").replacingOccurrences(of: "µ", with: "μ") : ""
+            if let u = kind.units.first(where: { $0.lowercased() == typed.lowercased() }) {
+                return .lab(kind, value: v, unit: u, guessed: false)
+            }
+            let fits = kind.units.first { kind.plausible.contains(kind.standard(v, unit: $0)) }
+            return fits.map { .lab(kind, value: v, unit: $0, guessed: true) }
         }
         return nil
     }
@@ -113,6 +146,8 @@ struct AgentQuestion {
 
 enum AskedSymptom: String, CaseIterable {
     case fatigue, dizzy, swelling, cold, pain, soreness, palpitations, cramps, thirst, urine, headache
+    /// Common with kidney disease: itchy skin, no appetite, getting up at night to pass urine.
+    case itch, appetite, nocturia
 
     var label: String {
         switch self {
@@ -127,6 +162,9 @@ enum AskedSymptom: String, CaseIterable {
         case .thirst: "口渴"
         case .urine: "尿的变化"
         case .headache: "头疼"
+        case .itch: "皮肤痒"
+        case .appetite: "没胃口"
+        case .nocturia: "起夜"
         }
     }
 
@@ -140,6 +178,9 @@ enum AskedSymptom: String, CaseIterable {
         if any(["头疼", "头痛"]) { return .headache }
         if q.contains("抽筋") { return .cramps }
         if any(["泡沫尿", "尿里有泡沫", "尿少", "尿量少", "尿量变少", "尿血"]) { return .urine }
+        if any(["起夜", "夜尿", "晚上尿", "夜里尿", "半夜上厕所", "夜里上厕所", "晚上上厕所"]) { return .nocturia }
+        if any(["皮肤痒", "身上痒", "全身痒", "瘙痒", "痒得", "很痒", "发痒"]), !any(["嗓子", "喉咙", "眼睛", "鼻子"]) { return .itch }
+        if any(["没胃口", "胃口不好", "不想吃", "吃不下", "食欲不好", "食欲差", "恶心"]) { return .appetite }
         if any(["口渴", "口干", "老想喝水", "尿多", "尿频"]) { return .thirst }
         let body = PlanChat.lowerBody + PlanChat.upperBody + PlanChat.backWords
         if PlanChat.painWords.filter({ $0 != "不舒服" }).contains(where: { q.contains($0) }), body.contains(where: { q.contains($0) }) { return .pain }

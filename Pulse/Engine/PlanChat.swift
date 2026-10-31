@@ -57,7 +57,7 @@ enum PlanChat {
 
     static let busyWords = ["没空", "没时间", "有事", "加班", "出差", "去不了", "来不及", "不在家", "聚餐", "请假", "想休息", "不想练", "不练"]
     static let moveWords = ["改到", "换到", "挪到", "移到", "调到", "放到", "推迟到", "提前到", "改成周", "换成周"]
-    static let easierWords = ["轻松一点", "轻松些", "轻一点", "太累", "好累", "疲劳", "降低强度", "减量", "少练", "练少", "强度太大", "吃不消", "顶不住", "太多了"]
+    static let easierWords = ["轻松一点", "轻松些", "轻一点", "减一点", "少一点", "减少训练", "减少运动", "量减少", "太累", "好累", "疲劳", "降低强度", "减量", "少练", "练少", "强度太大", "吃不消", "顶不住", "太多了"]
     static let moreWords = ["多练", "加一次", "加练", "加量", "再加", "练多", "增加训练", "增加一次", "提高强度", "加强", "多跑"]
     static let painWords = ["疼", "痛", "受伤", "扭伤", "拉伤", "不舒服"]
     static let lowerBody = ["膝", "脚踝", "踝", "腿", "跟腱", "足底", "脚", "髋", "小腿", "大腿"]
@@ -592,6 +592,20 @@ enum PlanChat {
         }
     }
 
+    /// The first sentence of an answer with a plan change, pinned so the change is never presented as made.
+    /// Asked about this week when nothing is left in it, it says why the change is for next week.
+    static func lead(for p: PlanChangeProposal) -> String {
+        let movedOn = p.scope == .nextWeek && !p.request.contains("下周") && !p.request.contains("下个星期")
+        return movedOn ? "这周剩下的日子已经没有训练了，下周计划可以这样调整，点「采纳」后才会生效。"
+            : "按你说的，\(p.scope.label)计划可以这样调整，点「采纳」后才会生效。"
+    }
+
+    /// Whether any day that can still change this week has a training session on it.
+    static func trainingLeft(_ scope: PlanScope, context c: AgentContext) -> Bool {
+        let (ws, items, _) = slots(scope, context: c)
+        return editable(items, weekStart: ws, now: c.now).contains { !training(items, on: day($0, ws)).isEmpty }
+    }
+
     static func reply(for p: PlanChangeProposal, context c: AgentContext) -> AgentReply {
         guard p.hasChanges else {
             let text = p.checks.first.map { "这次没有可以改动的地方：\($0)" }
@@ -599,7 +613,7 @@ enum PlanChat {
             return AgentReply(text: text, sources: ["\(p.scope.label)计划"], followUps: ["帮我调整下周计划", "这周三和周四没空"], destination: .plan)
         }
         // Pinned as the first sentence: the model must not present the change as made.
-        let lead = "按你说的，\(p.scope.label)计划可以这样调整，点「采纳」后才会生效。"
+        let lead = lead(for: p)
         var parts = [lead]
         // Before and after for each day, so a model rewording this can't swap them round.
         parts.append(p.lines.map { "• \(Weekday.name($0.weekday))：原来是「\($0.before)」，改为「\($0.after)」" }.joined(separator: "\n"))
@@ -620,7 +634,7 @@ enum PlanChat {
     static let cloudInstructions = """
     你是 Pulse 应用中的 Health Agent，正在根据对话帮用户调整训练计划。长期目标是降低静息心率。
     要求：
-    1. 结合用户的要求、之前的对话和数据（准备度、训练负荷、完成情况、健康状况），给出具体的修改。只能修改标注「可调整」的日子。
+    1. 结合用户的要求、之前的对话和数据（准备度、训练负荷、完成情况、健康状况），给出具体的修改。只能修改标注「可调整」的日子。minutes 和 intensity 只对训练（aerobic、long、quality、strength、mobility）有效；walk（日常活动）和 rest 标着「不是训练」，减量时不要改它们。某一周可调整的日子里已经没有训练时，改另一周，并在第一句说明。
     2. 先用简体中文 1–3 句话说明怎么改、为什么（引用数据中的数字），不超过 150 字；不要逐日复述计划，修改会以卡片展示给用户确认。用户点「采纳」前计划没有改变，不要说「已改为」「已调整」，用「建议」「可以改为」。
     3. 然后输出 <plan>{"scope":"this_week 或 next_week","edits":[…]}</plan>。edits 只能使用：
        {"op":"move","from":"周三","to":"周四"}（两天的安排互换）
@@ -643,11 +657,13 @@ enum PlanChat {
                 let d = day(wd, ws)
                 let list = items.filter { $0.day == d }
                 let desc = list.isEmpty ? "无安排" : list.map { s in
-                    "\(s.kind.rawValue)「\(s.title)」\(s.minutes) 分钟 \(s.intensity.rawValue)\(s.status == .planned ? "" : "（\(s.status.label)）")"
+                    "\(s.kind.rawValue)「\(s.title)」\(s.minutes) 分钟 \(s.intensity.rawValue)\(s.kind.isTraining ? "" : "（不是训练）")"
+                        + (s.status == .planned ? "" : "（\(s.status.label)）")
                 }.joined(separator: " + ")
                 return "\(Weekday.name(wd)) \(df.string(from: d))：\(desc)\(open.contains(wd) ? " ·可调整" : "")"
             }
-            return "\(scope.label)计划\(generated ? "（尚未生成，以下按当前设置预排）" : "")：\n" + rows.joined(separator: "\n")
+            let left = trainingLeft(scope, context: c) ? "" : "\n（\(scope.label)可调整的日子里已经没有训练了）"
+            return "\(scope.label)计划\(generated ? "（尚未生成，以下按当前设置预排）" : "")：\n" + rows.joined(separator: "\n") + left
         }
         let p = c.profile
         var limits = ["每周训练目标 \(p.weeklyTargetMinutes) 分钟，单次可用约 \(p.sessionMinutes) 分钟", "活动水平：\(p.level.label)"]

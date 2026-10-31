@@ -130,6 +130,17 @@ struct LabRecheckTests {
         #expect(CareReminders.plan(many, now: evening).count == CareReminders.limit)
     }
 
+    @Test func backgroundEventsNotifyOnlyWhatCallsForTheDoctor() {
+        let events = [CareReminders.Event(id: "a", title: "两次透析之间体重涨了 2.6 kg", detail: "62.6 kg，比干体重 60.0 kg 多 2.6 kg。涨得多…", severity: .consult),
+                      CareReminders.Event(id: "b", title: "腹透可能有感染", detail: "记录：透出液浑浊。可能是腹膜炎。", severity: .urgent),
+                      CareReminders.Event(id: "c", title: "静息心率略高", detail: "比基线高 3。", severity: .verify),
+                      CareReminders.Event(id: "d", title: "提示", detail: "", severity: .info)]
+        let n = CareReminders.notices(events)
+        #expect(n.map(\.id) == ["pulse.event.a", "pulse.event.b"])
+        #expect(n[0].body == "62.6 kg，比干体重 60.0 kg 多 2.6 kg。打开 Pulse 看看该怎么做。")
+        #expect(n[1].title == "请尽快处理：腹透可能有感染")
+    }
+
     @Test func theAgentUsesTheSameSchedule() throws {
         let (container, ctx) = try load(.wangjianguo)
         _ = container

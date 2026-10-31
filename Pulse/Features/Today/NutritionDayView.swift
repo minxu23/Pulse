@@ -178,8 +178,12 @@ struct KidneySignsCard: View {
         let today = data.analytics.today ?? DayData(day: data.day)
         let lines = KidneySigns.lines(today)
         VStack(alignment: .leading, spacing: Theme.Space.block) {
-            CardTitle("水肿与尿量", detail: p.onDialysis ? "血液透析 · \(Dialysis.schedule(p))" : nil)
-            if p.onDialysis {
+            CardTitle("水肿与尿量", detail: p.onHemodialysis ? "血液透析 · \(Dialysis.schedule(p))" : (p.onPeritoneal ? "腹膜透析" : nil))
+            if p.onPeritoneal {
+                Text("每天称体重、留意尿量；透出液浑浊、肚子疼或发烧，立即联系腹透中心。")
+                    .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            if p.onHemodialysis {
                 VStack(alignment: .leading, spacing: Theme.Space.item) {
                     if let next = Dialysis.next(from: data.now, p) {
                         StatusLabel(.neutral(next.isSameDay(data.now) ? "今天透析，今天不安排训练" : "下次透析：\(next.formatted(.dateTime.month().day().weekday(.wide)))"))

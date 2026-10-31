@@ -66,9 +66,9 @@ extension AgentDestination {
 // MARK: - Conversation
 
 struct AgentMessage: Identifiable, Equatable {
-    enum Role { case user, agent }
-    enum Engine: Equatable { case onDevice, rules, cloud }
-    let id = UUID()
+    enum Role: String { case user, agent }
+    enum Engine: String, Equatable { case onDevice, rules, cloud }
+    var id = UUID()
     let role: Role
     var text: String
     var reply: AgentReply? = nil
@@ -85,7 +85,63 @@ struct AgentMessage: Identifiable, Equatable {
     var general = false
     /// 端云结合: why this answer stayed on the device (shown with the answer).
     var privacy: String? = nil
-    let date = Date.app
+    var date = Date.app
+}
+
+/// The conversation kept on the phone between launches: the text of each message and what goes
+/// with it (sources, suggested questions). Cards are not kept — what they recorded is already in
+/// the records. Never in tests or an in-memory demo; 清空对话 and 删除所有数据 remove the file.
+enum AgentTranscript {
+    static let limit = 200
+
+    private struct Stored: Codable {
+        var id: UUID
+        var role: String
+        var text: String
+        var engine: String
+        var date: Date
+        var withdrawn = false
+        var general = false
+        var note: String?
+        var privacy: String?
+        var sources: [String] = []
+        var followUps: [String] = []
+        var destination: String?
+        var intent: String?
+    }
+
+    static var url: URL? {
+        let args = ProcessInfo.processInfo.arguments
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil, !args.contains("-PulseInMemory"),
+              let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        return dir.appendingPathComponent("agent-chat.json")
+    }
+
+    static func load(from url: URL? = url) -> [AgentMessage] {
+        guard let url, let data = try? Data(contentsOf: url), let stored = try? JSONDecoder().decode([Stored].self, from: data) else { return [] }
+        return stored.compactMap { s in
+            guard let role = AgentMessage.Role(rawValue: s.role) else { return nil }
+            let reply = role == .agent
+                ? AgentReply(text: s.text, sources: s.sources, followUps: s.followUps, destination: s.destination.flatMap(AgentDestination.init(rawValue:)),
+                             intent: s.intent.flatMap(AgentIntent.init(rawValue:)) ?? .unknown) : nil
+            return AgentMessage(id: s.id, role: role, text: s.text, reply: reply, engine: AgentMessage.Engine(rawValue: s.engine) ?? .rules,
+                                note: s.note, withdrawn: s.withdrawn, general: s.general, privacy: s.privacy, date: s.date)
+        }
+    }
+
+    static func save(_ messages: [AgentMessage], to url: URL? = url) {
+        guard let url else { return }
+        let kept = messages.filter { !$0.streaming && !($0.role == .agent && $0.text.isEmpty) }.suffix(limit)
+        guard !kept.isEmpty else { try? FileManager.default.removeItem(at: url); return }
+        let stored = kept.map { m in
+            Stored(id: m.id, role: m.role.rawValue, text: m.text, engine: m.engine.rawValue, date: m.date, withdrawn: m.withdrawn,
+                   general: m.general, note: m.note, privacy: m.privacy, sources: m.reply?.sources ?? [], followUps: m.reply?.followUps ?? [],
+                   destination: m.reply?.destination?.rawValue, intent: m.reply?.intent.rawValue)
+        }
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        // Health information: kept encrypted while the phone is locked.
+        try? JSONEncoder().encode(stored).write(to: url, options: [.atomic, .completeFileProtection])
+    }
 }
 
 /// How a cloud answer attempt ended.
@@ -97,6 +153,13 @@ private enum CloudOutcome {
 /// What happened to a plan proposal shown in the conversation.
 enum PlanOutcome: Equatable {
     case applied(DataHub.PlanUndo)
+    case dismissed
+    case undone
+}
+
+/// What happened to a 记下 card for a reading, water, a symptom or a reminder.
+enum RecordOutcome: Equatable {
+    case recorded(DataHub.RecordUndo)
     case dismissed
     case undone
 }
@@ -123,6 +186,7 @@ final class AgentConversation {
     var answeredForms: [String: String] = [:]
     var planOutcomes: [UUID: PlanOutcome] = [:]
     var conditionOutcomes: [UUID: ConditionOutcome] = [:]
+    var recordOutcomes: [UUID: RecordOutcome] = [:]
     /// Where a name given in the chat is saved.
     @ObservationIgnored var names = AgentNameSettings.shared
     /// The answer being written, so that taking its question back can stop it.
@@ -135,6 +199,7 @@ final class AgentConversation {
     init() {
         // The old "don't use the language model" switch is gone; answers always go through a model.
         UserDefaults.standard.removeObject(forKey: "agent.useModel")
+        messages = AgentTranscript.load()
         synth.delegate = speechDelegate
         speechDelegate.onFinish = { [weak self] in Task { @MainActor in self?.speakingID = nil } }
     }
@@ -171,7 +236,10 @@ final class AgentConversation {
         turn += 1
         let mine = turn
         isResponding = true
-        defer { if turn == mine { isResponding = false; answering = nil } }
+        defer {
+            if turn == mine { isResponding = false; answering = nil }
+            AgentTranscript.save(messages)
+        }
 
         // 「以后叫你小安」: the new name applies at once, and the answer says how to change it back.
         if let request = AgentName.requested(in: q, afterAsking: askedForName) {
@@ -299,24 +367,27 @@ final class AgentConversation {
             let parts = AgentUI.split(raw)
             var blocks = parts.ui.map { AgentUI.blocks(fromJSON: $0, context: q) } ?? []
             var note: String? = nil
+            // The model's own change failed the checks: its words describe that change, so the
+            // rules' answer goes with the rules' card.
+            var rejected = false
+            // The pinned first sentence follows the model's change (its week), not the rules' one.
+            var shown = rule
             if let json = parts.plan {
                 let parsed = PlanChat.ops(fromJSON: json)
                 let scope = parsed.scope ?? (q.contains("下周") ? .nextWeek : .thisWeek)
                 let proposal = PlanChat.propose(parsed.ops, scope: scope, request: q, context: context,
                                                 source: "云端 · \(CloudModelSettings.shared.model)")
-                if proposal.hasChanges { blocks.insert(.plan(proposal), at: 0) }
-                else { note = "云端模型给出的修改没有通过本机安全检查，下面是 Pulse 规则给出的方案。" }
+                if proposal.hasChanges {
+                    blocks.insert(.plan(proposal), at: 0)
+                    shown.conclusion = PlanChat.lead(for: proposal)
+                }
+                else { note = "云端模型给出的修改没有通过本机安全检查，下面是 Pulse 规则给出的方案。"; rejected = true }
             }
-            // Keep the rules engine's components when the model offered none for a task that needs them.
-            if blocks.isEmpty, [.planChange, .device, .trainingCheck, .symptom, .reading].contains(rule.intent) { blocks = rule.blocks }
-            // A condition the user mentioned is always offered by the rules, with its plan change.
-            if rule.blocks.contains(where: { $0.condition != nil }) {
-                blocks = rule.blocks + blocks.filter { b in b.proposal == nil && !rule.blocks.contains { $0.id == b.id } }
-            }
+            blocks = AgentUI.cloudBlocks(blocks, rule: rule)
             edit(id) { m in
-                m.text = HealthAgent.finalize(parts.text.isEmpty ? rule.text : parts.text, of: rule,
-                                              proposals: blocks.prefix(AgentUI.maxBlocks).compactMap(\.proposal), strict: false)
-                m.blocks = Array(blocks.prefix(AgentUI.maxBlocks))
+                m.text = rejected ? rule.text : HealthAgent.finalize(parts.text.isEmpty ? rule.text : parts.text, of: shown,
+                                                                     proposals: blocks.compactMap(\.proposal), strict: false)
+                m.blocks = blocks
                 m.reply?.followUps = followUps
                 m.note = note
                 m.streaming = false
@@ -407,9 +478,17 @@ final class AgentConversation {
         }
     }
 
+    /// Readings, water, symptoms and reminders recorded from the answers to a question.
+    func recordedItems(answering id: UUID) -> [(RecordProposal, DataHub.RecordUndo)] {
+        messages[answers(to: id)].flatMap(\.blocks).compactMap { b in
+            guard let r = b.record, case .recorded(let undo) = recordOutcomes[r.id] else { return nil }
+            return (r, undo)
+        }
+    }
+
     /// Whether taking the question back could also undo something the user adopted from its answer.
     func hasAdoptedChanges(answering id: UUID) -> Bool {
-        !adoptedPlans(answering: id).isEmpty || !recordedConditions(answering: id).isEmpty
+        !adoptedPlans(answering: id).isEmpty || !recordedConditions(answering: id).isEmpty || !recordedItems(answering: id).isEmpty
     }
 
     /// 撤回: takes a question back with its answer, stopping the answer if it is still being written.
@@ -433,6 +512,10 @@ final class AgentConversation {
                 DataHub.forgetCondition(c.info, in: ctx)
                 conditionOutcomes[c.id] = .undone
             }
+            for (r, undo) in recordedItems(answering: id) {
+                DataHub.undoRecord(undo, in: ctx)
+                recordOutcomes[r.id] = .undone
+            }
         }
         let range = answers(to: id)
         let removed = Set(messages[range].map(\.id))
@@ -440,6 +523,7 @@ final class AgentConversation {
         answeredForms = answeredForms.filter { key, _ in !removed.contains { key.hasPrefix($0.uuidString) } }
         messages.removeSubrange(range)
         messages[i].withdrawn = true
+        AgentTranscript.save(messages)
     }
 
     /// Instructions and prompt for the cloud model, by what the question is about.
@@ -502,6 +586,8 @@ final class AgentConversation {
         answeredForms = [:]
         planOutcomes = [:]
         conditionOutcomes = [:]
+        recordOutcomes = [:]
+        AgentTranscript.save([])
     }
 }
 

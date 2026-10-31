@@ -23,6 +23,7 @@ struct AgentBlocksView: View {
                     case .steps(let s): AgentStepsView(steps: s)
                     case .plan(let p): PlanProposalCard(proposal: p)
                     case .condition(let c): ConditionCard(proposal: c)
+                    case .record(let r): RecordCard(proposal: r)
                     }
                 }
                 .cardSurface()
@@ -302,6 +303,77 @@ struct ConditionCard: View {
                 } label: { Label("撤销", systemImage: "arrow.uturn.backward").frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel) }
                 .buttonStyle(.bordered)
             }
+        case .dismissed:
+            StatusLabel(.neutral("没有记下")).font(.subheadline)
+        case .undone:
+            StatusLabel(.neutral("已撤销，没有记下")).font(.subheadline)
+        }
+    }
+}
+
+// MARK: - Record
+
+/// What the user asked to record — a reading, water, a symptom or a reminder — written only on 记下,
+/// and undone on 撤销. A reminder's date and time can be changed first.
+struct RecordCard: View {
+    let proposal: RecordProposal
+    @Environment(\.modelContext) private var ctx
+    @State private var convo = AgentConversation.shared
+    @State private var due: Date
+    @AppStorage(CareReminders.enabledKey) private var careReminders = false
+
+    init(proposal: RecordProposal) {
+        self.proposal = proposal
+        _due = State(initialValue: proposal.reminder?.due ?? proposal.time)
+    }
+
+    var body: some View {
+        let reminder = proposal.reminder
+        VStack(alignment: .leading, spacing: Theme.Space.block) {
+            BlockHeader(title: reminder == nil ? "记下来" : "加一条提醒", icon: reminder == nil ? "square.and.pencil" : "bell",
+                        trailing: reminder == nil ? proposal.time.formatted(.dateTime.month().day().hour().minute()) : nil)
+            VStack(alignment: .leading, spacing: Theme.Space.item) {
+                ForEach(Array(proposal.items.enumerated()), id: \.offset) { _, item in
+                    Label(RecordProposal.label(item), systemImage: RecordProposal.icon(item))
+                        .font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if let r = reminder, convo.recordOutcomes[proposal.id] == nil {
+                DatePicker("时间", selection: $due, in: Date.app.startOfDay..., displayedComponents: r.timed ? [.date, .hourAndMinute] : [.date])
+                    .font(.subheadline)
+                if !r.timed { Text("当天上午 9 点提醒").font(.footnote).foregroundStyle(.secondary) }
+            }
+            actions
+        }
+    }
+
+    @ViewBuilder private var actions: some View {
+        switch convo.recordOutcomes[proposal.id] {
+        case nil:
+            HStack(spacing: Theme.Space.item) {
+                Button {
+                    convo.recordOutcomes[proposal.id] = .recorded(DataHub.applyRecord(proposal, reminderDue: due, in: ctx))
+                } label: { Text("记下").fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel) }
+                .buttonStyle(.borderedProminent)
+                Button { convo.recordOutcomes[proposal.id] = .dismissed } label: { Text("不用了").frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel) }
+                    .buttonStyle(.bordered)
+            }
+        case .recorded(let undo):
+            StatusLabel(.good(proposal.reminder == nil ? "已记下" : "已加到「照护与随访事项」")).font(.subheadline)
+            if proposal.reminder != nil, !careReminders {
+                Button {
+                    Task {
+                        careReminders = await CareReminders.requestPermission()
+                        CareReminders.sync(in: ctx)
+                    }
+                } label: { Label("打开到期提醒，到时手机通知我", systemImage: "bell.badge").frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel) }
+                .buttonStyle(.bordered)
+            }
+            Button {
+                DataHub.undoRecord(undo, in: ctx)
+                convo.recordOutcomes[proposal.id] = .undone
+            } label: { Label("撤销", systemImage: "arrow.uturn.backward").frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel) }
+            .buttonStyle(.bordered)
         case .dismissed:
             StatusLabel(.neutral("没有记下")).font(.subheadline)
         case .undone:

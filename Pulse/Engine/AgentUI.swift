@@ -91,6 +91,8 @@ enum AgentUIBlock: Equatable, Identifiable {
     case plan(PlanChangeProposal)
     /// A condition the user mentioned, to record (记下).
     case condition(ConditionProposal)
+    /// A reading, water, a symptom or a reminder the user asked to record (记下).
+    case record(RecordProposal)
 
     var id: String {
         switch self {
@@ -100,15 +102,31 @@ enum AgentUIBlock: Equatable, Identifiable {
         case .steps(let s): "steps-\(s.title)"
         case .plan(let p): "plan-\(p.id)"
         case .condition(let c): "condition-\(c.id)"
+        case .record(let r): "record-\(r.id)"
         }
     }
 
     var proposal: PlanChangeProposal? { if case .plan(let p) = self { p } else { nil } }
     var condition: ConditionProposal? { if case .condition(let c) = self { c } else { nil } }
+    var record: RecordProposal? { if case .record(let r) = self { r } else { nil } }
 }
 
 enum AgentUI {
     static let maxBlocks = 3
+
+    /// The cards shown with a cloud model's answer: its own, or the rules' when it offered none for a
+    /// task that needs them. A condition card (with its plan change) and a 记下 card for a reading or
+    /// a reminder always stay, first, whatever the model offered.
+    static func cloudBlocks(_ model: [AgentUIBlock], rule: AgentReply) -> [AgentUIBlock] {
+        var blocks = model
+        if blocks.isEmpty, [.planChange, .device, .trainingCheck, .symptom, .reading].contains(rule.intent) { blocks = rule.blocks }
+        if rule.blocks.contains(where: { $0.condition != nil }) {
+            blocks = rule.blocks + blocks.filter { b in b.proposal == nil && !rule.blocks.contains { $0.id == b.id } }
+        }
+        let records = rule.blocks.filter { $0.record != nil }
+        if !records.isEmpty { blocks = records + blocks.filter { b in !records.contains { $0.id == b.id } } }
+        return Array(blocks.prefix(maxBlocks))
+    }
 
     // MARK: Reading a model's answer
 

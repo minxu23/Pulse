@@ -19,6 +19,9 @@ enum SymptomGuide {
         case .thirst: thirst(a, c)
         case .urine: urine(a, c)
         case .headache: headache(a, c)
+        case .itch: itch(a, c)
+        case .appetite: appetite(a, c)
+        case .nocturia: nocturia(a, c)
         }
     }
 
@@ -66,8 +69,11 @@ enum SymptomGuide {
         if c.recent7.filter(\.highStress).count >= 3 { why.append("这周压力大的天比较多") }
         if c.days.contains(where: { $0.day >= c.logicalToday.adding(days: -3) && $0.isIll }) { why.append("这几天记录了生病") }
         if c.medications.contains(where: { $0.category == .betaBlocker }) { why.append("β 受体阻滞剂有时会让人觉得没劲") }
-        let first = "累的话今天先放轻松：训练降一级或换成散步，今晚早点睡。"
+        let afterDialysis = p.onHemodialysis && a.has(["透析"])
+        let first = afterDialysis ? "透析后觉得累很常见，多数休息几个小时到第二天会缓解：透析当天以休息为主，不安排训练。"
+            : "累的话今天先放轻松：训练降一级或换成散步，今晚早点睡。"
         var parts: [String?] = []
+        if afterDialysis { parts.append("每次透析后都累得厉害、要很久才缓过来，告诉透析中心：可能和脱水量、血压或贫血有关，可以调整。") }
         if why.isEmpty, let s = c.readiness.score, c.readiness.level == .high, !c.beforeWake {
             parts.append("今天的准备度是 \(s)，数据上恢复得不错，但你的感受更重要，按感受来。")
         }
@@ -104,8 +110,11 @@ enum SymptomGuide {
     static func swelling(_ a: AgentQuestion, _ c: AgentContext) -> AgentReply {
         let p = c.profile
         let why = ([HealthCondition.ckd, .heartFailure].filter { p.conditions.contains($0) }.map(\.label) + (p.fluidLimited ? ["限水"] : [])).joined(separator: "、")
-        let first = p.watchesWeight ? "脚肿对有\(why)的你需要留意，可能是身体存了水：今天称一下体重、量一下血压。"
-            : "脚肿多数和久坐久站、吃得咸有关，先抬高腿休息；但有几种情况要尽快就医。"
+        let place = ["眼皮", "眼睑", "脸", "手", "腿", "脚踝", "脚"].first { a.text.contains($0) } ?? "脚"
+        let face = ["眼皮", "眼睑", "脸"].contains(place)
+        let first = p.watchesWeight ? "\(place)肿对有\(why)的你需要留意，可能是身体存了水：今天称一下体重、量一下血压。"
+            : (face ? "早上\(place)有点肿，可能是睡前喝水多、吃得咸或没睡好；如果天天这样，或者同时尿里泡沫多，去查一下尿常规和肾功能。"
+               : "\(place)肿多数和久坐久站、吃得咸有关，先抬高腿休息；但有几种情况要尽快就医。")
         var seen: [String] = []
         if let g = CardioAnalyzer.weightGain(c.vitals, now: c.now) { seen.append("体重 3 天内涨了 \(g.kg.oneDecimal) kg") }
         if let s = KidneySigns.summary(c.days, now: c.now), s.edemaDays > 0 { seen.append("你记录的" + s.text.replacingOccurrences(of: "近 14 天记了 \(s.days) 天：", with: "近 14 天里，")) }
@@ -115,7 +124,8 @@ enum SymptomGuide {
         if let u = c.lab(.uacr, within: 365), u.value >= 30 { seen.append("尿白蛋白/肌酐比 \(u.valueText) 偏高，尿里漏蛋白多时也容易肿") }
         if let w = KidneyDiet.week(c.days, profile: p, now: c.now), w.saltyDays > 0 { seen.append("这周记录里偏咸 \(w.saltyDays) 天，盐多会让身体存水") }
         if let avg = c.bp.avgSys, avg >= 140 { seen.append("近 30 天血压平均 \(Int(avg))/\(Int(c.bp.avgDia ?? 0))") }
-        var tips = ["按一按脚踝或小腿前面，松开后留下小坑就是水肿", "坐着时把腿抬高，少久站久坐", "少吃盐"]
+        var tips = face ? ["晚饭和睡前少喝水、少吃咸的", "看看小腿、脚踝是不是也有按下去的坑", "少吃盐"]
+            : ["按一按脚踝或小腿前面，松开后留下小坑就是水肿", "坐着时把腿抬高，少久站久坐", "少吃盐"]
         if p.watchesWeight { tips.insert("每天早上起床排尿后称体重，记在 Pulse 里", at: 1) }
         return answer(first, [
             found(seen),
@@ -148,8 +158,11 @@ enum SymptomGuide {
         let q = a.text
         let part = ["膝盖", "膝", "脚踝", "踝", "跟腱", "足底", "小腿", "大腿", "髋", "腰", "背", "肩", "手腕", "肘", "腿", "脚"].first { q.contains($0) } ?? "这里"
         let running = q.contains("跑")
-        let first = "\(part)疼先别\(running ? "跑" : "练")了，换成不压到这个部位的运动，疼痛消了再慢慢恢复。"
-        var parts: [String?] = []
+        let rest = "\(part)疼先别\(running ? "跑" : "练")了，换成不压到这个部位的运动，疼痛消了再慢慢恢复。"
+        // 「膝盖疼能吃布洛芬吗」 is answered first.
+        let painkiller = KidneyMeds.asksAbout(q) ? KidneyMeds.answer(c.profile, labs: c.labs) : nil
+        let first = painkiller ?? rest
+        var parts: [String?] = painkiller == nil ? [] : [rest]
         if running, ["膝", "踝", "跟腱", "足底", "小腿", "髋"].contains(where: { part.contains($0) }) {
             parts.append("跑步时\(part)疼，常见原因是跑量加得太快、鞋或路面不合适。")
         }
@@ -158,7 +171,7 @@ enum SymptomGuide {
                                           "刚扭伤或明显肿痛，冰敷 15 分钟，一天几次",
                                           "不疼了先从平时一半的量开始，每周加不超过 10%"]))
         parts.append("肿得厉害、关节卡住或打软腿、不能负重，或者 1–2 周还没好转，去看骨科或运动医学科。")
-        if KidneyMeds.atRisk(c.profile, labs: c.labs) { parts.append("想吃止痛药的话，布洛芬这类药可能伤肾，先问医生或药师用哪种。") }
+        if painkiller == nil, KidneyMeds.atRisk(c.profile, labs: c.labs) { parts.append("想吃止痛药的话，布洛芬这类药可能伤肾，先问医生或药师用哪种。") }
         var blocks: [AgentUIBlock] = []
         if PlanChat.isRequest(q) {
             blocks = PlanChat.reply(q, context: c).blocks.filter { $0.proposal != nil }
@@ -238,7 +251,11 @@ enum SymptomGuide {
             return answer("尿里有血要尽快去医院查一下。", ["剧烈运动后偶尔会有，但不能自己判断，先查尿常规。"], sources: ["常识"])
         }
         if a.has(["尿少", "尿量"]) {
-            if p.onDialysis {
+            if p.onPeritoneal {
+                return answer("腹透的人保住剩下的尿量很重要，尿明显变少要告诉腹透中心。", ["每天称体重；体重涨得快、脚肿或气短，及时联系腹透中心。利尿剂不要自己加减。"],
+                              sources: ["健康状况"], followUps: ["最近脚有点肿怎么办？"])
+            }
+            if p.onHemodialysis {
                 return answer("透析以后尿量变少很常见，尿量的变化按透析中心的要求记录、告诉医护人员。", ["喝水按透析中心定的量；两次透析之间体重涨得多、气短或脚肿，及时联系透析中心。"],
                               sources: ["健康状况"], followUps: ["最近脚有点肿怎么办？"])
             }
@@ -253,20 +270,78 @@ enum SymptomGuide {
                       sources: [u == nil ? "常识" : "化验结果"], followUps: ["我的肾功能怎么样？"], destination: u == nil ? nil : .labs)
     }
 
+    static func itch(_ a: AgentQuestion, _ c: AgentContext) -> AgentReply {
+        let p = c.profile
+        let kidney = p.conditions.contains(.ckd) || p.onDialysis
+        let first = kidney ? "皮肤痒在肾病里很常见，常和皮肤干、血磷偏高有关，告诉肾内科医生，有办法缓解。"
+            : "皮肤痒多数是皮肤干，天冷、洗澡水太热、洗得太勤都会加重；先做好保湿，一两周不见好去看皮肤科。"
+        var seen: [String] = []
+        if let ph = c.lab(.phosphorus, within: 365), ph.value > 1.45 { seen.append("血磷 \(ph.valueText) mmol/L 偏高，磷高常让人皮肤痒") }
+        if let w = KidneyDiet.week(c.days, profile: p, now: c.now), w.phosphorusPerDay >= 1 { seen.append("这周高磷食物平均每天 \(w.phosphorusPerDay.oneDecimal) 份") }
+        if p.hasDiabetes, (c.glucose.tar ?? 0) > 0.25 { seen.append("血糖偏高的时间比较多，血糖高也会让皮肤干痒") }
+        return answer(first, [
+            found(seen),
+            HealthAgent.bullets(["洗澡用温水、时间短一些，洗完趁皮肤还潮就涂保湿霜", "穿宽松的棉质衣服，别用力抓，指甲剪短",
+                                 kidney ? "少吃加工食品、深色汽水这类高磷食物，降磷药按医生的安排吃" : "少吃辛辣，留意是不是换了洗衣液或护肤品"]),
+            "痒得睡不着、起了大片疹子，或者皮肤、眼白发黄，尽快就医。",
+        ], sources: ["健康状况", c.labs.isEmpty ? nil : "化验结果"].compactMap { $0 }, followUps: kidney ? ["我的化验结果怎么样？"] : [],
+                      destination: c.labs.isEmpty ? nil : .labs)
+    }
+
+    static func appetite(_ a: AgentQuestion, _ c: AgentContext) -> AgentReply {
+        let p = c.profile
+        let hypoRisk = p.hypoRiskMeds()
+        let first = hypoRisk ? "吃得少的时候要先留意血糖：你在用会引起低血糖的药，吃得比平时少时多测几次，药怎么调先问医生，别自己停。"
+            : "一两天没胃口多数和累、压力、天热或着凉有关，先吃清淡、少量多餐；持续一周以上要查一下原因。"
+        var seen: [String] = []
+        if let e = LabAnalyzer.egfrSeries(c.labs).last, e.value < 30 { seen.append("eGFR \(e.valueText) 比较低，肾功能下降时也会没胃口、恶心") }
+        if let h = lowHb(c) { seen.append("血红蛋白 \(h.valueText) g/L 偏低") }
+        if c.recent7.filter(\.highStress).count >= 3 { seen.append("这周压力大的天比较多") }
+        let weights = c.vitals.filter { $0.kind == .weight && $0.time > c.now.adding(days: -30) }.sorted { $0.time < $1.time }
+        if let f = weights.first, let l = weights.last, f.value - l.value >= 2 { seen.append("近一个月体重少了 \((f.value - l.value).oneDecimal) kg") }
+        return answer(first, [
+            found(seen),
+            HealthAgent.bullets(["少量多餐，选容易消化的", p.tracksNutrients ? "蛋白质别吃得太少，按医生定的量来" : "保证每餐有点蛋白质，比如鸡蛋、豆腐、鱼",
+                                 "记下每天大概吃了多少，复诊时告诉医生"]),
+            "一周以上吃不下、体重明显下降，或者伴有呕吐、腹痛、黑便，去看医生；\(p.conditions.contains(.ckd) || p.onDialysis ? "肾病的人还要告诉肾内科医生。" : "")",
+        ], sources: ["健康状况", c.labs.isEmpty ? nil : "化验结果"].compactMap { $0 }, followUps: hypoRisk ? ["血糖控制得怎么样？"] : [])
+    }
+
+    static func nocturia(_ a: AgentQuestion, _ c: AgentContext) -> AgentReply {
+        let p = c.profile
+        let first = "晚上起夜两次以上，先看看是不是睡前喝水多、喝了茶或咖啡；如果最近才变多，或者白天尿也多、总口渴，要去查一下。"
+        var seen: [String] = []
+        if p.hasDiabetes, (c.glucose.tar ?? 0) > 0.25 { seen.append("血糖偏高的时间比较多，血糖高会让尿变多") }
+        if p.conditions.contains(.ckd) { seen.append("你有慢性肾病，肾脏浓缩尿的能力下降时夜里尿会变多") }
+        if c.medications.contains(where: { $0.name.contains("呋塞米") || $0.name.contains("利尿") || $0.name.contains("氢氯噻嗪") }) { seen.append("利尿剂下午或晚上吃，夜里尿会多，吃药时间问医生能不能调") }
+        if p.sex == .male, p.age >= 50 { seen.append("50 岁以上的男性，前列腺增大也常让人起夜") }
+        var tips = ["睡前 2 小时少喝水，晚上不喝茶、咖啡和酒", "记 2–3 天起夜几次、每次大概多少，看医生时带上"]
+        if p.fluidLimited { tips[0] = "一天的水按医生定的上限，尽量放在白天喝" }
+        return answer(first, [
+            found(seen),
+            HealthAgent.bullets(tips),
+            "尿里有血、尿痛、发烧，或者起夜多同时脚肿、气短，尽快就医。",
+        ], sources: ["健康状况"], followUps: p.hasDiabetes ? ["血糖控制得怎么样？"] : [])
+    }
+
     static func headache(_ a: AgentQuestion, _ c: AgentContext) -> AgentReply {
         let p = c.profile
         let hasBP = p.conditions.contains(.hypertension) || c.bp.count > 0
-        let first = hasBP ? "头疼时先量一下血压。" : "先找个安静的地方休息一下；头疼常见的原因是睡得少、没吃饭、喝水少、压力大，或者咖啡突然停了。"
+        let rest = hasBP ? "头疼时先量一下血压。" : "先找个安静的地方休息一下；头疼常见的原因是睡得少、没吃饭、喝水少、压力大，或者咖啡突然停了。"
+        // 「头疼能吃布洛芬吗」 is answered first.
+        let painkiller = KidneyMeds.asksAbout(a.text) ? KidneyMeds.answer(p, labs: c.labs) : nil
+        let first = painkiller ?? rest
         var why: [String] = []
         if let s = lastNight(c), s < 360 { why.append("昨晚只睡了 \((s / 60).oneDecimal) 小时") }
         if c.recent7.filter(\.highStress).count >= 2 { why.append("最近压力大") }
         if let y = c.days.first(where: { $0.day == c.logicalToday.adding(days: -1) }), y.hadAlcohol { why.append("昨天喝了酒") }
         if let last = recentBP(c, days: 3).max(by: { $0.time < $1.time }), last.value >= 160 { why.append("最近一次血压 \(Int(last.value))/\(Int(last.value2 ?? 0))") }
         return answer(first, [
+            painkiller == nil ? nil : rest,
             hasBP ? "血压在 180/110 以上又头疼得厉害，或者伴有一侧无力、说话不清、看东西模糊，立即拨打 120。" : "突然剧烈头疼（像被打了一下），或者伴有发烧、脖子发硬、一侧无力，立即就医。",
             found(why),
             "头疼越来越频繁或越来越重，去看医生。",
-            KidneyMeds.atRisk(p, labs: c.labs) ? "想吃止痛药的话，布洛芬这类药可能伤肾，先问医生或药师用哪种。" : nil,
+            painkiller == nil && KidneyMeds.atRisk(p, labs: c.labs) ? "想吃止痛药的话，布洛芬这类药可能伤肾，先问医生或药师用哪种。" : nil,
         ], sources: ["睡眠", hasBP ? "血压" : nil].compactMap { $0 }, followUps: hasBP ? ["我的血压控制得怎么样？"] : ["我的睡眠怎么样？"])
     }
 }

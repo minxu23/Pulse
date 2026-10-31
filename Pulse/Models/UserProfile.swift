@@ -75,6 +75,8 @@ final class UserProfile {
     var phosphorusLimit: Bool = false
     /// 血液透析: the session weekdays (Calendar numbering) and the dry weight the doctor gave.
     var dialysis: Bool = false
+    /// 「hemo」 血液透析 or 「peritoneal」 腹膜透析.
+    var dialysisModeRaw: String = "hemo"
     var dialysisWeekdays: [Int] = []
     var dryWeightKg: Double? = nil
     /// 复盘的优先事项 in the user's own order; empty = Pulse's automatic order.

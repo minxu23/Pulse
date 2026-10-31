@@ -75,6 +75,10 @@ enum AgentFollowUps {
                 list = [when(!c.pastBedtime, "今晚该注意什么？"), "熬夜后怎么恢复？", "今天适合运动吗？"]
             case .weightChange?:
                 list = [when(saltMatters, "少吃盐有什么技巧？"), when(p.watchesWeight, "我需要去看医生吗？"), "我想减肥该怎么吃？"]
+            case .weight?:
+                list = ["我的体重有变化吗？", when(p.watchesWeight, "最近脚有点肿怎么办？")]
+            case .lab?:
+                list = ["我的化验结果怎么样？", "我什么时候该复查？"]
             case nil:
                 list = []
             }
@@ -91,6 +95,9 @@ enum AgentFollowUps {
             case .thirst?: list = [when(diabetes, "血糖控制得怎么样？"), when(saltMatters || p.fluidLimited, "少吃盐有什么技巧？")]
             case .urine?: list = [when(c.lab(.uacr) != nil || c.lab(.egfr) != nil, "我的肾功能怎么样？"), when(saltMatters, "少吃盐有什么技巧？")]
             case .headache?: list = [when(c.bp.count > 0, "我的血压控制得怎么样？"), "我的睡眠怎么样？"]
+            case .itch?: list = [when(hasLabs, "我的化验结果怎么样？"), when(p.tracksNutrients, "血磷高不能吃什么？")]
+            case .appetite?: list = [when(diabetes, "血糖控制得怎么样？"), "今天吃什么好？"]
+            case .nocturia?: list = [when(diabetes, "血糖控制得怎么样？"), "我的睡眠怎么样？"]
             case nil: list = []
             }
         case .trainingCheck:
@@ -128,8 +135,11 @@ enum AgentFollowUps {
             list = [when(!q.contains("现在"), "现在可以喝咖啡吗？"), "我的睡眠怎么样？", "睡不着怎么办？"]
         case .stress:
             list = ["睡不着怎么办？", "今天适合运动吗？"]
+        case .diet where r.blocks.contains { if case .water? = $0.record?.items.first { true } else { false } }:
+            // 「我刚喝了一杯水」: about drinking, not food.
+            list = ["一天喝多少水？"]
         case .diet:
-            list = [when(saltMatters && !q.contains("盐"), "少吃盐有什么技巧？"), when(diabetes, "糖尿病人能吃水果吗？"),
+            list = [when(saltMatters && (!q.contains("盐") || q.contains("为什么")), "少吃盐有什么技巧？"), when(diabetes, "糖尿病人能吃水果吗？"),
                     when(kHigh, "我能吃香蕉吗？"), when(!q.contains("饿"), "晚上饿了能吃点什么？"), when(!q.contains("吃什么"), "今天吃什么好？")]
         case .bp:
             list = [when(saltMatters || c.bp.avgSys.map { $0 >= 130 } == true, "少吃盐有什么技巧？"), when(onBPMeds, "降压药是早上吃还是晚上吃？"),
@@ -157,7 +167,14 @@ enum AgentFollowUps {
             list = [when(!q.contains("热身"), "热身怎么做？"), when(!q.contains("拉伸") && !q.contains("拉多久"), "拉伸怎么做？"),
                     when(q.contains("跑"), "跑步时怎么呼吸？"), "今天适合运动吗？"]
         case .about:
-            list = ["我的数据会上传吗？", "你的建议依据是什么？"]
+            // A reminder or a 记下 card: what is next for that, not questions about Pulse itself.
+            if let rec = r.blocks.compactMap(\.record).first {
+                list = rec.reminder.map { [when($0.area == .kidney || $0.area == .diabetes, "我的复查安排是什么？")] } ?? []
+            } else if a.has(["怎么", "在哪", "哪里", "如何"]) {
+                list = []
+            } else {
+                list = ["我的数据会上传吗？", "你的建议依据是什么？"]
+            }
         case .condition, .greeting, .daySummary, .unknown, .emergency:
             list = []
         }

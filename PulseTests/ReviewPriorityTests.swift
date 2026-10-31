@@ -161,7 +161,7 @@ struct ReviewPriorityTests {
 
         // Far above the line every day: not 「和你平时差不多」-and-平稳, however usual it is.
         let severe = line(.bloodPressure, context(bp(152, 96, days: 30)))
-        #expect(severe.usual == .worse && severe.text.contains("明显高于 135/85") && severe.text.contains("最近量的 30 天都是这样"), "\(severe.text)")
+        #expect(severe.usual == .worse && severe.text.contains("明显高于目标 130/80") && severe.text.contains("最近量的 30 天都是这样"), "\(severe.text)")
         #expect(ReviewPriorities.level(lines: [severe] + calm, readiness: nil) == .mixed)
 
         // Just above it, day after day: said once, on the 7th measured day in a row, with the doctor…
@@ -188,6 +188,18 @@ struct ReviewPriorityTests {
         // A diastolic higher than usual says so (not 「比你平时高 -3」).
         let dia = context(bp(138, 80, days: 10).filter { $0.time.startOfDay != today } + bp(135, 86, days: 1))
         #expect(line(.bloodPressure, dia).text.hasSuffix("舒张压比你平时高 6"), "\(line(.bloodPressure, dia).text)")
+
+        // Read against the person's own target, naming the number that is over.
+        #expect(line(.bloodPressure, context(bp(132, 82, days: 1))).text == "132/82 mmHg，高于目标 130/80")
+        #expect(line(.bloodPressure, context(bp(128, 84, days: 1))).text == "128/84 mmHg，舒张压高于目标 80")
+        #expect(line(.bloodPressure, context(bp(136, 78, days: 1))).text == "136/78 mmHg，收缩压高于目标 130")
+        #expect(line(.bloodPressure, context(bp(128, 92, days: 1))).text == "128/92 mmHg，舒张压明显高于目标 80")
+        var looser = p
+        looser.bpTargetSys = 135
+        looser.bpTargetDia = 85
+        let ok = ReviewPriorities.line(for: .bloodPressure, DayData(day: today), AgentContext.make(profile: looser, name: "", days: [], plan: [], workouts: [],
+                                       vitals: bp(132, 82, days: 1), events: [], stopBang: [], baselineSetAt: nil, raceName: "", labs: [], now: day))
+        #expect(ok?.tone == .good && ok?.text == "132/82 mmHg，在目标 135/85 以内")
 
         // CGM: under half the day in range is never "usual" either.
         var cgm: [VitalPoint] = []

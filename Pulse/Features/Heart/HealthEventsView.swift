@@ -158,11 +158,13 @@ struct CareTaskRow: View {
                 HStack(spacing: Theme.Space.item) {
                     Label(task.area.label, systemImage: task.area.icon)
                     if let due = task.due {
-                        if !task.done && due < .app {
-                            Label("已逾期 \(due.formatted(.dateTime.month().day()))", systemImage: "exclamationmark.circle.fill")
+                        // A reminder set in the chat may have a time of day.
+                        let when = due.formatted(.dateTime.month().day()) + (due == due.startOfDay ? "" : " " + Clock.text(due.minutesOfDay))
+                        if !task.done && due < (due == due.startOfDay ? Date.app.startOfDay : .app) {
+                            Label("已逾期 \(when)", systemImage: "exclamationmark.circle.fill")
                                 .symbolRenderingMode(.multicolor)
                         } else {
-                            Text("· \(due.formatted(.dateTime.month().day()))")
+                            Text("· \(when)")
                         }
                     }
                 }

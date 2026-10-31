@@ -61,7 +61,10 @@ struct DataPrivacyView: View {
         }
         .navigationTitle("隐私与数据").calmStyle()
         .confirmationDialog("确定删除 Pulse 中的所有数据？此操作无法撤销。", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("永久删除", role: .destructive) { DataHub.deleteAll(in: ctx) }
+            Button("永久删除", role: .destructive) {
+                DataHub.deleteAll(in: ctx)
+                AgentConversation.shared.clear()
+            }
         }
     }
 

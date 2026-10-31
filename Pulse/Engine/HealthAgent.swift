@@ -253,7 +253,8 @@ enum AgentIntent: String, CaseIterable {
     var keywords: [String] {
         switch self {
         case .emergency: ["想死", "轻生", "伤害自己", "活着没意思", "chest pain", "Chest pain", "can't breathe", "cannot breathe", "suicide", "kill myself",
-                          "胸痛", "胸口痛", "胸闷", "喘不上气", "呼吸困难", "憋得慌", "晕倒", "晕厥", "昏倒", "昏迷", "意识不清", "一侧无力", "半边", "口角歪", "说话不清", "言语不清", "抽搐", "心跳很快停不下来", "严重低血糖", "想自杀", "不想活"]
+                          "胸痛", "胸口痛", "胸闷", "胸口闷", "胸口发闷", "胸口憋", "胸口压", "胸口疼", "胸疼", "胸部疼", "胸部痛", "胸前疼", "胸前痛",
+                          "心口疼", "心口痛", "心口闷", "喘不上气", "呼吸困难", "憋得慌", "晕倒", "晕厥", "昏倒", "昏迷", "意识不清", "一侧无力", "半边", "口角歪", "说话不清", "言语不清", "抽搐", "心跳很快停不下来", "严重低血糖", "想自杀", "不想活"]
         case .daySummary: ["总结一下今天", "今天总结", "今天的总结", "今天怎么样", "今天的数据", "明天要注意", "明天注意", "今晚该注意", "今晚注意", "今晚要注意", "睡前注意"]
         case .meds: ["药", "剂量", "胰岛素", "停药", "减药", "加药", "二甲双胍", "格列", "地平", "沙坦", "普利", "洛尔", "他汀", "阿司匹林",
                      "利尿剂", "呋塞米", "华法林", "司美格鲁肽", "利拉鲁肽"] + KidneyMeds.nsaids
@@ -271,12 +272,12 @@ enum AgentIntent: String, CaseIterable {
         case .hrv: ["HRV", "hrv", "变异性"]
         case .rhr: ["静息心率", "心率", "心跳", "基线"]
         case .readiness: ["准备度", "今天适合", "今天能", "今天要不要", "今天练", "能不能练", "能练", "适合运动", "适合跑", "要不要练", "累"]
-        case .sleep: ["睡眠", "睡觉", "失眠", "早睡", "作息", "熬夜", "睡不着", "困", "怎么睡", "补觉", "睡好", "睡得", "倒班", "夜班"]
+        case .sleep: ["睡眠", "睡觉", "失眠", "早睡", "作息", "熬夜", "睡不着", "困", "怎么睡", "补觉", "睡好", "睡不好", "睡不踏实", "睡不安稳", "睡眠差", "早醒", "睡得", "倒班", "夜班"]
         case .exercise: ["运动", "训练", "计划", "锻炼", "跑步", "有氧", "力量", "步数", "下周"]
         case .events: ["异常", "提醒", "警告", "事件"]
         case .doctor: ["医生", "就医", "看病", "复诊", "医院", "门诊", "检查"]
         case .next: ["接下来", "下一步", "关注", "注意什么", "重点", "建议", "该做"]
-        case .overall: ["总体", "整体", "怎么样", "评价", "总结", "进展", "进步", "变好", "改善", "效果", "状态"]
+        case .overall: ["总体", "整体", "怎么样", "评价", "总结", "进展", "进步", "变好", "改善", "效果", "状态", "上个月", "和以前比", "比以前"]
         case .greeting: ["你好", "您好", "hi", "Hi", "你是谁", "能做什么", "怎么用"]
         case .unknown: []
         }
@@ -289,6 +290,8 @@ enum AgentIntent: String, CaseIterable {
 
     func matches(_ q: String) -> Bool {
         switch self {
+        // 「胸口有点闷」「心口疼得厉害」: the chest, then the feeling, a few words apart.
+        case .emergency: keywords.contains { q.contains($0) } || q.range(of: "(胸口|心口|胸前).{0,3}(闷|疼|痛|压|憋)", options: .regularExpression) != nil
         case .device: DeviceGuide.isRequest(q)
         case .planChange: PlanChat.isRequest(q)
         // "明天下雨能跑吗" is a training question that weighs the weather; "这几天天气适合户外训练吗" asks about the weather.
@@ -514,6 +517,10 @@ enum HealthAgent {
     // MARK: Answers
 
     static func reply(to question: String, context base: AgentContext) -> AgentReply {
+        recordingNote(answer(to: question, context: base), question: question, context: base)
+    }
+
+    private static func answer(to question: String, context base: AgentContext) -> AgentReply {
         // A condition the user says they have counts for this answer already; a card records it.
         // The question is what is left without it: 「我是低血钾症患者」 is not a question about lab results.
         let told = intent(for: question) == .emergency ? nil : ConditionLibrary.mention(in: question, profile: base.profile)
@@ -919,6 +926,11 @@ enum HealthAgent {
             var found: [String] = []
             if let a = c.association("caffeine-sleep"), a.unfavorable { found.append(a.sentence) }
             if c.recent7.filter(\.highStress).count >= 2 { found.append("这周压力大的天比较多。") }
+            // Snoring and waking up gasping disturb sleep too, and need a different answer than habits.
+            let b = c.breathing
+            if c.profile.apneaStatus != .diagnosed, b.snoring >= 4 || b.gasping > 0 {
+                found.append("近 30 天有 \(b.snoring) 晚打鼾\(b.gasping > 0 ? "、\(b.gasping) 晚憋醒" : "")，夜里呼吸不顺也会让人睡不踏实，可以问问医生要不要做睡眠监测。")
+            }
             if c.profile.shift != nil { tips[0] = "倒班的人更容易睡不好：夜班后补觉时卧室全遮光、手机静音，休息日起床时间别比上班日晚太多" }
             return AgentReply(text: lines([
                 first, bullets(tips),
@@ -1408,9 +1420,11 @@ enum HealthAgent {
                               sources: [], followUps: ["我的血压控制得怎么样？"], destination: .labs)
         }
         // 「我是不是有低血钾」「肌酐高吗」: that test first.
-        let names: [(LabKind, [String])] = [(.potassium, ["血钾", "低钾", "高钾", "低血钾", "高血钾"]), (.egfr, ["eGFR", "egfr", "肾小球"]),
-                                            (.creatinine, ["肌酐"]), (.uacr, ["尿蛋白", "尿白蛋白", "UACR"]), (.hemoglobin, ["血红蛋白", "贫血"]),
-                                            (.uricAcid, ["尿酸"]), (.hba1c, ["糖化"]), (.phosphorus, ["血磷"])]
+        // Longer names first: 「糖化血红蛋白」 is not 血红蛋白, 「尿白蛋白肌酐比」 is not 肌酐.
+        let names: [(LabKind, [String])] = [(.hba1c, ["糖化", "HbA1c"]), (.uacr, ["尿蛋白", "尿白蛋白", "UACR"]),
+                                            (.potassium, ["血钾", "低钾", "高钾", "低血钾", "高血钾"]), (.egfr, ["eGFR", "egfr", "肾小球"]),
+                                            (.creatinine, ["肌酐"]), (.hemoglobin, ["血红蛋白", "贫血"]),
+                                            (.uricAcid, ["尿酸"]), (.phosphorus, ["血磷"])]
         var lead: String? = nil
         var asked: LabKind? = nil
         if let (kind, _) = names.first(where: { $0.1.contains { q.contains($0) } }), let l = latest.first(where: { $0.kind == kind }) {
@@ -1419,7 +1433,7 @@ enum HealthAgent {
             var line = "\(kind.label) \(l.valueText) \(kind.unit)（\(l.date.formatted(.dateTime.month().day()))）：\(status.text)。"
             if kind == .potassium, q.contains("低"), l.value > 5.0 { line = "从化验看不是偏低，而是偏高：" + line }
             if kind == .potassium, q.contains("高"), l.value < 3.5 { line = "从化验看不是偏高，而是偏低：" + line }
-            lead = line + "是不是某种病要由医生结合多次结果判断。"
+            lead = line + "一次结果只能作参考，医生会结合前后几次化验一起看。"
         }
         var items = latest.filter { $0.kind != asked }.map { l in
             "\(l.kind.label) \(l.valueText) \(l.kind.unit)（\(l.date.formatted(.dateTime.month().day()))\(l.estimated ? "，由肌酐估算" : "")）：\(LabAnalyzer.status(l.kind, l.value, profile: c.profile).text)"
@@ -1754,6 +1768,7 @@ enum HealthAgent {
     /// A condition card records nothing until 记下, so 「已为你记下低血钾症」 becomes 「可以记下…」.
     /// Only clauses about the condition count: 「你已记录 5 天血压」 stays.
     static func notRecorded(_ text: String, of r: AgentReply) -> String {
+        let text = r.blocks.contains { $0.record != nil } ? withoutRecordClaims(text) : text
         guard let name = r.blocks.compactMap(\.condition).first?.info.name else { return text }
         let claim = "已经?(?:为你|帮你|给你)?(?:记下|记录|添加|保存)(?:了|好)?"
         func rewrite(_ c: String) -> String {
@@ -1768,6 +1783,24 @@ enum HealthAgent {
             clause = ""
         }
         return out + rewrite(clause)
+    }
+
+    /// Sentences in which a model says it recorded something itself (「我这边先帮你记一条」): only
+    /// the 记下 card records, so they go. Offers (「可以帮你记下」) stay.
+    static func withoutRecordClaims(_ text: String) -> String {
+        let claim = #"((?:帮你|为你|给你)先?(?:记|加|添加|设置|设好|保存)|我(?:已经?|先)?(?:记下|记上|记好|记了|记录了|加上了|添加了|设置了|设好了))"#
+        let offer = ["可以", "要不要", "的话", "点下面", "点「"]
+        var out = "", sentence = ""
+        func flush() {
+            if sentence.range(of: claim, options: .regularExpression) == nil || offer.contains(where: sentence.contains) { out += sentence }
+            sentence = ""
+        }
+        for ch in text {
+            sentence.append(ch)
+            if "。！\n".contains(ch) { flush() }
+        }
+        flush()
+        return out
     }
 
     static func streamed(_ partial: String, of r: AgentReply, proposing: Bool? = nil) -> String {
@@ -1852,11 +1885,26 @@ enum HealthAgent {
             }
         }
         // When to see a doctor stays, however the model shortened the answer.
-        if let s = r.safety {
-            func squeeze(_ x: String) -> String { x.filter { !$0.isWhitespace } }
-            if !squeeze(t).contains(squeeze(String(s.prefix(14)))) { t += "\n\n" + s }
+        if let s = r.safety, !says(t, safety: s) { t += "\n\n" + s }
+        // A 记下 card goes with the line that says how to use it.
+        if r.blocks.contains(where: { $0.record != nil }), !t.contains("「记下」"),
+           let ask = r.text.components(separatedBy: "\n").first(where: { $0.hasPrefix("要记下来的话") }) {
+            t += "\n\n" + ask
         }
         return t
+    }
+
+    /// Whether an answer already gives the safety line, perhaps in its own words: its opening as
+    /// written, or nearly all of its clauses, the last one (what to do) among them.
+    static func says(_ text: String, safety s: String) -> Bool {
+        func squeeze(_ x: String) -> String { x.filter { !$0.isWhitespace } }
+        let t = squeeze(text)
+        if t.contains(squeeze(String(s.prefix(14)))) { return true }
+        let clauses = s.split(whereSeparator: { "，、；。,;".contains($0) })
+            .map { squeeze(String($0)).replacingOccurrences(of: #"^(如果|若|或者|或|有|出现|并且|且|又|还)+"#, with: "", options: .regularExpression) }
+            .filter { $0.count >= 2 }
+        guard let action = clauses.last, t.contains(action) else { return false }
+        return Double(clauses.filter { t.contains($0) }.count) >= Double(clauses.count) * 0.75
     }
 
     /// Instructions for the on-device model (Apple Intelligence).

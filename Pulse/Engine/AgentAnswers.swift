@@ -24,11 +24,16 @@ extension HealthAgent {
                 : "现在请用中文提问，比如「今天适合跑步吗？」，我会结合你的记录回答。"
             return AgentReply(text: text, followUps: ["我最近整体怎么样？", "今天适合运动吗？"], intent: .about, conclusion: text, verbatim: true)
         }
+        // Dialysis warning signs (peritonitis, a blocked fistula) come before anything else they mention.
+        if let w = KidneySigns.askedWarning(q, profile: c.profile) { return w }
+        if let r = courtesy(q) ?? reminderRequest(a, context: c) ?? mood(a, context: c) { return r }
         // A blood pressure or glucose reading decides the answer; the symptom with it is part of it
         // (「血压88/55头有点晕」).
         switch a.reading {
         case .bp(let sys, let dia)?: return bpReading(sys: sys, dia: dia, a, context: c)
         case .glucose(let v, let ctx)?: return glucoseReading(v, ctx, a, context: c)
+        case .lab(let k, let v, let unit, let guessed)?: return labReading(k, value: v, unit: unit, guessed: guessed, a, context: c)
+        case .weight(let kg)?: return weightReading(kg, a, context: c)
         default: break
         }
         // 「喝酒后第二天能跑步吗」 is about the drink, not the day's plan.
@@ -44,6 +49,7 @@ extension HealthAgent {
             return SymptomGuide.reply(s, a, context: c)
         }
         if let k = knowledge(a, context: c) { return k }
+        if let r = careAnswer(a, context: c) { return r }
         switch a.reading {
         case .sleepHours(let h)? where h * 60 < c.profile.sleepNeedMinutes - 60: return shortNight(hours: h, a, context: c)
         case .weightChange(let kg)?: return weightChange(kg: kg, a, context: c)
@@ -51,7 +57,8 @@ extension HealthAgent {
         }
         if let f = a.food { return FoodGuide.reply(f, a, context: c) }
         if q.contains("准备度"), a.form == .explain || a.has(["怎么算", "怎么来", "依据", "根据什么"]) { return readinessExplained(c) }
-        if a.has(["复查", "复诊", "检查", "化验", "抽血"]), a.has(["多久", "多长时间", "隔多", "频率", "几个月", "什么时候"]) { return recheck(c) }
+        if a.has(["复查", "复诊", "检查", "化验", "抽血"]), a.has(["多久", "多长时间", "隔多", "频率", "几个月", "什么时候", "安排", "日程", "哪天", "日期"]) { return recheck(c) }
+        if a.has(["盐"]), a.form == .why || a.has(["为什么", "为啥"]) { return saltWhy(c) }
         if a.has(["盐"]), a.form == .how || a.has(["少吃盐", "控盐", "限盐", "低盐", "减盐"]) { return saltTips(c) }
         if a.has(["药"]), a.has(["早上吃还是晚上吃", "什么时候吃", "几点吃", "饭前吃还是饭后吃", "饭前还是饭后", "早上还是晚上", "漏吃", "忘了吃", "漏服", "忘吃"]) {
             return medTiming(a, context: c)
@@ -323,6 +330,25 @@ extension HealthAgent {
         return AgentReply(text: lines([first, bullets(items), "复诊时可以在「我的 › 隐私与数据导出」生成就诊摘要带上。"]),
                           sources: ["化验结果", "健康状况"], followUps: ["我的肾功能怎么样？"], destination: c.labs.isEmpty ? nil : .labs,
                           intent: .doctor, conclusion: first, verbatim: true)
+    }
+
+    /// 「肾病为什么要少吃盐」: the reason first, for this person's conditions, then how much.
+    static func saltWhy(_ c: AgentContext) -> AgentReply {
+        let p = c.profile
+        let kidney = p.conditions.contains(.ckd) || p.onDialysis
+        let first = kidney
+            ? "盐吃多了，身体会存水，血压升高，肾脏要更费力地工作，尿里漏的蛋白也会变多，肾功能下降得更快。"
+            : "盐吃多了，身体会存水，血压容易升高，心脏和血管的负担也会加重。"
+        var parts: [String?] = []
+        if kidney, p.conditions.contains(.hypertension) { parts.append("你同时有高血压，盐也是血压降不下来的常见原因，少吃盐能让降压药效果更好。") }
+        else if p.conditions.contains(.hypertension) { parts.append("你有高血压，盐也是血压降不下来的常见原因，少吃盐能让降压药效果更好。") }
+        if p.onDialysis { parts.append("做透析时，吃得咸会口渴、喝水多，两次透析之间体重就涨得多。") }
+        parts.append("一般建议每天不超过 \(p.saltLimitG.noDecimal) g 盐，具体以医生给你定的为准。")
+        if let w = KidneyDiet.week(c.days, profile: p, now: c.now), w.saltyDays > 0 {
+            parts.append("你近 7 天记录了 \(w.days) 天，偏咸 \(w.saltyDays) 天。")
+        }
+        return AgentReply(text: lines(parts.isEmpty ? [first] : [first] + parts), sources: ["健康状况", "饮食记录"],
+                          followUps: ["少吃盐有什么技巧？", "我这周吃得咸吗？"], intent: .diet, conclusion: first, verbatim: true)
     }
 
     /// 「少吃盐有什么技巧」: practical steps, starting from where this person's salt comes from.

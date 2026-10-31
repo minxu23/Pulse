@@ -14,6 +14,11 @@ enum CareReminders {
     static let limit = 48
 
     static var enabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
+    /// 异常提醒: events found by the background check (`BackgroundCheck`) are notified at once.
+    static let eventsKey = "reminders.events"
+    static var eventsEnabled: Bool { UserDefaults.standard.bool(forKey: eventsKey) }
+    /// Not from tests, and not in a demo running on a shifted clock: the dates would be off.
+    static var schedulable: Bool { ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil && !DemoClock.isShifted }
 
     struct Task: Equatable {
         let id: String
@@ -40,17 +45,49 @@ enum CareReminders {
         let day = Date.FormatStyle().month().day().weekday(.abbreviated).locale(Locale(identifier: "zh_CN"))
         var out: [Planned] = []
         for t in tasks where !t.done {
-            guard let due = t.due?.startOfDay else { continue }
+            guard let at = t.due else { continue }
+            let due = at.startOfDay
+            // A time of day given in the chat (「晚上 9 点」) rings then; a date alone at 9 o'clock.
+            let timed = at != due
             if needsBooking(t.title) {
                 out.append(Planned(id: prefix + t.id + ".week", title: "下周：\(t.title)",
                                    body: "大约 \(due.formatted(day))。需要预约的话，现在约正好；日期以医生的安排为准。",
                                    fire: due.adding(days: -7).adding(minutes: hour * 60)))
             }
-            out.append(Planned(id: prefix + t.id + ".day", title: "今天：\(t.title)",
-                               body: t.note.isEmpty ? "完成后在 Pulse 的「照护与随访」里打个勾。" : t.note,
-                               fire: due.adding(minutes: hour * 60)))
+            let note = t.note == "在对话里添加" ? "" : t.note
+            out.append(Planned(id: prefix + t.id + ".day", title: (timed ? "" : "今天：") + t.title,
+                               body: note.isEmpty ? "完成后在 Pulse 的「照护与随访」里打个勾。" : note,
+                               fire: timed ? at : due.adding(minutes: hour * 60)))
         }
         return Array(out.filter { $0.fire > now }.sorted { $0.fire < $1.fire }.prefix(limit))
+    }
+
+    struct Event: Equatable {
+        let id: String
+        let title: String
+        let detail: String
+        let severity: Severity
+    }
+
+    /// New events worth a notification: those that call for the doctor, or for help now.
+    static func notices(_ events: [Event]) -> [Planned] {
+        events.filter { $0.severity >= .consult }.map { e in
+            let first = e.detail.split(separator: "。").first.map { $0 + "。" } ?? ""
+            return Planned(id: "pulse.event." + e.id, title: (e.severity == .urgent ? "请尽快处理：" : "") + e.title,
+                           body: first + "打开 Pulse 看看该怎么做。", fire: Date())
+        }
+    }
+
+    /// Shows these now (they are found in the background, so the user is not looking).
+    static func notifyNow(_ planned: [Planned]) async {
+        let center = UNUserNotificationCenter.current()
+        for p in planned {
+            let content = UNMutableNotificationContent()
+            content.title = p.title
+            content.body = p.body
+            content.sound = .default
+            try? await center.add(UNNotificationRequest(identifier: p.id, content: content, trigger: nil))
+        }
     }
 
     /// Asks once; false when the user said no (then only the system Settings can turn it on).
@@ -60,8 +97,7 @@ enum CareReminders {
 
     /// Replaces Pulse's pending reminders with the ones the tasks call for now (none when turned off).
     @MainActor static func sync(in ctx: ModelContext) {
-        // Not from tests, and not in a demo running on a shifted clock: the dates would be off.
-        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil, !DemoClock.isShifted else { return }
+        guard schedulable else { return }
         let tasks = ((try? ctx.fetch(FetchDescriptor<CareTask>())) ?? [])
             .map { Task(id: $0.id.uuidString, title: $0.title, note: $0.note, due: $0.due, done: $0.done) }
         let planned = enabled ? plan(tasks, now: Date()) : []

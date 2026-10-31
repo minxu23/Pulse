@@ -21,6 +21,7 @@ struct PulseApp: App {
                 .pageMargins()
         }
         .modelContainer(container)
+        .backgroundTask(.appRefresh(BackgroundCheck.id)) { await BackgroundCheck.run(container) }
     }
 }
 
@@ -70,6 +71,7 @@ struct RootView: View {
                 let persona = args.firstIndex(of: "-PulsePersona").flatMap { i in i + 1 < args.count ? DemoPersona(rawValue: args[i + 1]) : nil }
                     ?? DataHub.profile(in: ctx).flatMap { DemoPersona(rawValue: $0.demoPersona) }
                 DemoDataGenerator.populate(ctx, persona: persona ?? .xiaolin)
+                AgentConversation.shared.clear()
             }
             #if DEBUG
             // Screenshot helper: make today a training day in the demo plan.
@@ -87,7 +89,10 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { refresh() }
             // Whatever changed while the app was open (a task ticked off, a date moved) is what rings.
-            if phase == .background { CareReminders.sync(in: ctx) }
+            if phase == .background {
+                CareReminders.sync(in: ctx)
+                BackgroundCheck.schedule()
+            }
         }
         #if DEBUG
         .fullScreenCover(item: $debugPage) { page in

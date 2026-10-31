@@ -219,6 +219,7 @@ struct DayData: Identifiable, Equatable {
     var urineOutput: Int?
     var urineMl: Int?
     var foamyUrine: Bool?
+    var pdSigns: [String] = []
     var snoring = false
     var gasping = false
     var witnessedApnea = false
@@ -301,9 +302,14 @@ struct ProfileSnapshot: Equatable {
     var limitsPotassium: Bool { potassiumLimit || extraConditions.contains { $0.id == "hyperkalemia" } }
     var limitsPhosphorus: Bool { phosphorusLimit }
     /// 血液透析: no training on session days, fluids limited, weight watched between sessions.
+    /// 复盘的优先事项 in the user's own order; empty = automatic.
+    var reviewPriorities: [PriorityArea] = []
     var onDialysis = false
+    var dialysisMode: DialysisMode = .hemo
     var dialysisWeekdays: [Int] = []
     var dryWeightKg: Double?
+    var onHemodialysis: Bool { onDialysis && dialysisMode == .hemo }
+    var onPeritoneal: Bool { onDialysis && dialysisMode == .peritoneal }
     var stepsTarget: Int = 8000
     var hrCap: Int?
     var clinicianCleared: Bool = false

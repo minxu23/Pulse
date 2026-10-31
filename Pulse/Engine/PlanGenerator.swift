@@ -169,6 +169,8 @@ enum PlanGenerator {
         if p.conditions.contains(.ckd) {
             notes.append("慢性肾病：规律的中低强度运动对血压、血糖和体能都有好处。\(p.kidneyLimited ? "医生确认强度范围之前，不安排间歇等高强度训练；" : "")有内瘘的手臂不做负重，运动日饮水\(p.fluidLimited ? "仍按医生定的上限" : "按医生的要求")。")
         }
+        if p.onHemodialysis { notes.append("血液透析：透析日（\(Dialysis.schedule(p))）不安排训练，透析后以休息为主。") }
+        if p.onPeritoneal { notes.append(Dialysis.peritonealExercise) }
         for x in p.extraConditions where !x.exercise.isEmpty {
             notes.append("\(x.name)：" + x.exercise.joined())
         }

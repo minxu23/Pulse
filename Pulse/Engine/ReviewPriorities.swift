@@ -413,9 +413,12 @@ enum ReviewPriorities {
         case .bloodPressure:
             let bp = bpByDay(c)
             guard let (sys, dia, n) = bp[d.day] else { return DayLine(area: a, tone: .neutral, text: "这天没量血压") }
-            let high = sys >= 135 || dia >= 85
+            // Read against the person's own target (心血管健康 › 血压目标), as the other pages do.
+            let (ts, td) = (Double(p.bpTargetSys), Double(p.bpTargetDia))
+            let over = { (s: Double, d: Double) in s > ts || d > td }
+            let sysOver = sys > ts, diaOver = dia > td
             let value = "\(n > 1 ? "平均 " : "")\(Int(sys.rounded()))/\(Int(dia.rounded())) mmHg\(n > 1 ? "（\(n) 次）" : "")"
-            guard high else { return DayLine(area: a, tone: .good, text: value) }
+            guard sysOver || diaOver else { return DayLine(area: a, tone: .good, text: value + "，在目标 \(p.bpTargetSys)/\(p.bpTargetDia) 以内") }
             // Compared with the person's own usual readings: the systolic, or a diastolic 4 higher.
             let uSys = usual(before: d.day) { bp[$0]?.sys }, uDia = usual(before: d.day) { bp[$0]?.dia }
             var cmp = compared(sys, usual: uSys, worseBy: 5, betterBy: 5)
@@ -424,8 +427,11 @@ enum ReviewPriorities {
             if cmp == .same, let uDia, dia - uDia >= 4 { cmp = .worse; vs = "，舒张压比你平时高 \(Int((dia - uDia).rounded()))" }
             // From 145/90 at home (about 160/100 at the clinic) a usual level is no excuse.
             let severe = sys >= 145 || dia >= 90
-            let end = standing(cmp, vs, severe: severe, on: d.day, days: "最近量的") { bp[$0].map { $0.sys >= 135 || $0.dia >= 85 } }
-            return DayLine(area: a, tone: .attention, text: "\(value)，\(severe ? "明显" : "")高于 135/85" + end.text, usual: end.usual, standing: end.standing)
+            let end = standing(cmp, vs, severe: severe, on: d.day, days: "最近量的") { bp[$0].map { over($0.sys, $0.dia) } }
+            // Which number is over: 「舒张压高于目标 80」 when the systolic is within it.
+            let higher = (severe ? "明显" : "") + "高于目标 "
+            let what = sysOver && diaOver ? higher + "\(p.bpTargetSys)/\(p.bpTargetDia)" : (sysOver ? "收缩压" + higher + "\(p.bpTargetSys)" : "舒张压" + higher + "\(p.bpTargetDia)")
+            return DayLine(area: a, tone: .attention, text: "\(value)，" + what + end.text, usual: end.usual, standing: end.standing)
         case .glucose:
             let g = c.vitals.filter { $0.kind == .glucose && $0.time >= d.day && $0.time < next }
             guard !g.isEmpty else { return DayLine(area: a, tone: .neutral, text: "这天没有血糖读数") }
