@@ -187,6 +187,9 @@ struct ChatRecordTests {
                                               repeats: .everyDays(2))], now: evening)
         #expect(skips.first?.fire == evening.startOfDay.adding(days: 1).adding(minutes: 21 * 60) && skips.dropFirst().first?.fire == evening.startOfDay.adding(days: 3).adding(minutes: 21 * 60),
                 "missed: the next time in step, not today")
+        // Added by hand: 隔天 and 每几天 from the day chosen.
+        #expect(AddCareTaskSheet.RepeatChoice.everyOther.rule(on: evening, everyN: 5) == .everyDays(2)
+                && AddCareTaskSheet.RepeatChoice.everyN.rule(on: evening, everyN: 5)?.label == "每 5 天")
         let once = CareTask(title: "复查", area: .kidney, due: evening.startOfDay)
         once.complete(now: evening)
         #expect(once.done && once.isDone(now: evening))

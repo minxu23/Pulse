@@ -268,7 +268,7 @@ enum AgentIntent: String, CaseIterable {
         case .alcohol: ["酒", "喝酒", "饮酒", "啤酒"]
         case .caffeine: ["咖啡", "咖啡因", "奶茶", "浓茶"]
         case .stress: ["压力", "焦虑", "紧张", "放松", "情绪", "冥想"]
-        case .diet: ["饮食", "吃什么", "吃饭", "晚餐", "早餐", "喝水", "饮水", "营养", "体重", "减肥", "饿", "夜宵", "宵夜", "吃点", "吃东西"]
+        case .diet: ["饮食", "吃什么", "吃啥", "吃了什么比较好", "吃了什么好", "吃饭", "晚餐", "早餐", "喝水", "饮水", "营养", "体重", "减肥", "饿", "夜宵", "宵夜", "吃点", "吃东西"]
         case .hrv: ["HRV", "hrv", "变异性"]
         case .rhr: ["静息心率", "心率", "心跳", "基线"]
         case .readiness: ["准备度", "今天适合", "今天能", "今天要不要", "今天练", "能不能练", "能练", "适合运动", "适合跑", "要不要练", "累"]
@@ -1435,11 +1435,24 @@ enum HealthAgent {
             if kind == .potassium, q.contains("高"), l.value < 3.5 { line = "从化验看不是偏高，而是偏低：" + line }
             lead = line + "一次结果只能作参考，医生会结合前后几次化验一起看。"
         }
+        // 「我的肾功能怎么样」「担心肾功能会变差」: eGFR and how it is moving first, and what slows it.
+        var trendLed = false
+        var slower: String? = nil
+        if lead == nil, q.contains("肾功能") || (q.contains("肾") && ["变差", "下降", "恶化", "担心", "怕"].contains { q.contains($0) }),
+           let e = latest.first(where: { $0.kind == .egfr }) {
+            asked = .egfr
+            let trend = LabAnalyzer.egfrTrend(c.labs)
+            trendLed = trend != nil
+            lead = "肾功能主要看 eGFR：最近一次是 \(e.valueText)（\(e.date.formatted(.dateTime.month().day()))\(e.estimated ? "，由肌酐估算" : "")，"
+                + "\(LabAnalyzer.status(.egfr, e.value, profile: c.profile).text)）" + (trend.map { "，\($0.text)" } ?? "") + "。"
+                + (trend?.fast == true ? "这个速度要尽早告诉肾内科医生。" : trend == nil ? "一次结果只能作参考，医生会结合前后几次化验一起看。" : "")
+            slower = bullets(["血压、血糖控制在目标内", "少吃盐，别自己吃布洛芬这类止痛药", "要不要用护肾的药，由肾内科医生决定"]).map { "能让它降得慢一点的：\n" + $0 }
+        }
         var items = latest.filter { $0.kind != asked }.map { l in
             "\(l.kind.label) \(l.valueText) \(l.kind.unit)（\(l.date.formatted(.dateTime.month().day()))\(l.estimated ? "，由肌酐估算" : "")）：\(LabAnalyzer.status(l.kind, l.value, profile: c.profile).text)"
         }
-        if let t = LabAnalyzer.egfrTrend(c.labs) { items.insert("eGFR \(t.text)", at: min(1, items.count)) }
-        var parts: [String?] = [lead, items.isEmpty ? nil : (lead == nil ? "你最近的化验结果：" : "其他化验结果："), bullets(items)]
+        if !trendLed, let t = LabAnalyzer.egfrTrend(c.labs) { items.insert("eGFR \(t.text)", at: min(1, items.count)) }
+        var parts: [String?] = [lead, slower, items.isEmpty ? nil : (lead == nil ? "你最近的化验结果：" : "其他化验结果："), bullets(items)]
         let flagged = latest.filter { LabAnalyzer.status($0.kind, $0.value, profile: c.profile).level >= .abnormal }
         if let k = flagged.first(where: { $0.kind == .potassium }) {
             parts.append("血钾\(k.value < 3.5 ? "偏低" : "偏高")会影响心跳和肌肉：\(LabAnalyzer.status(.potassium, k.value, profile: c.profile).level == .urgent ? "请今天就联系医生；在这之前先不运动。" : "运动以中低强度为主，按医生的安排复查。")不要自己加减补钾药或利尿剂。")
@@ -1861,6 +1874,18 @@ enum HealthAgent {
               let i = lines.lastIndex(of: last), !(r.text.hasSuffix(last)) {
             lines.remove(at: i)
         }
+        // A list reads the same whoever wrote it: apart from the sentence before it (not from its
+        // 「…：」 heading), and no 「；」 left at the end of an item.
+        lines = lines.map { l in
+            guard l.hasPrefix("•") else { return l }
+            var x = l
+            while let ch = x.last, "；;，,、".contains(ch) { x.removeLast() }
+            return x
+        }
+        for i in lines.indices.reversed() where i > 0 && lines[i].hasPrefix("•") {
+            let before = lines[i - 1].trimmingCharacters(in: .whitespaces)
+            if !before.isEmpty, !before.hasPrefix("•"), !before.hasSuffix("："), !before.hasSuffix(":") { lines.insert("", at: i) }
+        }
         var t = lines.joined(separator: "\n").replacingOccurrences(of: "\n\n\n", with: "\n\n")
             .replacingOccurrences(of: "【数据】", with: "你的数据").replacingOccurrences(of: "【要点】", with: "分析")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1884,15 +1909,29 @@ enum HealthAgent {
                 t = k + "\n\n" + t
             }
         }
+        // A list item that only repeats a sentence already given (a small model turns the verdict's
+        // second half into bullets) goes.
+        let said = t.components(separatedBy: "\n").filter { !$0.hasPrefix("•") }.joined().filter { !$0.isWhitespace }
+        let kept = t.components(separatedBy: "\n").filter { l in
+            guard l.hasPrefix("•") else { return true }
+            let item = l.dropFirst().filter { !$0.isWhitespace && !"。；，".contains($0) }
+            return item.count < 6 || !said.contains(item)
+        }
+        t = kept.joined(separator: "\n").replacingOccurrences(of: "\n\n\n", with: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines)
         // When to see a doctor stays, however the model shortened the answer.
         if let s = r.safety, !says(t, safety: s) { t += "\n\n" + s }
         // The visit summary is made by the user, in the app; the model can't make it for them.
         t = t.replacingOccurrences(of: #"我?(?:可以|会|来|能)?(?:帮你|为你|给你)(?:生成|做|整理|准备|出)(?:一份)?(?:Pulse ?的?)?就诊摘要"#,
                                    with: "可以在「我的 › 隐私与数据导出」生成就诊摘要", options: .regularExpression)
-        // A 记下 card goes with the line that says how to use it.
-        if r.blocks.contains(where: { $0.record != nil }), !t.contains("「记下」"),
-           let ask = r.text.components(separatedBy: "\n").first(where: { $0.hasPrefix("要记下来的话") }) {
-            t += "\n\n" + ask
+        // A 记下 card goes with the line that says how to use it, right above the card.
+        if r.blocks.contains(where: { $0.record != nil }) {
+            var paragraphs = t.components(separatedBy: "\n\n")
+            if let i = paragraphs.firstIndex(where: { !$0.contains("\n") && $0.contains("「记下」") && $0.hasPrefix("要记下") }), i < paragraphs.count - 1 {
+                paragraphs.append(paragraphs.remove(at: i))
+                t = paragraphs.joined(separator: "\n\n")
+            } else if !t.contains("「记下」"), let ask = r.text.components(separatedBy: "\n").first(where: { $0.hasPrefix("要记下来的话") }) {
+                t += "\n\n" + ask
+            }
         }
         return t
     }

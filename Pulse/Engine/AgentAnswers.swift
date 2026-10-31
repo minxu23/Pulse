@@ -71,7 +71,7 @@ extension HealthAgent {
             return r
         }
         if a.has(["减肥", "减重", "瘦下来", "减脂", "瘦一点"]) || (q.contains("饿") && !a.has(["低血糖"])) { return eating(a, context: c) }
-        if a.has(["吃什么", "怎么吃", "吃点什么", "推荐吃", "该吃"]) { return mealIdeas(c) }
+        if a.has(["吃什么", "吃啥", "吃了什么比较好", "吃了什么好", "怎么吃", "吃点什么", "推荐吃", "该吃"]) { return mealIdeas(c) }
         return nil
     }
 

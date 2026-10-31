@@ -311,7 +311,13 @@ final class AgentConversation {
             break
         }
 
-        if usesOnDeviceModel {
+        // A plan change on the device reads as the rules wrote it: the small model turns 「25 → 20 分钟」
+        // into reasons of its own, and the card under it holds the change anyway.
+        if usesOnDeviceModel, rule.intent == .planChange {
+            try? await Task.sleep(for: .milliseconds(350))
+            guard turn == mine else { return }
+            messages.append(AgentMessage(role: .agent, text: rule.text, reply: rule, engine: .rules, note: fallbackNote, blocks: rule.blocks, privacy: privacy))
+        } else if usesOnDeviceModel {
             let id = append(AgentMessage(role: .agent, text: "", reply: rule, engine: .onDevice, streaming: true, note: fallbackNote,
                                          blocks: rule.blocks, privacy: privacy))
             // The on-device context window is small: the last exchange is enough history.
@@ -533,7 +539,7 @@ final class AgentConversation {
         AgentName.introduction(c.agentName).map { instructions + "\n\n" + $0 } ?? instructions
     }
 
-    private func cloudRequest(_ q: String, rule: AgentReply, history: [String], context: AgentContext) -> (system: String, prompt: String) {
+    func cloudRequest(_ q: String, rule: AgentReply, history: [String], context: AgentContext) -> (system: String, prompt: String) {
         let (system, prompt) = recordsRequest(q, rule: rule, history: history, context: context)
         return (Self.named(system, context), prompt)
     }

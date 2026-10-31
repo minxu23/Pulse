@@ -192,23 +192,30 @@ struct AddCareTaskSheet: View {
     @State private var due = Date.app.adding(days: 7)
     @State private var note = ""
     @State private var repeatChoice = RepeatChoice.never
+    @State private var everyN = 3
+    @State private var hasTime = false
+    @State private var time = Date.app.startOfDay.adding(minutes: 9 * 60)
 
     /// The repeats a task added by hand can have, from the date chosen.
     enum RepeatChoice: String, CaseIterable, Identifiable {
-        case never, daily, weekly, monthly
+        case never, daily, everyOther, everyN, weekly, monthly
         var id: String { rawValue }
         var label: String {
             switch self {
             case .never: "不重复"
             case .daily: "每天"
+            case .everyOther: "隔天"
+            case .everyN: "每几天"
             case .weekly: "每周"
             case .monthly: "每月"
             }
         }
-        func rule(on day: Date) -> CareRepeat? {
+        func rule(on day: Date, everyN n: Int) -> CareRepeat? {
             switch self {
             case .never: nil
             case .daily: .daily
+            case .everyOther: .everyDays(2)
+            case .everyN: .everyDays(n)
             case .weekly: .weekly([day.weekday])
             case .monthly: .monthly(Calendar.pulse.component(.day, from: day))
             }
@@ -224,6 +231,13 @@ struct AddCareTaskSheet: View {
                 if hasDue {
                     DatePicker(repeatChoice == .never ? "日期" : "从哪天开始", selection: $due, in: Date.app.startOfDay..., displayedComponents: .date)
                     Picker("重复", selection: $repeatChoice) { ForEach(RepeatChoice.allCases) { Text($0.label).tag($0) } }
+                    if repeatChoice == .everyN {
+                        Stepper("每 \(everyN) 天", value: $everyN, in: 3...30)
+                    }
+                    Toggle("设定时间", isOn: $hasTime)
+                    if hasTime {
+                        DatePicker("时间", selection: $time, displayedComponents: .hourAndMinute)
+                    }
                 }
                 TextField("备注（可选）", text: $note, axis: .vertical)
             }
@@ -233,9 +247,10 @@ struct AddCareTaskSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        // A date alone: 9 o'clock on the day, not the time of day the sheet was opened.
-                        ctx.insert(CareTask(title: title, area: selectedArea, due: hasDue ? due.startOfDay : nil, note: note,
-                                            repeats: hasDue ? repeatChoice.rule(on: due) : nil))
+                        // A date alone is reminded at 9 o'clock on the day, not the time of day the sheet was opened.
+                        let at = due.startOfDay.adding(minutes: hasTime ? time.minutesOfDay : 0)
+                        ctx.insert(CareTask(title: title, area: selectedArea, due: hasDue ? at : nil, note: note,
+                                            repeats: hasDue ? repeatChoice.rule(on: due, everyN: everyN) : nil))
                         CareReminders.sync(in: ctx)
                         dismiss()
                     }
@@ -244,6 +259,6 @@ struct AddCareTaskSheet: View {
             }
             .onAppear { title = defaultTitle; selectedArea = area }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
     }
 }

@@ -671,6 +671,8 @@ struct NextWeekAndCloudTests {
         #expect(r.value(forHTTPHeaderField: "X-Title") == "Pulse")
         let body = try JSONSerialization.jsonObject(with: r.httpBody ?? Data()) as? [String: Any]
         #expect(body?["model"] as? String == "anthropic/claude-sonnet-5.5")
+        // No thinking first: the rules worked the answer out, the model words it.
+        #expect((body?["reasoning"] as? [String: String])?["effort"] == "none")
         #expect(CloudModelClient.parse(line: ": OPENROUTER PROCESSING", provider: .openRouter) == .ignore)
         #expect(CloudModelClient.parse(line: #"data: {"choices":[{"delta":{"content":"好"}}]}"#, provider: .openRouter) == .text("好"))
         #expect(CloudModelClient.errorMessage(in: #"{"error":{"message":"No auth credentials found","code":401}}"#) == "No auth credentials found")

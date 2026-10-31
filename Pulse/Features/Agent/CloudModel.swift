@@ -310,7 +310,13 @@ struct CloudModelClient {
     let model: String
     let apiKey: String
 
-    func request(system: String, prompt: String, maxTokens: Int) throws -> URLRequest {
+    /// Models that refused to answer without reasoning, asked with "minimal" from then on.
+    @MainActor private static var mustReason: Set<String> = []
+
+    /// OpenRouter's reasoning level. The rules have already worked the answer out, so the model only
+    /// words it: thinking first kept the chat on 「•••」 for about ten seconds. A model that must
+    /// reason refuses "none" and is asked again with "minimal".
+    func request(system: String, prompt: String, maxTokens: Int, reasoning: String = "none") throws -> URLRequest {
         let base = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
         let path = provider == .anthropic ? "/messages" : "/chat/completions"
         guard let url = URL(string: base + path), url.scheme == "https" else { throw CloudModelError.badURL }
@@ -327,8 +333,10 @@ struct CloudModelClient {
         case .openAICompatible, .openRouter:
             r.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
             if provider == .openRouter { r.setValue("Pulse", forHTTPHeaderField: "X-Title") }
-            body = ["model": model, "max_tokens": maxTokens, "stream": true, "temperature": 0.3,
-                    "messages": [["role": "system", "content": system], ["role": "user", "content": prompt]]]
+            var b: [String: Any] = ["model": model, "max_tokens": maxTokens, "stream": true, "temperature": 0.3,
+                                    "messages": [["role": "system", "content": system], ["role": "user", "content": prompt]]]
+            if provider == .openRouter { b["reasoning"] = ["effort": reasoning] }
+            body = b
         }
         r.httpBody = try JSONSerialization.data(withJSONObject: body)
         return r
@@ -336,8 +344,10 @@ struct CloudModelClient {
 
     /// Streams the answer, reporting the accumulated text as it arrives.
     @MainActor
-    func stream(system: String, prompt: String, maxTokens: Int = 900, onPartial: @escaping @MainActor (String) -> Void) async throws -> String {
-        let req = try request(system: system, prompt: prompt, maxTokens: maxTokens)
+    func stream(system: String, prompt: String, maxTokens: Int = 900, reasoning: String? = nil,
+                onPartial: @escaping @MainActor (String) -> Void) async throws -> String {
+        let reasoning = reasoning ?? (Self.mustReason.contains(model) ? "minimal" : "none")
+        let req = try request(system: system, prompt: prompt, maxTokens: maxTokens, reasoning: reasoning)
         let (bytes, response): (URLSession.AsyncBytes, URLResponse)
         do {
             (bytes, response) = try await URLSession.shared.bytes(for: req)
@@ -348,6 +358,10 @@ struct CloudModelClient {
         guard (200..<300).contains(status) else {
             var body = ""
             for try await line in bytes.lines { body += line; if body.count > 2000 { break } }
+            if provider == .openRouter, reasoning == "none", status == 400, body.lowercased().contains("reasoning") {
+                Self.mustReason.insert(model)
+                return try await stream(system: system, prompt: prompt, maxTokens: maxTokens, reasoning: "minimal", onPartial: onPartial)
+            }
             throw CloudModelError.http(status, Self.errorMessage(in: body) ?? "")
         }
         var text = ""
@@ -407,7 +421,7 @@ extension HealthAgent {
     1. 第一句直接回答用户问的事。【要点】是 Pulse 在本机根据记录得出的回答，事实、数字和结论以它为准；可以补充【数据】里和问题直接相关的内容和通用知识，但不要编造用户没有记录的数据，不相关的数据不要提。不要输出【】标题，也不要整段复述【数据】。
     2. 区分「观察到的关联」和「已确认的原因」；不做诊断；不建议开始、停止或调整任何药物和剂量。
     3. 用户描述紧急症状时，第一句建议立即拨打 120；否则不要提及急救。
-    4. 用口语化的简体中文，不夹英文单词（HRV、CGM 这类通用缩写除外）。需要用户去做的事列 2–4 条（每条以「• 」开头），要具体、马上能做。不超过 300 字，不用标题和表格。
+    4. 用口语化的简体中文，不夹英文单词（HRV、CGM 这类通用缩写除外）。需要用户去做的事列 2–4 条（每条以「• 」开头），要具体、马上能做；观察和原因写成句子，不要也列成「• 」。不超过 300 字，不用标题和表格。
     5. 需要专业判断时建议咨询医生，并提醒可以带上就诊摘要（在「我的 › 隐私与数据导出」里生成）。
     6. 注意摘要中的「现在」时间。给出【第一句】时，回答必须以它原样开头，后面的内容不能与它矛盾，不要输出「结论：」之类的标签；某天是否适合训练，分析要点没有结论时，说明要看当天早上的准备度，不要自行判断「适合」。
     """

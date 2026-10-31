@@ -187,4 +187,31 @@ struct AgentCoverageTests {
         // Low mood keeps the helpline whatever a model writes.
         #expect(HealthAgent.reply(to: "我心情不好", context: c).safety?.contains("12356") == true)
     }
+
+    /// Questions Apple Intelligence once answered with nothing from the rules to keep.
+    @Test func kidneyFunctionAndMealIdeas() throws {
+        let f = try fixture()
+        let c = f.make(f.base)
+        for q in ["我有点担心肾功能会变差", "我的肾功能怎么样"] {
+            let r = HealthAgent.reply(to: q, context: c)
+            #expect(r.conclusion?.hasPrefix("肾功能主要看 eGFR：最近一次是 57") == true && r.conclusion?.contains("平均每年下降约") == true, "\(q)")
+            #expect(r.text.components(separatedBy: "平均每年下降约").count == 2, "\(q): the trend said once")
+        }
+        for q in ["今天吃啥好", "今天吃了什么比较好"] {
+            #expect(HealthAgent.reply(to: q, context: c).intent == .diet, "\(q)")
+        }
+        // A model's list: apart from the sentence before it, no 「；」 left at the end.
+        let run = HealthAgent.reply(to: "今天能跑步吗", context: c)
+        let t = HealthAgent.finalize((run.conclusion ?? "") + "\n• 充分热身，跑的时候以能完整说话为准；", of: run, strict: false)
+        #expect(t.contains("\n\n• 充分热身") && t.hasSuffix("为准"))
+        // Bullets that only repeat the verdict go.
+        let kidney = HealthAgent.reply(to: "我有点担心肾功能会变差", context: c)
+        #expect(kidney.text.contains("能让它降得慢一点的：\n• 血压、血糖控制在目标内"))
+        let repeated = HealthAgent.finalize((kidney.conclusion ?? "") + "\n\n• 近 17 个月平均每年下降约 4\n• 少吃盐，别自己吃布洛芬这类止痛药", of: kidney)
+        #expect(!repeated.contains("• 近 17 个月") && repeated.contains("• 少吃盐"))
+        // The model's 「要记下的话…」 in the middle moves down to sit above the card.
+        let bp = HealthAgent.reply(to: "帮我记一下血压 138/88", context: c)
+        let moved = HealthAgent.finalize((bp.conclusion ?? "") + "\n\n要记下的话，点下面的「记下」：血压 138/88 mmHg。\n\n• 静坐 5 分钟再测两次", of: bp, strict: false)
+        #expect(moved.hasSuffix("要记下的话，点下面的「记下」：血压 138/88 mmHg。") && moved.components(separatedBy: "「记下」").count == 2)
+    }
 }

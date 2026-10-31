@@ -21,8 +21,12 @@ enum CareReminders {
     /// 异常提醒: events found by the background check (`BackgroundCheck`) are notified at once.
     static let eventsKey = "reminders.events"
     static var eventsEnabled: Bool { UserDefaults.standard.bool(forKey: eventsKey) }
-    /// Not from tests, and not in a demo running on a shifted clock: the dates would be off.
-    static var schedulable: Bool { ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil && !DemoClock.isShifted }
+    /// Not from tests, not in a demo running on a shifted clock (the dates would be off), and not from
+    /// a throwaway in-memory run, which would replace the device's own reminders with its sample ones.
+    static var schedulable: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil && !DemoClock.isShifted
+            && !ProcessInfo.processInfo.arguments.contains("-PulseInMemory")
+    }
 
     struct Task: Equatable {
         let id: String
