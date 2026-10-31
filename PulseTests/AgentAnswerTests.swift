@@ -308,6 +308,14 @@ struct AgentAnswerTests {
         #expect(AgentName.phrase("和", "Ava", "一起分析") == "和 Ava 一起分析")
         #expect(AgentName.cleaned(" 「小安」 ") == "小安" && AgentName.cleaned("health agent") == nil)
         #expect(AgentName.introduction("小安")?.contains("你就是小安") == true && AgentName.introduction(AgentName.standard) == nil)
+        // A model speaks of itself as 「我」, whatever it was named.
+        #expect(AgentName.firstPerson("康康建议把今天的活动减到 10 分钟。", name: "康康") == "我建议把今天的活动减到 10 分钟。")
+        #expect(AgentName.firstPerson("Health Agent 会在本机回答。", name: "Health Agent") == "Health Agent 会在本机回答。", "only when it is the subject, right before the verb")
+        #expect(AgentName.firstPerson("Health Agent建议早点睡。", name: "Health Agent") == "我建议早点睡。")
+        #expect(AgentName.firstPerson("小安排一下明天的训练", name: "小安") == "小安排一下明天的训练")
+        // Only the user can make the visit summary, in the app.
+        let r = AgentReply(text: "肌酐偏高。", intent: .labs)
+        #expect(HealthAgent.finalize("复诊时给医生看，我可以帮你生成就诊摘要。", of: r, strict: false) == "复诊时给医生看，可以在「我的 › 隐私与数据导出」生成就诊摘要。")
 
         let (base, container) = try load(.xiaolin)
         _ = container

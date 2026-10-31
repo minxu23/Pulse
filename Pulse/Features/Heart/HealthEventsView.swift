@@ -140,27 +140,32 @@ struct HealthEventDetailView: View {
 
 struct CareTaskRow: View {
     @Bindable var task: CareTask
+    @Environment(\.modelContext) private var ctx
     var body: some View {
+        let done = task.isDone(now: .app)
         HStack(spacing: Theme.Space.block) {
             Button {
-                task.done.toggle()
-                task.doneAt = task.done ? .app : nil
+                // A repeating task ticked off moves on to its next time; ticking again takes it back.
+                if done { task.reopen() } else { task.complete(now: .app) }
+                CareReminders.sync(in: ctx)
             } label: {
-                Image(systemName: task.done ? "checkmark.circle.fill" : "circle").font(.title3)
-                    .foregroundStyle(task.done ? .green : .secondary)
+                Image(systemName: done ? "checkmark.circle.fill" : "circle").font(.title3)
+                    .foregroundStyle(done ? .green : .secondary)
                     .frame(width: Theme.Size.tap, height: Theme.Size.tap)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(task.done ? "标记为未完成" : "标记为完成")
+            .accessibilityLabel(done ? "标记为未完成" : (task.repeats == nil ? "标记为完成" : "标记这次已完成"))
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 Text(task.title).font(.subheadline).strikethrough(task.done)
                 HStack(spacing: Theme.Space.item) {
                     Label(task.area.label, systemImage: task.area.icon)
+                    if let r = task.repeats { Label(r.label, systemImage: "repeat") }
                     if let due = task.due {
                         // A reminder set in the chat may have a time of day.
-                        let when = due.formatted(.dateTime.month().day()) + (due == due.startOfDay ? "" : " " + Clock.text(due.minutesOfDay))
-                        if !task.done && due < (due == due.startOfDay ? Date.app.startOfDay : .app) {
+                        let when = (task.repeats != nil && done ? "下次 " : "") + due.formatted(.dateTime.month().day())
+                            + (due == due.startOfDay ? "" : " " + Clock.text(due.minutesOfDay))
+                        if !done && due < (due == due.startOfDay ? Date.app.startOfDay : .app) {
                             Label("已逾期 \(when)", systemImage: "exclamationmark.circle.fill")
                                 .symbolRenderingMode(.multicolor)
                         } else {
@@ -186,6 +191,29 @@ struct AddCareTaskSheet: View {
     @State private var hasDue = true
     @State private var due = Date.app.adding(days: 7)
     @State private var note = ""
+    @State private var repeatChoice = RepeatChoice.never
+
+    /// The repeats a task added by hand can have, from the date chosen.
+    enum RepeatChoice: String, CaseIterable, Identifiable {
+        case never, daily, weekly, monthly
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .never: "不重复"
+            case .daily: "每天"
+            case .weekly: "每周"
+            case .monthly: "每月"
+            }
+        }
+        func rule(on day: Date) -> CareRepeat? {
+            switch self {
+            case .never: nil
+            case .daily: .daily
+            case .weekly: .weekly([day.weekday])
+            case .monthly: .monthly(Calendar.pulse.component(.day, from: day))
+            }
+        }
+    }
 
     var body: some View {
         CalmNavigationStack {
@@ -193,7 +221,10 @@ struct AddCareTaskSheet: View {
                 TextField("事项", text: $title)
                 Picker("类别", selection: $selectedArea) { ForEach(CareArea.allCases) { Label($0.label, systemImage: $0.icon).tag($0) } }
                 Toggle("设定日期", isOn: $hasDue)
-                if hasDue { DatePicker("日期", selection: $due, displayedComponents: .date) }
+                if hasDue {
+                    DatePicker(repeatChoice == .never ? "日期" : "从哪天开始", selection: $due, in: Date.app.startOfDay..., displayedComponents: .date)
+                    Picker("重复", selection: $repeatChoice) { ForEach(RepeatChoice.allCases) { Text($0.label).tag($0) } }
+                }
                 TextField("备注（可选）", text: $note, axis: .vertical)
             }
             .navigationTitle("照护事项")
@@ -202,7 +233,10 @@ struct AddCareTaskSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        ctx.insert(CareTask(title: title, area: selectedArea, due: hasDue ? due : nil, note: note))
+                        // A date alone: 9 o'clock on the day, not the time of day the sheet was opened.
+                        ctx.insert(CareTask(title: title, area: selectedArea, due: hasDue ? due.startOfDay : nil, note: note,
+                                            repeats: hasDue ? repeatChoice.rule(on: due) : nil))
+                        CareReminders.sync(in: ctx)
                         dismiss()
                     }
                     .disabled(title.isEmpty)

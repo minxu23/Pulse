@@ -402,11 +402,65 @@ extension HealthAgent {
         let p = ChatRecord.reminder(a, now: c.now)
         guard let r = p.reminder else { return nil }
         let df = Date.FormatStyle().month().day().weekday(.abbreviated).locale(Locale(identifier: "zh_CN"))
-        let when = r.due.formatted(df) + (r.timed ? " " + Clock.text(r.due.minutesOfDay) : "，当天上午 9 点提醒")
-        let first = "可以帮你加一条提醒：「\(r.title)」，\(when)。点「记下」后生效，日期可以在卡片上改。"
-        return AgentReply(text: lines([first, p.repeatAsked ? "每天、每周重复的提醒现在还不支持，这里先加一次。" : nil,
-                                       "它会出现在「趋势 › 异常跟进 › 照护与随访事项」里，完成后在那里打个勾。"]),
+        let first: String
+        if let rep = p.repeats {
+            let at = r.timed ? " " + Clock.text(r.due.minutesOfDay) : "上午 9 点"
+            first = "可以帮你加一条重复提醒：「\(r.title)」，\(rep.label)\(at)，第一次在 \(r.due.formatted(df))。点「记下」后生效\(r.timed ? "，时间可以在卡片上改" : "")。"
+        } else {
+            let when = r.due.formatted(df) + (r.timed ? " " + Clock.text(r.due.minutesOfDay) : "，当天上午 9 点提醒")
+            first = "可以帮你加一条提醒：「\(r.title)」，\(when)。点「记下」后生效，日期可以在卡片上改。"
+        }
+        return AgentReply(text: lines([first, p.repeatAsked ? "这种重复方式还不支持（可以按每天、每周几或每月几号重复），这里先加一次。" : nil,
+                                       p.repeats == nil ? "它会出现在「趋势 › 异常跟进 › 照护与随访事项」里，完成后在那里打个勾。"
+                                           : "它会出现在「趋势 › 异常跟进 › 照护与随访事项」里，每次完成后打个勾，会自动排到下一次。"]),
                           sources: ["照护与随访事项"], intent: .about, blocks: [.record(p)], conclusion: first, verbatim: true)
+    }
+
+    /// A meal or a workout told in the chat: what it is, and what it adds up to today or this week.
+    private static func eatenOrDone(_ p: RecordProposal, context c: AgentContext) -> (lines: [String], sources: [String], intent: AgentIntent)? {
+        let prof = c.profile
+        var out: [String] = []
+        var sources: [String] = []
+        for item in p.items {
+            switch item {
+            case .meal(let m):
+                let kidney = prof.proteinTargetG != nil || prof.conditions.contains(.ckd) || prof.onDialysis
+                if m.foods.isEmpty {
+                    out.append("好的，记一顿\(m.kind.label)。")
+                    if kidney { out.append("说出吃了什么、吃了多少（比如「两碗米饭、一个鸡蛋」），Pulse 能按份数帮你算蛋白质和钾。") }
+                } else {
+                    out.append("好的，\(m.kind.label)：\(ChatRecord.portions(m.foods))。")
+                }
+                let protein = m.foods.reduce(0.0) { sum, f in sum + (DietFoods.proteinFoods.first { $0.name == f }?.proteinG ?? 0) }
+                if kidney, protein > 0 {
+                    let today = c.days.first { $0.day == m.at.startOfDay }.flatMap(KidneyDiet.proteinG) ?? 0
+                    out.append("按份数估算，这顿蛋白质约 \(Int(protein.rounded())) g，加上今天已记的约 \(Int((protein + today).rounded())) g"
+                               + (prof.proteinTargetG.map { "（医生定的每天约 \($0) g）" } ?? "") + "。")
+                }
+                let potassium = m.foods.filter(DietFoods.potassium.contains)
+                if prof.limitsPotassium, !potassium.isEmpty { out.append("\(KidneyDiet.names(potassium))含钾较多，你在限钾，今天其他高钾的少吃些。") }
+                let salty = m.foods.filter(DietFoods.salt.contains)
+                if !salty.isEmpty, kidney || prof.conditions.contains(.hypertension) { out.append("\(salty.joined(separator: "、"))偏咸，今天其他菜清淡些。") }
+                sources.append("饮食记录")
+            case .workout(let w):
+                let names: [WorkoutType: String] = [.run: "跑步", .walk: "步行", .cycle: "骑行", .swim: "游泳", .strength: "力量训练", .hiit: "间歇训练",
+                                                    .yoga: "瑜伽 / 拉伸", .ball: "球类运动"]
+                out.append("好的，\(names[w.type] ?? "运动")\(w.km.map { " \($0.cleanText) 公里" } ?? "")\(w.estimated ? "，按距离估算约" : " ")\(w.minutes) 分钟。")
+                if let s = ChatRecord.planned(for: w, in: c.plan) {
+                    out.append("记下后算作\(Calendar.pulse.isDate(s.day, inSameDayAs: c.now) ? "今天" : "那天")计划的「\(s.title)」。")
+                }
+                if w.start.weekStart == c.now.weekStart {
+                    out.append("加上这次，这周约活动 \(Int(c.weekActiveMinutes) + w.minutes) 分钟，每周目标 \(prof.weeklyTargetMinutes) 分钟。")
+                }
+                sources.append("本周计划")
+            case .water(let ml):
+                out.append("饮水 \(ml) ml 也一起记。")
+            default: return nil
+            }
+        }
+        guard !out.isEmpty else { return nil }
+        let intent: AgentIntent = p.items.contains { if case .workout = $0 { true } else { false } } ? .exercise : .diet
+        return (out, sources, intent)
     }
 
     /// 「帮我记一下…」「我刚喝了一杯水」: the answer, with a card to record what the statement holds.
@@ -414,9 +468,10 @@ extension HealthAgent {
         let a = AgentQuestion(q)
         guard ChatRecord.wanted(a), r.intent != .emergency, !r.urgent, r.blocks.allSatisfy({ $0.record == nil }) else { return r }
         guard let p = ChatRecord.proposal(a, now: c.now) else {
-            // Something Pulse can't take from a sentence yet (a meal, a workout): where to record it.
-            let where_ = a.has(["吃", "饭", "餐"]) ? "「今日 › 饮食与指标」的「记录饮食」" : (a.has(["跑", "练", "运动", "走"]) ? "「今日」右上角「+ › 运动」" : "「今日」右上角的「+」")
-            let note = "这个还不能在对话里直接记，在\(where_)记一下就好。"
+            // Nothing Pulse could take from the sentence: how to say it, or where to record it.
+            let note = a.has(["吃", "饭", "餐"]) ? "没认出吃了什么。可以说「午饭吃了两碗米饭、一个鸡蛋」，或者在「今日 › 饮食与指标」的「记录饮食」里记。"
+                : a.has(["跑", "练", "运动", "走", "骑", "游"]) ? "没认出运动了多久。可以说「刚快走了 40 分钟」「跑了 5 公里」，或者在「今日」右上角「+ › 运动」里记。"
+                : "这个还不能在对话里直接记，在「今日」右上角的「+」记一下就好。"
             var out = r.intent == .unknown ? AgentReply(text: note, intent: .about, conclusion: note, verbatim: true) : r
             if r.intent != .unknown { out.text = lines([r.text, note]) }
             return out
@@ -429,6 +484,12 @@ extension HealthAgent {
             let drunk = c.days.first { $0.day == c.logicalToday }?.waterMl ?? 0
             let first = "好的，这杯是 \(ml) ml。今天已记录 \(drunk) ml，\(c.profile.fluidLimited ? "上限" : "目标") \(c.profile.waterTargetMl) ml。"
             out = AgentReply(text: lines([first, ask]), sources: ["饮水记录"], intent: .diet, conclusion: first, verbatim: true)
+        } else if p.items.allSatisfy({ switch $0 { case .meal, .workout, .water: true; default: false } }),
+                  [.unknown, .diet, .food, .exercise, .about].contains(r.intent), a.symptom == nil,
+                  !a.has(["血压", "血糖", "心率", "心跳", "头晕", "不舒服", "难受", "疼", "痛"]), let said = eatenOrDone(p, context: c) {
+            // 「午饭吃了两碗米饭」「刚走了 40 分钟」: what it adds up to today, then the card. A sentence that
+            // says more (「吃了咸菜，血压有点高」) keeps its own answer, with the card.
+            out = AgentReply(text: lines(said.lines + [ask]), sources: said.sources, intent: said.intent, conclusion: said.lines.first, verbatim: true)
         } else if r.intent == .unknown {
             out = AgentReply(text: ask, intent: .about, conclusion: ask, verbatim: true)
         } else {
@@ -469,7 +530,7 @@ enum AppGuide {
     }
 }
 
-private extension Double {
+extension Double {
     /// 「1.44」「53」: as typed, without trailing zeros.
     var cleanText: String { truncatingRemainder(dividingBy: 1) == 0 ? String(Int(self)) : String(self) }
 }

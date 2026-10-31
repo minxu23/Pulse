@@ -96,7 +96,14 @@ enum AgentName {
     /// For the language models: the name the user gave, so 「小安」 in a question means them. nil for the standard name.
     static func introduction(_ name: String) -> String? {
         guard name != standard else { return nil }
-        return "用户给你取了名字「\(name)」：你就是\(name)，用户叫\(name)就是在叫你；需要称呼自己时用这个名字，不要自称 Health Agent。"
+        return "用户给你取了名字「\(name)」：你就是\(name)，用户叫\(name)就是在叫你。说到自己时用「我」，不要用名字或 Health Agent 称呼自己；用户问你叫什么时再说这个名字。"
+    }
+
+    /// 「康康建议把…」: a model that speaks of itself by its name says 「我」 instead.
+    static func firstPerson(_ text: String, name: String) -> String {
+        guard !name.isEmpty else { return text }
+        let who = [name, standard].map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
+        return text.replacingOccurrences(of: "(?:\(who))(?=建议|觉得|认为|会|可以|帮你|给你|这边|先|来|提醒)", with: "我", options: .regularExpression)
     }
 
     /// The reply to a rename in the chat (shown as written).

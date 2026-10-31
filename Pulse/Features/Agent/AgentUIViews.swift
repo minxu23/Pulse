@@ -338,10 +338,17 @@ struct RecordCard: View {
                         .font(.subheadline).fixedSize(horizontal: false, vertical: true)
                 }
             }
+            if let rep = proposal.repeats {
+                Label("重复：\(rep.label)", systemImage: "repeat").font(.subheadline)
+            }
             if let r = reminder, convo.recordOutcomes[proposal.id] == nil {
-                DatePicker("时间", selection: $due, in: Date.app.startOfDay..., displayedComponents: r.timed ? [.date, .hourAndMinute] : [.date])
-                    .font(.subheadline)
-                if !r.timed { Text("当天上午 9 点提醒").font(.footnote).foregroundStyle(.secondary) }
+                // A repeating reminder's days follow its rule: only the time can change.
+                if proposal.repeats == nil || r.timed {
+                    DatePicker("时间", selection: $due, in: Date.app.startOfDay...,
+                               displayedComponents: proposal.repeats != nil ? [.hourAndMinute] : (r.timed ? [.date, .hourAndMinute] : [.date]))
+                        .font(.subheadline)
+                }
+                if !r.timed { Text(proposal.repeats == nil ? "当天上午 9 点提醒" : "每次上午 9 点提醒").font(.footnote).foregroundStyle(.secondary) }
             }
             actions
         }

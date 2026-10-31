@@ -318,13 +318,13 @@ final class AgentConversation {
             let prompt = HealthAgent.modelPrompt(question: asked, history: Array(history.suffix(2)), context: context, reply: rule, anonymous: false)
             do {
                 let text = try await OnDeviceModel.respond(instructions: Self.named(HealthAgent.groundedInstructions, context), prompt: prompt) { [weak self] partial in
-                    self?.edit(id) { $0.text = HealthAgent.streamed(partial, of: rule) }
+                    self?.edit(id) { $0.text = AgentName.firstPerson(HealthAgent.streamed(partial, of: rule), name: context.agentName) }
                 }
                 guard turn == mine else { return }
                 guard !text.isEmpty else { throw CloudModelError.empty }
                 if HealthAgent.keepsConclusion(text, of: rule) {
                     edit(id) { m in
-                        m.text = HealthAgent.finalize(text, of: rule)
+                        m.text = AgentName.firstPerson(HealthAgent.finalize(text, of: rule), name: context.agentName)
                         m.reply?.followUps = modelFollowUps
                     }
                 } else {
@@ -361,7 +361,8 @@ final class AgentConversation {
         let (system, prompt) = cloudRequest(q, rule: rule, history: history, context: context)
         do {
             let raw = try await client.stream(system: system, prompt: prompt, maxTokens: 1600) { [weak self] partial in
-                self?.edit(id) { $0.text = HealthAgent.streamed(AgentUI.split(partial).text, of: rule, proposing: rule.proposesPlan || rule.intent == .planChange) }
+                self?.edit(id) { $0.text = AgentName.firstPerson(HealthAgent.streamed(AgentUI.split(partial).text, of: rule, proposing: rule.proposesPlan || rule.intent == .planChange),
+                                                         name: context.agentName) }
             }
             guard turn == mine else { return .superseded }
             let parts = AgentUI.split(raw)
@@ -385,8 +386,8 @@ final class AgentConversation {
             }
             blocks = AgentUI.cloudBlocks(blocks, rule: rule)
             edit(id) { m in
-                m.text = rejected ? rule.text : HealthAgent.finalize(parts.text.isEmpty ? rule.text : parts.text, of: shown,
-                                                                     proposals: blocks.compactMap(\.proposal), strict: false)
+                m.text = rejected ? rule.text : AgentName.firstPerson(HealthAgent.finalize(parts.text.isEmpty ? rule.text : parts.text, of: shown,
+                                                                     proposals: blocks.compactMap(\.proposal), strict: false), name: context.agentName)
                 m.blocks = blocks
                 m.reply?.followUps = followUps
                 m.note = note

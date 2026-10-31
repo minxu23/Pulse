@@ -128,7 +128,7 @@ struct RootView: View {
 #if DEBUG
 /// Pages that `-PulseOpen <name>` presents directly, for screenshots.
 enum DebugPage: String, Identifiable {
-    case glucose, cardio, marathon, agent, nutrition, evening, review, readiness, cloud, nextweek, labs
+    case glucose, cardio, marathon, agent, nutrition, evening, review, readiness, cloud, nextweek, labs, events
     var id: String { rawValue }
     @MainActor @ViewBuilder var view: some View {
         switch self {
@@ -143,6 +143,7 @@ enum DebugPage: String, Identifiable {
         case .cloud: CloudModelSettingsView()
         case .nextweek: WeeklyPlanView(startOnNextWeek: true).navigationTitle("运动计划").navigationBarTitleDisplayMode(.inline)
         case .labs: LabResultsView()
+        case .events: HealthEventsView()
         }
     }
 }

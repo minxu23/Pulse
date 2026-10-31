@@ -92,6 +92,7 @@ struct CloudLiveTests {
                 }
                 if let s = rule.safety { #expect(HealthAgent.says(m.text, safety: s), "\(q): safety kept") }
                 if rule.blocks.contains(where: { $0.record != nil }) { #expect(HealthAgent.withoutRecordClaims(m.text) == m.text, "\(q): no claim of recording") }
+                #expect(AgentName.firstPerson(m.text, name: c.agentName) == m.text && !m.text.contains("帮你生成"), "\(q): speaks as 「我」, makes nothing itself")
                 if rule.blocks.contains(where: { $0.record != nil }) { #expect(m.blocks.contains { $0.record != nil }, "\(q): 记下 card kept") }
             }
             out += "\n"

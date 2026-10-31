@@ -15,6 +15,17 @@ extension DataHub {
         var places: [String] = []
         var urine: Int? = nil
         var foamy: Bool? = nil
+        var meals: [UUID] = []
+        var sessions: [UUID] = []
+        /// The day's diet lists before a meal was counted in, to put back.
+        var dietDay: Date? = nil
+        var diet: [[String]] = []
+        var dietLogged = false
+        var proteinServings: Double? = nil
+        /// A planned session the workout counted for, as it was.
+        var planItem: UUID? = nil
+        var planMinutes: Int? = nil
+        var planStatus: PlanStatus? = nil
     }
 
     /// Records the card's items; the reminder's date is the one shown on the card. New readings are
@@ -73,8 +84,50 @@ extension DataHub {
                     undo.labs.append(est.id)
                     newLabs.append(est.point)
                 }
-            case .reminder(let title, let area, let due, _):
-                let t = CareTask(title: title, area: area, due: reminderDue ?? due, note: "在对话里添加")
+            case .meal(let m):
+                let log = MealLog(time: m.at, kind: m.kind)
+                log.note = m.said
+                ctx.insert(log)
+                undo.meals.append(log.id)
+                // Kidney diet: the foods count as in the diet form, in the order of its lists.
+                if profile(in: ctx)?.nutrientTracking == true, !m.foods.isEmpty {
+                    let r = record(for: m.at, in: ctx)
+                    if undo.dietDay == nil {
+                        undo.dietDay = r.day
+                        undo.diet = [r.proteinFoods, r.potassiumFoods, r.phosphorusFoods, r.saltSources]
+                        undo.dietLogged = r.nutrientsLogged
+                        undo.proteinServings = r.proteinServings
+                    }
+                    func merged(_ list: [String], _ names: [String]) -> [String] {
+                        names.flatMap { n in Array(repeating: n, count: (list + m.foods).filter { $0 == n }.count) }
+                    }
+                    r.nutrientsLogged = true
+                    r.proteinFoods = merged(r.proteinFoods, DietFoods.proteinFoods.map(\.name))
+                    r.potassiumFoods = merged(r.potassiumFoods, DietFoods.potassium)
+                    r.phosphorusFoods = merged(r.phosphorusFoods, DietFoods.phosphorus)
+                    r.saltSources = DietFoods.salt.filter { r.saltSources.contains($0) || m.foods.contains($0) }
+                    if !r.proteinFoods.isEmpty { r.proteinServings = nil }
+                }
+            case .workout(let w):
+                let s = ActivitySession(start: w.start, type: w.type, minutes: Double(w.minutes), source: .manual)
+                s.rpe = w.effort; s.distanceKm = w.km; s.note = "在对话里记下"
+                // It counts for the session planned that day, as when logged from the plan.
+                let day = w.start.startOfDay
+                let items = (try? ctx.fetch(FetchDescriptor<PlanItem>(predicate: #Predicate { $0.day == day }))) ?? []
+                if let planned = ChatRecord.planned(for: w, in: items.map(\.snapshot)), let item = items.first(where: { $0.id == planned.id }) {
+                    undo.planItem = item.id; undo.planMinutes = item.completedMinutes; undo.planStatus = item.status
+                    let done = (item.completedMinutes ?? 0) + w.minutes
+                    item.completedMinutes = done
+                    item.status = Double(done) >= Double(item.minutes) * 0.8 ? .done : .partial
+                    s.planItemID = item.id
+                }
+                ctx.insert(s)
+                undo.sessions.append(s.id)
+            case .reminder(let title, let area, let due, let timed):
+                var when = reminderDue ?? due
+                // A repeating one starts at its next time, at the time shown on the card.
+                if let r = p.repeats { when = r.first(onOrAfter: .app, minutes: timed ? when.minutesOfDay : nil) }
+                let t = CareTask(title: title, area: area, due: when, note: "在对话里添加", repeats: p.repeats)
                 t.createdAt = .app
                 ctx.insert(t)
                 undo.tasks.append(t.id)
@@ -98,6 +151,22 @@ extension DataHub {
         }
         for id in u.tasks {
             for t in (try? ctx.fetch(FetchDescriptor<CareTask>(predicate: #Predicate { $0.id == id }))) ?? [] { ctx.delete(t) }
+        }
+        for id in u.meals {
+            for m in (try? ctx.fetch(FetchDescriptor<MealLog>(predicate: #Predicate { $0.id == id }))) ?? [] { ctx.delete(m) }
+        }
+        for id in u.sessions {
+            for s in (try? ctx.fetch(FetchDescriptor<ActivitySession>(predicate: #Predicate { $0.id == id }))) ?? [] { ctx.delete(s) }
+        }
+        if let d = u.dietDay, u.diet.count == 4 {
+            let r = record(for: d, in: ctx)
+            r.proteinFoods = u.diet[0]; r.potassiumFoods = u.diet[1]; r.phosphorusFoods = u.diet[2]; r.saltSources = u.diet[3]
+            r.nutrientsLogged = u.dietLogged
+            r.proteinServings = u.proteinServings
+        }
+        if let id = u.planItem, let item = ((try? ctx.fetch(FetchDescriptor<PlanItem>(predicate: #Predicate { $0.id == id }))) ?? []).first {
+            item.completedMinutes = u.planMinutes
+            if let s = u.planStatus { item.status = s }
         }
         if let d = u.waterDay {
             let r = record(for: d, in: ctx)

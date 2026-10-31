@@ -3,7 +3,8 @@ import SwiftData
 import UserNotifications
 
 /// 到期提醒: system notifications for 照护与随访 tasks with a due date — a week ahead for one that
-/// needs booking (a lab recheck, a visit, an examination), and at 9 on the day. Local only: nothing
+/// needs booking (a lab recheck, a visit, an examination), and at 9 on the day (or at the time
+/// given); a repeating task at each of its next times. Local only: nothing
 /// leaves the phone. The schedule is rebuilt from the tasks whenever the app comes to the front or
 /// goes to the background, so a ticked-off or moved task never rings.
 enum CareReminders {
@@ -12,6 +13,9 @@ enum CareReminders {
     static let hour = 9
     /// iOS keeps 64 pending notifications per app; leave room.
     static let limit = 48
+    /// A repeating task: its next times, so reminders keep coming while the app stays closed (each
+    /// time Pulse opens or runs in the background the schedule moves on).
+    static let repeatsAhead = 7
 
     static var enabled: Bool { UserDefaults.standard.bool(forKey: enabledKey) }
     /// 异常提醒: events found by the background check (`BackgroundCheck`) are notified at once.
@@ -26,6 +30,7 @@ enum CareReminders {
         let note: String
         let due: Date?
         let done: Bool
+        var repeats: CareRepeat? = nil
     }
 
     struct Planned: Equatable {
@@ -49,12 +54,27 @@ enum CareReminders {
             let due = at.startOfDay
             // A time of day given in the chat (「晚上 9 点」) rings then; a date alone at 9 o'clock.
             let timed = at != due
+            let note = t.note == "在对话里添加" ? "" : t.note
+            if let r = t.repeats {
+                // Missed times are not caught up: from the next one on.
+                var next = at < now ? r.first(onOrAfter: now, minutes: timed ? at.minutesOfDay : nil) : at
+                var n = 0
+                while n < repeatsAhead, next < now.adding(days: 35) {
+                    let fire = timed ? next : next.startOfDay.adding(minutes: hour * 60)
+                    if fire > now {
+                        out.append(Planned(id: prefix + t.id + ".r\(Int(fire.timeIntervalSince1970))", title: (timed ? "" : "今天：") + t.title,
+                                           body: note.isEmpty ? "完成后在 Pulse 的「照护与随访」里打个勾，会自动排到下一次。" : note, fire: fire))
+                        n += 1
+                    }
+                    next = r.next(after: next, at: at)
+                }
+                continue
+            }
             if needsBooking(t.title) {
                 out.append(Planned(id: prefix + t.id + ".week", title: "下周：\(t.title)",
                                    body: "大约 \(due.formatted(day))。需要预约的话，现在约正好；日期以医生的安排为准。",
                                    fire: due.adding(days: -7).adding(minutes: hour * 60)))
             }
-            let note = t.note == "在对话里添加" ? "" : t.note
             out.append(Planned(id: prefix + t.id + ".day", title: (timed ? "" : "今天：") + t.title,
                                body: note.isEmpty ? "完成后在 Pulse 的「照护与随访」里打个勾。" : note,
                                fire: timed ? at : due.adding(minutes: hour * 60)))
@@ -99,7 +119,7 @@ enum CareReminders {
     @MainActor static func sync(in ctx: ModelContext) {
         guard schedulable else { return }
         let tasks = ((try? ctx.fetch(FetchDescriptor<CareTask>())) ?? [])
-            .map { Task(id: $0.id.uuidString, title: $0.title, note: $0.note, due: $0.due, done: $0.done) }
+            .map { Task(id: $0.id.uuidString, title: $0.title, note: $0.note, due: $0.due, done: $0.done, repeats: $0.repeats) }
         let planned = enabled ? plan(tasks, now: Date()) : []
         _Concurrency.Task {
             let center = UNUserNotificationCenter.current()

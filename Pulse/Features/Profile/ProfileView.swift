@@ -71,6 +71,7 @@ struct ProfileView: View {
                                 careReminders = ok
                                 remindersDenied = !ok
                                 CareReminders.sync(in: ctx)
+                                BackgroundCheck.schedule()
                             }
                         })) {
                             Label { Text("到期提醒") } icon: { tileIcon("bell", .red) }
@@ -93,7 +94,7 @@ struct ProfileView: View {
                         }
                     } header: { Text("提醒") } footer: {
                         Text(remindersDenied ? "通知被关掉了：在系统「设置 › 通知 › Pulse」里允许后，再回来打开。"
-                             : "到期提醒：复查、复诊这类照护与随访事项，到期前一周和当天上午 9 点通知你。异常提醒：Pulse 在后台看看健康 App 里新同步的数据（比如手表、体重秤），发现需要联系医生的情况就通知你；什么时候检查由系统决定，通常几个小时一次，不能代替急救。提醒都在本机完成，不经过网络。")
+                             : "到期提醒：复查、复诊这类照护与随访事项，到期前一周和当天上午 9 点通知你；设了时间或重复的事项按时通知。异常提醒：Pulse 在后台看看健康 App 里新同步的数据（比如手表、体重秤），发现需要联系医生的情况就通知你；什么时候检查由系统决定，通常几个小时一次，不能代替急救。提醒都在本机完成，不经过网络。")
                     }
 
                     Section {

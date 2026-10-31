@@ -1886,6 +1886,9 @@ enum HealthAgent {
         }
         // When to see a doctor stays, however the model shortened the answer.
         if let s = r.safety, !says(t, safety: s) { t += "\n\n" + s }
+        // The visit summary is made by the user, in the app; the model can't make it for them.
+        t = t.replacingOccurrences(of: #"我?(?:可以|会|来|能)?(?:帮你|为你|给你)(?:生成|做|整理|准备|出)(?:一份)?(?:Pulse ?的?)?就诊摘要"#,
+                                   with: "可以在「我的 › 隐私与数据导出」生成就诊摘要", options: .regularExpression)
         // A 记下 card goes with the line that says how to use it.
         if r.blocks.contains(where: { $0.record != nil }), !t.contains("「记下」"),
            let ask = r.text.components(separatedBy: "\n").first(where: { $0.hasPrefix("要记下来的话") }) {

@@ -106,7 +106,8 @@ enum DataExporter {
                  "status": $0.statusRaw, "title": $0.title, "detail": $0.detail, "followUp": $0.followUpLog] as [String: Any]
             }
             root["careTasks"] = ((try? ctx.fetch(FetchDescriptor<CareTask>())) ?? []).map {
-                ["title": $0.title, "area": $0.areaRaw, "due": $0.due.map { iso.string(from: $0) } as Any, "done": $0.done] as [String: Any]
+                ["title": $0.title, "area": $0.areaRaw, "due": $0.due.map { iso.string(from: $0) } as Any, "done": $0.done,
+                 "repeat": $0.repeats?.label as Any] as [String: Any]
             }
         }
         if categories.contains(.medications) {

@@ -634,7 +634,7 @@ enum PlanChat {
     static let cloudInstructions = """
     你是 Pulse 应用中的 Health Agent，正在根据对话帮用户调整训练计划。长期目标是降低静息心率。
     要求：
-    1. 结合用户的要求、之前的对话和数据（准备度、训练负荷、完成情况、健康状况），给出具体的修改。只能修改标注「可调整」的日子。minutes 和 intensity 只对训练（aerobic、long、quality、strength、mobility）有效；walk（日常活动）和 rest 标着「不是训练」，减量时不要改它们。某一周可调整的日子里已经没有训练时，改另一周，并在第一句说明。
+    1. 结合用户的要求、之前的对话和数据（准备度、训练负荷、完成情况、健康状况），给出具体的修改。只能修改标注「可调整」的日子。minutes 和 intensity 只对训练（aerobic、long、quality、strength、mobility）有效；walk（日常活动）和 rest 标着「不是训练」，减量时不要改它们。某一周可调整的日子里已经没有训练时，改另一周（App 会在回答开头说明这一点，不用重复）。
     2. 先用简体中文 1–3 句话说明怎么改、为什么（引用数据中的数字），不超过 150 字；不要逐日复述计划，修改会以卡片展示给用户确认。用户点「采纳」前计划没有改变，不要说「已改为」「已调整」，用「建议」「可以改为」。
     3. 然后输出 <plan>{"scope":"this_week 或 next_week","edits":[…]}</plan>。edits 只能使用：
        {"op":"move","from":"周三","to":"周四"}（两天的安排互换）

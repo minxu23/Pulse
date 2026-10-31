@@ -100,14 +100,37 @@ final class CareTask {
     var done: Bool = false
     var doneAt: Date? = nil
     var createdAt: Date = Date()
+    /// `CareRepeat.raw`; empty for a task done once.
+    var repeatRaw: String = ""
 
-    init(title: String, area: CareArea, due: Date? = nil, note: String = "") {
+    init(title: String, area: CareArea, due: Date? = nil, note: String = "", repeats: CareRepeat? = nil) {
         self.title = title
         self.areaRaw = area.rawValue
         self.due = due
         self.note = note
+        self.repeatRaw = repeats?.raw ?? ""
     }
     var area: CareArea { CareArea(rawValue: areaRaw) ?? .general }
+    var repeats: CareRepeat? { CareRepeat(raw: repeatRaw) }
+
+    /// Ticked off for now: a one-off task is done; a repeating one was done today and waits for its next time.
+    func isDone(now: Date) -> Bool {
+        repeats == nil ? done : doneAt.map { Calendar.pulse.isDate($0, inSameDayAs: now) } == true
+    }
+
+    /// Ticks the task off. A repeating one stays open and moves on: past this time when it is still
+    /// ahead (done early), or to the next time from now when this one was missed.
+    func complete(now: Date) {
+        doneAt = now
+        guard let r = repeats, let d = due else { done = true; return }
+        due = r.next(after: max(now, d), at: d)
+    }
+
+    /// Takes a tick back; a repeating task returns to the time before.
+    func reopen() {
+        if let r = repeats, let d = due { due = r.previous(before: d) } else { done = false }
+        doneAt = nil
+    }
 }
 
 /// A saved weekly / phase review with the user's reflection and next-step strategy (需求 9).

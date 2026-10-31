@@ -107,6 +107,9 @@ enum AgentFollowUps {
                     when(affected && !q.contains("天气"), "这几天的天气适合户外训练吗？"), "这周的训练完成得怎么样？"]
         case .planChange, .weather:
             list = ["今天适合运动吗？", "这周的训练完成得怎么样？"]
+        case .exercise where r.blocks.contains { if case .workout? = $0.record?.items.first { true } else { false } }:
+            // 「刚快走了 40 分钟」: the week, and the next session.
+            list = ["这周的训练完成得怎么样？", "明天能运动吗？"]
         case .exercise:
             list = ["今天适合运动吗？", when(p.goals.contains(.lowerRHR), "怎么才能把静息心率降下来？"), "热身怎么做？"]
         case .rhr:
@@ -135,6 +138,10 @@ enum AgentFollowUps {
             list = [when(!q.contains("现在"), "现在可以喝咖啡吗？"), "我的睡眠怎么样？", "睡不着怎么办？"]
         case .stress:
             list = ["睡不着怎么办？", "今天适合运动吗？"]
+        case .diet where r.blocks.contains { if case .meal? = $0.record?.items.first { true } else { false } }:
+            // 「午饭吃了…」: what the day adds up to.
+            list = [when(p.proteinTargetG != nil || p.conditions.contains(.ckd), "今天蛋白质吃够了吗？"), when(p.limitsPotassium, "今天钾吃多了吗？"),
+                    when(diabetes, "血糖控制得怎么样？"), "今天吃什么好？"]
         case .diet where r.blocks.contains { if case .water? = $0.record?.items.first { true } else { false } }:
             // 「我刚喝了一杯水」: about drinking, not food.
             list = ["一天喝多少水？"]
