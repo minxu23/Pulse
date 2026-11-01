@@ -23,6 +23,7 @@ struct PlanView: View {
                     ForEach(Segment.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                .readableWidth()
                 .padding(.horizontal, Theme.Space.gutter)
                 .padding(.bottom, Theme.Space.item)
                 .background(.bar)

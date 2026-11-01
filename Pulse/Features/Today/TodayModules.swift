@@ -75,6 +75,7 @@ struct TodayModuleCard: View {
                         .navigationTitle("回想一下原因").navigationBarTitleDisplayMode(.inline)
                         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { noting = nil } } }
                 }
+                .pageMargins()
             }
         }
         .sheet(item: Binding(get: { agentQuestion.map(IdentifiedText.init) }, set: { agentQuestion = $0?.text })) { q in
@@ -266,6 +267,7 @@ struct AbnormalRecallCard: View {
                         .navigationTitle("回想一下原因").navigationBarTitleDisplayMode(.inline)
                         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { noting = nil } } }
                 }
+                .pageMargins()
             }
         }
         .sheet(item: Binding(get: { agentQuestion.map(IdentifiedText.init) }, set: { agentQuestion = $0?.text })) { q in

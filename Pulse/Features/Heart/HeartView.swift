@@ -27,6 +27,7 @@ struct HeartView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .readableWidth()
                 .padding(.horizontal, Theme.Space.gutter)
                 .padding(.bottom, Theme.Space.item)
                 .background(.bar)

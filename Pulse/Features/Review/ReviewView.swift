@@ -35,6 +35,7 @@ struct ReviewView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 Picker("复盘范围", selection: $segment) { ForEach(Segment.allCases) { Text($0.rawValue).tag($0) } }
                     .pickerStyle(.segmented)
+                    .readableWidth()
                     .padding(.horizontal, Theme.Space.gutter)
                     .padding(.bottom, Theme.Space.item)
                     .background(.bar)
@@ -87,6 +88,7 @@ struct AskAgentBar: View {
             .buttonStyle(.plain)
             .accessibilityLabel("语音提问")
         }
+        .readableWidth()
         .padding(.horizontal, Theme.Space.gutter)
         .padding(.top, Theme.Space.block)
         .padding(.bottom, Theme.Space.item)

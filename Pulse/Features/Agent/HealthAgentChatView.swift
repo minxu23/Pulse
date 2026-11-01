@@ -215,6 +215,7 @@ private struct AgentChatContent: View {
                 .accessibilityLabel("发送")
             }
         }
+        .readableWidth()
         .padding(.horizontal, Theme.Space.gutter)
         .padding(.vertical, Theme.Space.item)
         .background(.bar)

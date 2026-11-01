@@ -97,6 +97,7 @@ private struct RecheckDateSheet: View {
             }
             .calmStyle()
         }
+        .pageMargins()
         .presentationDetents([.medium, .large])
     }
 

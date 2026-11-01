@@ -102,6 +102,7 @@ struct RootView: View {
                 NavigationStack {
                     page.view.toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { debugPage = nil } } }
                 }
+                .pageMargins()
             }
         }
         .task {

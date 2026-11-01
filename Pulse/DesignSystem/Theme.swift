@@ -132,6 +132,9 @@ extension Theme {
         static let tileIcon: CGFloat = 40
         /// Filled tile on hero cards.
         static let hero: CGFloat = 56
+        /// Widest the page content gets on a wide screen (iPad), at the default text size: lines in a
+        /// card stay readable instead of running edge to edge.
+        static let readableWidth: CGFloat = 720
     }
 }
 
@@ -150,9 +153,31 @@ extension LabelStyle where Self == InlineLabelStyle {
 }
 
 extension View {
-    /// The same side margins for every scrolling page, list and form.
-    func pageMargins() -> some View {
-        contentMargins(.horizontal, Theme.Space.gutter, for: .scrollContent)
+    /// The same side margins for every scrolling page, list and form; on a wide screen they grow so
+    /// the content stays at a readable width.
+    func pageMargins() -> some View { modifier(PageMargins()) }
+    /// Bars outside the scroll content (segment pickers, the ask bar): no wider than the page content.
+    /// Applied inside their side padding, so they line up with the cards.
+    func readableWidth() -> some View { modifier(ReadableWidth()) }
+}
+
+/// The gutter on a phone; on a wide screen (iPad) the margins grow so the content is at most
+/// `readableWidth` wide — more with larger text, which needs the room. Measured where it is applied,
+/// so a sheet (narrower than the window) gets margins of its own.
+private struct PageMargins: ViewModifier {
+    @ScaledMetric(relativeTo: .body) private var readable = Theme.Size.readableWidth
+    @State private var width: CGFloat = 0
+    func body(content: Content) -> some View {
+        content
+            .contentMargins(.horizontal, max(Theme.Space.gutter, (width - readable) / 2), for: .scrollContent)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+    }
+}
+
+private struct ReadableWidth: ViewModifier {
+    @ScaledMetric(relativeTo: .body) private var readable = Theme.Size.readableWidth
+    func body(content: Content) -> some View {
+        content.frame(maxWidth: readable).frame(maxWidth: .infinity)
     }
 }
 
@@ -223,7 +248,8 @@ extension View {
 struct CalmNavigationStack<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
-        NavigationStack { content.navigationBarTitleDisplayMode(.inline) }.calmStyle()
+        // A sheet's own margins: it is narrower than the window on iPad.
+        NavigationStack { content.navigationBarTitleDisplayMode(.inline) }.calmStyle().pageMargins()
     }
 }
 
