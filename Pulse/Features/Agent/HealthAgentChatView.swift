@@ -239,7 +239,8 @@ private struct AgentIntro: View {
         let line: String
         switch s.effectiveMode {
         case .cloud: line = "全部云端 · 由云端模型 \(model) 根据你的数据回答，提问时发送数据摘要"
-        case .hybrid: line = "端云结合 · 涉及你记录的问题在本机回答；通用问题由 \(model) 回答，不发送你的数据"
+        case .hybrid: line = s.consented ? "端云结合 · 本机分析后，去掉姓名、电话等再由 \(model) 写回答；紧急情况在本机"
+            : "端云结合 · 涉及你记录的问题在本机回答；通用问题由 \(model) 回答，不发送你的数据"
         case .onDevice:
             line = AgentConversation.shared.usesOnDeviceModel ? "仅本机 · 由设备端 Apple 智能根据你的数据回答，数据不离开本机"
                 : "大模型不可用（\(AgentConversation.shared.noModelReason ?? "")）· 目前为规则分析"
@@ -285,6 +286,7 @@ private struct AgentMessageView: View {
     var onSpeak: () -> Void
     var onWithdraw: () -> Void
     var onEdit: () -> Void
+    @State private var showSent = false
 
     var body: some View {
         if message.role == .user && message.withdrawn {
@@ -362,8 +364,9 @@ private struct AgentMessageView: View {
             }
             HStack(spacing: Theme.Space.item) {
                 Text(([message.engine == .onDevice ? "Apple 智能" : (message.engine == .cloud ? "云端 · \(CloudModelSettings.shared.model)"
-                        : (r.urgent ? "固定急救提示（不经过模型）" : "Pulse 规则分析（未经大模型）"))] + [message.privacy].compactMap { $0 } + r.sources).joined(separator: " · "))
-                    .font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                        : (r.urgent ? "固定急救提示（不经过模型）" : "Pulse 规则分析（未经大模型）"))] + [message.privacy].compactMap { $0 }
+                       + [message.masked.map { "发送前去掉了\($0)" }].compactMap { $0 } + r.sources).joined(separator: " · "))
+                    .font(.footnote).foregroundStyle(.secondary).lineLimit(3)
                 Spacer(minLength: Theme.Space.tight)
                 Button(action: onSpeak) {
                     Image(systemName: speaking ? "speaker.wave.2.fill" : "speaker.wave.2")
@@ -372,6 +375,14 @@ private struct AgentMessageView: View {
                 }
                 .buttonStyle(.plain).foregroundStyle(Theme.accent)
                 .accessibilityLabel(speaking ? "停止朗读" : "朗读这条回复")
+            }
+            // Exactly what went to the cloud, so the masking can be checked.
+            if let sent = message.sent {
+                Button { showSent = true } label: {
+                    Text("查看发送的内容").font(.footnote).frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).foregroundStyle(Theme.accent)
+                .sheet(isPresented: $showSent) { SentContentSheet(text: sent, masked: message.masked) }
             }
             if isLast && !r.followUps.isEmpty {
                 FlowLayout(spacing: Theme.Space.item) {
@@ -387,6 +398,33 @@ private struct AgentMessageView: View {
     /// Renders inline Markdown (bold from the language model) and keeps line breaks.
     static func attributed(_ s: String) -> AttributedString {
         (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
+    }
+}
+
+/// What one answer sent to the cloud model, word for word.
+private struct SentContentSheet: View {
+    let text: String
+    let masked: String?
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Theme.Space.block) {
+                    Text(masked.map { "发送前在本机把\($0)换成了 [姓名1] 这样的代号，回答回来后再换回原文。年龄、日期和健康数据照原样发送。" }
+                         ?? "这次的内容里没有姓名、电话、证件号、邮箱、地址、医院或医生，照原样发送。")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Text(text).font(.subheadline).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(Theme.Space.block)
+                        .background(Theme.subtle.opacity(0.6), in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
+                }
+                .padding(.vertical, Theme.Space.block)
+            }
+            .pageMargins()
+            .navigationTitle("发送的内容").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+        }
     }
 }
 

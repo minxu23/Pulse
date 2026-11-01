@@ -41,6 +41,7 @@ struct AgentContextReader<Content: View>: View {
             targetRHR: p?.targetRHR, weather: WeatherStore.shared.days, weatherSource: WeatherStore.shared.sourceName,
             labs: labs.map(\.point), now: now)
         c.answerMode = CloudModelSettings.shared.effectiveMode
+        c.healthDataConsented = CloudModelSettings.shared.consented
         c.agentName = AgentNameSettings.shared.name
         return c
     }
@@ -85,6 +86,13 @@ struct AgentMessage: Identifiable, Equatable {
     var general = false
     /// 端云结合: why this answer stayed on the device (shown with the answer).
     var privacy: String? = nil
+    /// What was taken out before the question went to the cloud (「姓名、医院」), shown with the answer.
+    var masked: String? = nil
+    /// Exactly what went to the cloud model, identifiers masked; for 「查看发送的内容」. Not kept between launches.
+    var sent: String? = nil
+    /// A question as it was answered, follow-ups resolved (「我最近血压怎么样，那该注意什么？」): the next
+    /// follow-up builds on it.
+    var asked: String? = nil
     var date = Date.app
 }
 
@@ -104,6 +112,7 @@ enum AgentTranscript {
         var general = false
         var note: String?
         var privacy: String?
+        var masked: String?
         var sources: [String] = []
         var followUps: [String] = []
         var destination: String?
@@ -125,7 +134,7 @@ enum AgentTranscript {
                 ? AgentReply(text: s.text, sources: s.sources, followUps: s.followUps, destination: s.destination.flatMap(AgentDestination.init(rawValue:)),
                              intent: s.intent.flatMap(AgentIntent.init(rawValue:)) ?? .unknown) : nil
             return AgentMessage(id: s.id, role: role, text: s.text, reply: reply, engine: AgentMessage.Engine(rawValue: s.engine) ?? .rules,
-                                note: s.note, withdrawn: s.withdrawn, general: s.general, privacy: s.privacy, date: s.date)
+                                note: s.note, withdrawn: s.withdrawn, general: s.general, privacy: s.privacy, masked: s.masked, date: s.date)
         }
     }
 
@@ -135,7 +144,7 @@ enum AgentTranscript {
         guard !kept.isEmpty else { try? FileManager.default.removeItem(at: url); return }
         let stored = kept.map { m in
             Stored(id: m.id, role: m.role.rawValue, text: m.text, engine: m.engine.rawValue, date: m.date, withdrawn: m.withdrawn,
-                   general: m.general, note: m.note, privacy: m.privacy, sources: m.reply?.sources ?? [], followUps: m.reply?.followUps ?? [],
+                   general: m.general, note: m.note, privacy: m.privacy, masked: m.masked, sources: m.reply?.sources ?? [], followUps: m.reply?.followUps ?? [],
                    destination: m.reply?.destination?.rawValue, intent: m.reply?.intent.rawValue)
         }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -228,11 +237,11 @@ final class AgentConversation {
         let history = modelHistory()
         let generalHistory = generalModelHistory()
         // 「那明天呢？」 is read with the question before it.
-        let previous = messages.last { $0.role == .user && !$0.withdrawn }.map { AgentName.unaddressed($0.text, name: context.agentName) }
+        let previous = messages.last { $0.role == .user && !$0.withdrawn }.map { $0.asked ?? AgentName.unaddressed($0.text, name: context.agentName) }
         let asked = HealthAgent.resolveFollowUp(q, previous: previous) ?? q
         let earlier = messages.filter { $0.role == .user && !$0.withdrawn }.map(\.text)
         let askedForName = messages.last { $0.role == .agent }?.reply?.text == AgentName.reply(to: .ask).text
-        messages.append(AgentMessage(role: .user, text: typed))
+        messages.append(AgentMessage(role: .user, text: typed, asked: asked == q ? nil : asked))
         turn += 1
         let mine = turn
         isResponding = true
@@ -258,6 +267,8 @@ final class AgentConversation {
         }
 
         var rule = HealthAgent.reply(to: asked, context: context)
+        // 「那该注意什么？」: the topic's facts, but its verdict was given in the answer before.
+        if asked != q, HealthAgent.isContinuation(q) { rule = HealthAgent.continuing(rule, question: q) }
         let context = HealthAgent.context(context, answering: rule)
         // The questions offered under the answer follow from it and from this person.
         rule.followUps = AgentFollowUps.suggest(after: rule, question: asked, context: context, asked: earlier)
@@ -299,13 +310,24 @@ final class AgentConversation {
             switch AgentRouting.route(asked, reply: rule, profile: context.profile, name: context.name) {
             case .general(let text):
                 if let client = settings.client() {
-                    switch await answerGeneral(text, history: generalHistory, client: client, followUps: modelFollowUps, mine: mine, spoken: spoken) {
+                    switch await answerGeneral(text, history: generalHistory, context: context, client: client, followUps: modelFollowUps,
+                                               mine: mine, spoken: spoken) {
                     case .answered, .superseded: return
                     case .failed(let note): fallbackNote = note
                     }
                 }
             case .device(let why):
-                privacy = "在本机回答：\(why)"
+                // With consent, Pulse's analysis and the question go out with identifiers masked; the
+                // answer is put together here. Without it, the question is answered on this device.
+                if settings.consented, let client = settings.client() {
+                    switch await answerWithRecords(asked, rule: rule, history: history, context: context, client: client, followUps: modelFollowUps,
+                                                   mine: mine, spoken: spoken, localDecisions: true) {
+                    case .answered, .superseded: return
+                    case .failed(let note): fallbackNote = note
+                    }
+                } else {
+                    privacy = "在本机回答：\(why)"
+                }
             }
         case .onDevice:
             break
@@ -359,18 +381,34 @@ final class AgentConversation {
         if spoken || speakReplies, let last = messages.last { speak(last) }
     }
 
-    /// 全部云端: the question with the anonymous data digest and the rules analysis.
+    /// 全部云端: the question with the data digest and the rules analysis. 端云结合 (`localDecisions`):
+    /// the same facts, but the cloud only writes the words — cards and plan changes stay the rules' own.
+    /// Either way identifiers are masked on the way out and put back in the answer.
     private func answerWithRecords(_ q: String, rule: AgentReply, history: [String], context: AgentContext,
-                                   client: CloudModelClient, followUps: [String], mine: Int, spoken: Bool) async -> CloudOutcome {
-        let id = append(AgentMessage(role: .agent, text: "", reply: rule, engine: .cloud, streaming: true))
-        let (system, prompt) = cloudRequest(q, rule: rule, history: history, context: context)
+                                   client: CloudModelClient, followUps: [String], mine: Int, spoken: Bool,
+                                   localDecisions: Bool = false) async -> CloudOutcome {
+        let out = outgoing(localDecisions ? hybridRequest(q, rule: rule, history: history, context: context)
+                                          : cloudRequest(q, rule: rule, history: history, context: context), context: context)
+        let id = append(AgentMessage(role: .agent, text: "", reply: rule, engine: .cloud, streaming: true, masked: out.masked, sent: out.prompt))
         do {
-            let raw = try await client.stream(system: system, prompt: prompt, maxTokens: 1600) { [weak self] partial in
-                self?.edit(id) { $0.text = AgentName.firstPerson(HealthAgent.streamed(AgentUI.split(partial).text, of: rule, proposing: rule.proposesPlan || rule.intent == .planChange),
+            let raw = try await client.stream(system: out.system, prompt: out.prompt, maxTokens: 1600) { [weak self] partial in
+                let text = out.mask.restore(partial, streaming: true)
+                self?.edit(id) { $0.text = AgentName.firstPerson(HealthAgent.streamed(AgentUI.split(text).text, of: rule, proposing: rule.proposesPlan || rule.intent == .planChange),
                                                          name: context.agentName) }
             }
             guard turn == mine else { return .superseded }
-            let parts = AgentUI.split(raw)
+            let parts = AgentUI.split(out.mask.restore(raw))
+            if localDecisions {
+                edit(id) { m in
+                    m.text = AgentName.firstPerson(HealthAgent.finalize(parts.text.isEmpty ? rule.text : parts.text, of: rule,
+                                                                        proposals: rule.blocks.compactMap(\.proposal), strict: false), name: context.agentName)
+                    m.blocks = rule.blocks
+                    m.reply?.followUps = followUps
+                    m.streaming = false
+                }
+                if spoken || speakReplies, let m = messages.first(where: { $0.id == id }) { speak(m) }
+                return .answered
+            }
             var blocks = parts.ui.map { AgentUI.blocks(fromJSON: $0, context: q) } ?? []
             var note: String? = nil
             // The model's own change failed the checks: its words describe that change, so the
@@ -408,17 +446,18 @@ final class AgentConversation {
     }
 
     /// 端云结合: a general question goes out as its text alone — no digest, no records, no rules analysis.
-    private func answerGeneral(_ q: String, history: [String], client: CloudModelClient, followUps: [String], mine: Int, spoken: Bool) async -> CloudOutcome {
+    private func answerGeneral(_ q: String, history: [String], context: AgentContext, client: CloudModelClient, followUps: [String],
+                               mine: Int, spoken: Bool) async -> CloudOutcome {
         let shown = AgentReply(text: "", sources: ["通用问题 · 没有发送你的数据"], followUps: followUps, intent: .unknown)
-        let id = append(AgentMessage(role: .agent, text: "", reply: shown, engine: .cloud, streaming: true, general: true))
+        let out = outgoing((HealthAgent.generalCloudInstructions, HealthAgent.generalPrompt(question: q, history: history)), context: context)
+        let id = append(AgentMessage(role: .agent, text: "", reply: shown, engine: .cloud, streaming: true, general: true, masked: out.masked, sent: out.prompt))
         do {
-            let raw = try await client.stream(system: HealthAgent.generalCloudInstructions,
-                                              prompt: HealthAgent.generalPrompt(question: q, history: history), maxTokens: 900) { [weak self] partial in
-                self?.edit(id) { $0.text = HealthAgent.stripLabels(partial, streaming: true) }
+            let raw = try await client.stream(system: out.system, prompt: out.prompt, maxTokens: 900) { [weak self] partial in
+                self?.edit(id) { $0.text = HealthAgent.stripLabels(out.mask.restore(partial, streaming: true), streaming: true) }
             }
             guard turn == mine else { return .superseded }
             edit(id) { m in
-                m.text = HealthAgent.finalize(raw, of: shown, strict: false)
+                m.text = HealthAgent.finalize(out.mask.restore(raw), of: shown, strict: false)
                 m.reply = AgentReply(text: m.text, sources: shown.sources, followUps: shown.followUps, intent: .unknown)
                 m.streaming = false
             }
@@ -444,7 +483,7 @@ final class AgentConversation {
         var out: [String] = []
         for (i, m) in messages.enumerated() where m.role == .agent && m.general && !m.streaming {
             guard let qi = messages[..<i].lastIndex(where: { $0.role == .user }), !messages[qi].withdrawn else { continue }
-            out += ["用户：" + AgentRouting.redacted(String(messages[qi].text.prefix(200))), "助手：" + String(m.text.prefix(200))]
+            out += ["用户：" + String(messages[qi].text.prefix(200)), "助手：" + String(m.text.prefix(200))]
         }
         return Array(out.suffix(4))
     }
@@ -541,6 +580,23 @@ final class AgentConversation {
     func cloudRequest(_ q: String, rule: AgentReply, history: [String], context: AgentContext) -> (system: String, prompt: String) {
         let (system, prompt) = recordsRequest(q, rule: rule, history: history, context: context)
         return (Self.named(system, context), prompt)
+    }
+
+    /// 端云结合: Pulse's analysis and the data this question needs; no catalog of cards or plan edits,
+    /// since those are decided on the device.
+    func hybridRequest(_ q: String, rule: AgentReply, history: [String], context: AgentContext) -> (system: String, prompt: String) {
+        (Self.named(HealthAgent.cloudInstructions, context),
+         HealthAgent.modelPrompt(question: q, history: history, context: context, reply: rule, anonymous: true))
+    }
+
+    /// What actually leaves the phone: the prompt with identifiers masked (instructions are Pulse's own
+    /// text), and the mask that puts them back in the answer.
+    func outgoing(_ request: (system: String, prompt: String), context: AgentContext)
+        -> (system: String, prompt: String, mask: IdentityMask, masked: String?) {
+        var mask = AgentRouting.mask(for: context)
+        let prompt = mask.mask(request.prompt)
+        return (mask.isEmpty ? request.system : request.system + "\n\n" + IdentityMask.instruction, prompt, mask,
+                mask.isEmpty ? nil : mask.summary)
     }
 
     private func recordsRequest(_ q: String, rule: AgentReply, history: [String], context: AgentContext) -> (system: String, prompt: String) {

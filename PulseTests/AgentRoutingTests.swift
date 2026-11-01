@@ -32,7 +32,7 @@ struct AgentRoutingTests {
 
     @Test func modesNeedTheirSetup() {
         #expect(AnswerMode.effective(.hybrid, cloudReady: false, digestConsented: true) == .onDevice)
-        #expect(AnswerMode.effective(.hybrid, cloudReady: true, digestConsented: false) == .hybrid, "端云结合 sends no digest")
+        #expect(AnswerMode.effective(.hybrid, cloudReady: true, digestConsented: false) == .hybrid, "端云结合 without consent: general questions only")
         #expect(AnswerMode.effective(.cloud, cloudReady: true, digestConsented: false) == .onDevice)
         #expect(AnswerMode.effective(.cloud, cloudReady: true, digestConsented: true) == .cloud)
         #expect(AnswerMode.effective(.onDevice, cloudReady: true, digestConsented: true) == .onDevice)
@@ -63,8 +63,10 @@ struct AgentRoutingTests {
     @Test func onlyTheQuestionGoesOut() throws {
         let (c, container) = try load(.xiaolin)
         _ = container
-        #expect(route("我的手机号是13812345678，拉伸怎么做", c) == .general("我的手机号是[手机号]，拉伸怎么做"))
-        #expect(AgentRouting.redacted("发到 a.b@example.com") == "发到 [邮箱]")
+        #expect(route("我的手机号是13812345678，拉伸怎么做", c) == .general("我的手机号是13812345678，拉伸怎么做"))
+        // The number never leaves the phone: the whole outgoing prompt is masked.
+        let out = AgentConversation().outgoing((HealthAgent.generalCloudInstructions, HealthAgent.generalPrompt(question: "我的手机号是13812345678，拉伸怎么做", history: [])), context: c)
+        #expect(out.prompt.hasSuffix("问题：我的手机号是[电话1]，拉伸怎么做") && out.masked == "电话")
         let prompt = HealthAgent.generalPrompt(question: "拉伸怎么做", history: ["用户：跑鞋怎么选", "助手：看脚型"])
         #expect(prompt.hasSuffix("问题：拉伸怎么做") && !prompt.contains("静息心率") && !prompt.contains("【数据】"))
         #expect(HealthAgent.generalCloudInstructions.contains("没有附带用户的任何健康记录"))

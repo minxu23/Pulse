@@ -178,15 +178,15 @@ struct CloudModelSettingsView: View {
                 }
 
                 Section {
-                    Toggle("我了解「全部云端」会发送数据摘要", isOn: $settings.consented)
+                    Toggle("同意把健康数据发到云端", isOn: $settings.consented)
                     DisclosureGroup("查看会发送的数据摘要", isExpanded: $showDigest) {
                         Text(HealthAgent.digest(ctx, anonymous: true))
                             .font(.footnote).foregroundStyle(.secondary)
                             .textSelection(.enabled)
                             .padding(.vertical, Theme.Space.tight)
                     }
-                } header: { Text("全部云端会发送的内容") } footer: {
-                    Text("摘要包含年龄、健康状况、用药名称、最近一次化验结果和各项统计（如近 7 天静息心率平均值、睡眠时长、血压血糖达标情况），不包含姓名、逐条记录或设备标识。「端云结合」不发送摘要，只发送通用问题的原文。")
+                } header: { Text("会发送的健康数据") } footer: {
+                    Text("「端云结合」每次只发送问题、Pulse 在本机的分析要点和与这个问题有关的数据；「全部云端」还会附上数据摘要（年龄、健康状况、用药名称、最近一次化验结果和各项统计）。发送前都会在本机把姓名、电话、证件号、邮箱、地址、医院和医生换成代号，回答回来后再换回；年龄、日期和健康数据照原样发送。不同意时，「端云结合」只发送通用问题。")
                 }
 
                 Section {
@@ -206,7 +206,7 @@ struct CloudModelSettingsView: View {
                     }
                     if case .failed = sample { result(sample) }
                 } header: { Text("试一试") } footer: {
-                    Text("用你的数据摘要问一次，看看「全部云端」的回答效果。需要先测试连接并同意发送摘要。")
+                    Text("用你的数据摘要问一次，看看「全部云端」的回答效果。需要先测试连接并同意发送健康数据。")
                 }
             }
         }
@@ -283,8 +283,8 @@ struct CloudModelSettingsView: View {
     private func requirement(_ m: AnswerMode) -> String? {
         switch m {
         case .onDevice: nil
-        case .hybrid: settings.cloudReady ? nil : "先在下方保存密钥并测试连接"
-        case .cloud: !settings.cloudReady ? "先保存密钥、测试连接，并同意发送数据摘要" : (settings.consented ? nil : "先在下方同意发送数据摘要")
+        case .hybrid: !settings.cloudReady ? "先在下方保存密钥并测试连接" : (settings.consented ? nil : "同意发送健康数据后，涉及你记录的问题也由云端回答；现在只发通用问题")
+        case .cloud: !settings.cloudReady ? "先保存密钥、测试连接，并同意发送健康数据" : (settings.consented ? nil : "先在下方同意发送健康数据")
         }
     }
 

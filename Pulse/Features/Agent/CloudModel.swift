@@ -2,10 +2,12 @@ import Foundation
 import Security
 
 // Optional cloud language model for the Health Agent, under 我的 › 回答方式与云端模型. The user picks
-// an `AnswerMode`: 仅本机 (default, nothing sent), 端云结合 (general questions only, as their text,
-// without any records) or 全部云端 (each question sends the data digest, the rules-engine analysis
-// and the question; needs explicit consent). A key and a passed connection test come first.
-// Emergency questions are always answered on the device.
+// an `AnswerMode`: 仅本机 (default, nothing sent), 端云结合 (Pulse's analysis and the question go out,
+// the answer is put together on the phone; questions about the user's records only with consent to
+// send health data, general questions as their text) or 全部云端 (each question also sends the data
+// digest; needs that consent). Names, phone numbers, ID numbers, e-mail, addresses, hospitals and
+// doctors are masked before anything goes out (`IdentityMask`). A key and a passed connection test
+// come first. Emergency questions are always answered on the device.
 
 enum CloudProvider: String, CaseIterable, Identifiable {
     case openRouter, anthropic, openAICompatible
@@ -147,7 +149,8 @@ final class CloudModelSettings {
     var model: String {
         didSet { d.set(model, forKey: "cloud.model") }
     }
-    /// The user agreed that questions send the data digest to the service (needed for 全部云端).
+    /// The user agreed to send health data to the service: needed for 全部云端, and for 端云结合 to send
+    /// questions about the user's records.
     var consented: Bool {
         didSet { d.set(consented, forKey: "cloud.consented"); if !consented && mode == .cloud { mode = .onDevice } }
     }

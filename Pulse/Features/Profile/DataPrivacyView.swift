@@ -13,7 +13,7 @@ struct DataPrivacyView: View {
         Form {
             Section {
                 Label("所有数据仅保存在这台设备上，不需要账号，也不会上传到服务器。", systemImage: "iphone")
-                Label("例外是你在「回答方式与云端模型」里主动选择时：「端云结合」只把不涉及你记录的通用问题原文发到你配置的服务；「全部云端」提问时会发送数据摘要。默认「仅本机」。", systemImage: "cloud")
+                Label("例外是你在「回答方式与云端模型」里主动选择时：「端云结合」发送问题和 Pulse 在本机的分析要点（同意发送健康数据前，只发通用问题）；「全部云端」还会附上数据摘要。发送前都会在本机去掉姓名、电话、证件号、邮箱、地址、医院和医生。默认「仅本机」。", systemImage: "cloud")
                 Label("健康 App 数据只读取、不写入，可随时撤销权限。", systemImage: "heart.text.square")
                 Label("只有你主动导出或分享时，数据才会离开设备。", systemImage: "hand.raised")
             } header: { Text("你的数据由你掌握") }

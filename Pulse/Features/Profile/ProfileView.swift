@@ -74,7 +74,9 @@ struct ProfileView: View {
                                 BackgroundCheck.schedule()
                             }
                         })) {
-                            Label { Text("到期提醒") } icon: { tileIcon("bell", .red) }
+                            Label {
+                                setting("到期提醒", "复查、复诊到期前一周和当天上午 9 点提醒；设了时间的事项按时提醒。")
+                            } icon: { tileIcon("bell", .red) }
                         }
                         Toggle(isOn: Binding(get: { eventReminders }, set: { on in
                             guard on else { eventReminders = false; return }
@@ -85,7 +87,9 @@ struct ProfileView: View {
                                 BackgroundCheck.schedule()
                             }
                         })) {
-                            Label { Text("异常提醒") } icon: { tileIcon("exclamationmark.triangle", .orange) }
+                            Label {
+                                setting("异常提醒", "每隔几小时在后台看一次健康 App 的新数据，需要联系医生时提醒你。不能代替急救。")
+                            } icon: { tileIcon("exclamationmark.triangle", .orange) }
                         }
                         if remindersDenied {
                             Button("去系统设置允许通知") {
@@ -93,8 +97,7 @@ struct ProfileView: View {
                             }
                         }
                     } header: { Text("提醒") } footer: {
-                        Text(remindersDenied ? "通知被关掉了：在系统「设置 › 通知 › Pulse」里允许后，再回来打开。"
-                             : "到期提醒：复查、复诊这类照护与随访事项，到期前一周和当天上午 9 点通知你；设了时间或重复的事项按时通知。异常提醒：Pulse 在后台看看健康 App 里新同步的数据（比如手表、体重秤），发现需要联系医生的情况就通知你；什么时候检查由系统决定，通常几个小时一次，不能代替急救。提醒都在本机完成，不经过网络。")
+                        Text(remindersDenied ? "通知被关掉了：在系统「设置 › 通知 › Pulse」里允许后，再回来打开。" : "提醒都在本机完成，不经过网络。")
                     }
 
                     Section {
@@ -110,8 +113,10 @@ struct ProfileView: View {
                         link("回答方式与云端模型", "cloud", .gray) { CloudModelSettingsView() }
                     } header: { Text("Health Agent") } footer: {
                         switch CloudModelSettings.shared.effectiveMode {
-                        case .cloud: Text("正在使用「全部云端」：提问时会发送数据摘要。")
-                        case .hybrid: Text("正在使用「端云结合」：涉及你记录的问题在本机回答，通用问题只把问题原文发到云端。")
+                        case .cloud: Text("正在使用「全部云端」：提问时会发送数据摘要，姓名、电话等先在本机去掉。")
+                        case .hybrid: Text(CloudModelSettings.shared.consented
+                                           ? "正在使用「端云结合」：本机分析后，去掉姓名、电话等再发到云端写回答，在本机拼成完整回答。"
+                                           : "正在使用「端云结合」：涉及你记录的问题在本机回答，通用问题只把问题原文发到云端。")
                         case .onDevice: Text(AgentNameSettings.shared.phrase("正在使用「仅本机」：", "的所有分析都在本机完成。"))
                         }
                     }
@@ -150,6 +155,8 @@ struct ProfileView: View {
                     }
                 }
                 .navigationTitle("我的")
+                // Small titles, as on every tab; pages opened from here inherit it.
+                .navigationBarTitleDisplayMode(.inline)
                 .agentRenameAlert(isPresented: $renamingAgent)
                 .confirmationDialog("载入「\(pendingPersona?.name ?? "")」的示例数据会替换当前所有记录。",
                                     isPresented: Binding(get: { pendingPersona != nil }, set: { if !$0 { pendingPersona = nil } }),
@@ -170,6 +177,15 @@ struct ProfileView: View {
         NavigationLink(destination: destination) {
             Label { Text(title) } icon: { tileIcon(icon, color) }
         }
+    }
+
+    /// A switch's name with what it does underneath, so the section needs no long footer.
+    private func setting(_ title: String, _ detail: String) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Space.hairline) {
+            Text(title)
+            Text(detail).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, Theme.Space.tight)
     }
 
     private func tileIcon(_ icon: String, _ color: Color) -> some View {

@@ -1297,7 +1297,8 @@ struct AgentPlanDeviceTests {
         let undo = DataHub.applyPlanChange(p, in: ctx)
         let after = DataHub.planItems(weekStart: ws, in: ctx).first { $0.id == moved.id }!
         #expect(after.day == PlanChat.day(b, ws))
-        #expect(after.adjustmentNote?.contains("Health Agent") == true)
+        // Whatever the agent is called in this simulator (the shared name is the app's own setting).
+        #expect(after.adjustmentNote?.contains(AgentNameSettings.shared.name) == true)
         DataHub.revertPlanChange(p, undo: undo, in: ctx)
         let back = DataHub.planItems(weekStart: ws, in: ctx).first { $0.id == moved.id }!
         #expect(back.day == PlanChat.day(a, ws))

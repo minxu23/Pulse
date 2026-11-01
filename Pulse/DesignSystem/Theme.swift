@@ -218,11 +218,12 @@ extension View {
     func calmStyle() -> some View { environment(\.calmColors, true) }
 }
 
-/// Navigation stack for sheets: everything presented inside uses the calm palette.
+/// Navigation stack for sheets: everything presented inside uses the calm palette and, like every
+/// page in Pulse, a small title (pages pushed inside inherit it).
 struct CalmNavigationStack<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
-        NavigationStack { content }.calmStyle()
+        NavigationStack { content.navigationBarTitleDisplayMode(.inline) }.calmStyle()
     }
 }
 

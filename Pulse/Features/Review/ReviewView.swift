@@ -1278,13 +1278,19 @@ struct HabitsAdherenceCard: View {
 }
 
 /// Observed associations, each with its verification state. Long-press a row to ask about it.
+/// One association is verified at a time — two changes at once would blur which one made the
+/// difference — so the card has one 「开始 2 周验证」 for the user to pick from, not one per row.
 struct AssociationsCard: View {
+    @Environment(\.modelContext) private var ctx
     let associations: [Association]
     let insights: [InsightRecord]
     let days: [DayData]
     var onAsk: (String?, Bool) -> Void
 
     var body: some View {
+        let status = { (a: Association) in insights.first { $0.key == a.id }?.status ?? .observed }
+        let testing = associations.contains { status($0) == .testing }
+        let open = associations.filter { status($0) == .observed }
         VStack(alignment: .leading, spacing: 0) {
             CardTitle("发现的关联", detail: "关联 ≠ 已确认的原因").padding(.bottom, Theme.Space.tight)
             if associations.isEmpty {
@@ -1294,6 +1300,28 @@ struct AssociationsCard: View {
             ForEach(associations) { a in
                 if a.id != associations.first?.id { Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block) }
                 AssociationRow(association: a, record: insights.first { $0.key == a.id }, days: days, onAsk: onAsk)
+            }
+            if testing || !open.isEmpty {
+                Divider()
+                VStack(alignment: .leading, spacing: Theme.Space.item) {
+                    if testing {
+                        Text("一次验证一条：这条有结果后，再选下一条。").font(.subheadline).foregroundStyle(.secondary)
+                    } else {
+                        Menu {
+                            ForEach(open) { a in
+                                Button(AssociationRow.shortName(a)) {
+                                    AssociationRow.startExperiment(a, record: insights.first { $0.key == a.id }, in: ctx)
+                                }
+                            }
+                        } label: {
+                            Label("选一条开始 2 周验证", systemImage: "flask").frame(minHeight: Theme.Size.borderedLabel)
+                        }
+                        .buttonStyle(.bordered)
+                        .font(.subheadline.weight(.semibold))
+                        Text("两周里少做这件事，看指标有没有跟着变。").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, Theme.Space.block)
             }
         }
         // The last row's padding stands in for the card's.
@@ -1322,24 +1350,24 @@ struct AssociationRow: View {
                 }
             }
             .accessibilityElement(children: .combine)
-            VStack(alignment: .leading, spacing: Theme.Space.item) {
-                if status == .testing, let r = record, let start = r.experimentStart { experimentProgress(r, start) }
-                HStack(spacing: Theme.Space.item) {
-                    switch status {
-                    case .observed:
-                        Button("开始 2 周验证") { startExperiment() }.buttonStyle(.bordered)
-                    case .testing:
-                        Button("对我有效") { set(.confirmed) }.buttonStyle(.bordered)
-                        Button { set(.notSupported) } label: { textLink("未得到支持") }
-                            .buttonStyle(.borderless).foregroundStyle(.secondary)
-                    case .confirmed, .notSupported:
-                        Button { set(.observed) } label: { textLink("重新观察") }.buttonStyle(.borderless)
+            // An observed one has no action of its own: it is picked from the card's 「选一条开始 2 周验证」.
+            if status != .observed {
+                VStack(alignment: .leading, spacing: Theme.Space.item) {
+                    if status == .testing, let r = record, let start = r.experimentStart { experimentProgress(r, start) }
+                    HStack(spacing: Theme.Space.item) {
+                        if status == .testing {
+                            Button("对我有效") { set(.confirmed) }.buttonStyle(.bordered)
+                            Button { set(.notSupported) } label: { textLink("未得到支持") }
+                                .buttonStyle(.borderless).foregroundStyle(.secondary)
+                        } else {
+                            Button { set(.observed) } label: { textLink("重新观察") }.buttonStyle(.borderless)
+                        }
                     }
+                    .font(.subheadline.weight(.semibold))
                 }
-                .font(.subheadline.weight(.semibold))
+                // Under the sentence, past the glyph column.
+                .padding(.leading, Theme.Size.iconTile + Theme.Space.block)
             }
-            // Under the sentence, past the glyph column.
-            .padding(.leading, Theme.Size.iconTile + Theme.Space.block)
         }
         .padding(.vertical, Theme.Space.item)
         .contentShape(Rectangle())
@@ -1397,16 +1425,24 @@ struct AssociationRow: View {
         }
     }
 
-    private func startExperiment() {
+    /// 「饮酒后」 from 「饮酒后的次日早晨」: what the user would change.
+    private static func factor(_ a: Association) -> String {
+        a.factor.replacingOccurrences(of: "的次日早晨", with: "").replacingOccurrences(of: "的早晨", with: "").replacingOccurrences(of: "的当晚", with: "")
+    }
+
+    /// 「饮酒后 → 静息心率」, for the card's menu.
+    static func shortName(_ a: Association) -> String { "\(factor(a)) → \(a.metric)" }
+
+    static func startExperiment(_ a: Association, record: InsightRecord?, in ctx: ModelContext) {
         let r = record ?? {
-            let n = InsightRecord(key: association.id, status: .testing)
+            let n = InsightRecord(key: a.id, status: .testing)
             ctx.insert(n)
             return n
         }()
         r.status = .testing
         r.experimentStart = .app.startOfDay
         r.experimentEnd = .app.startOfDay.adding(days: 14)
-        r.note = "两周内减少「\(association.factor.replacingOccurrences(of: "的次日早晨", with: "").replacingOccurrences(of: "的早晨", with: "").replacingOccurrences(of: "的当晚", with: ""))」，观察\(association.metric)的变化"
+        r.note = "两周内减少「\(factor(a))」，观察\(a.metric)的变化"
     }
 
     private func set(_ s: InsightStatus) {

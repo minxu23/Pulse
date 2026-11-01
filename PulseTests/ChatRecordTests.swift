@@ -230,6 +230,11 @@ struct ChatRecordTests {
         let swell = HealthAgent.reply(to: "脚有点肿，记下来", context: c)
         let written = HealthAgent.finalize("脚肿要留意。\n\n我这边先帮你记一条：水肿，轻微（脚踝）。", of: swell, strict: false)
         #expect(!written.contains("帮你记一条") && written.contains("要记下来的话，点下面的「记下」"), "\(written)")
+        // The line about the card moves above it; a list's lead-in written on the same line stays with the list.
+        let bpAnswer = HealthAgent.finalize("138/88 偏高。\n\n要记下来的话，点下面的「记下」：血压 138/88 mmHg。另外可以这样做：\n\n• 静坐 5 分钟再测\n\n复诊时带上记录。",
+                                            of: HealthAgent.reply(to: "帮我记一下血压 138/88", context: c), strict: false)
+        #expect(bpAnswer.hasSuffix("要记下来的话，点下面的「记下」：血压 138/88 mmHg。") && bpAnswer.contains("可以这样做：\n\n• 静坐") && !bpAnswer.contains("另外"),
+                "\(bpAnswer)")
         #expect(HealthAgent.withoutRecordClaims("可以帮你记下这次血压。你已经记录了 3 天。") == "可以帮你记下这次血压。你已经记录了 3 天。")
         #expect(HealthAgent.withoutRecordClaims("已帮你记下血压 138/88。注意休息。") == "注意休息。")
         // A cloud answer that brings its own chart keeps the card, first.

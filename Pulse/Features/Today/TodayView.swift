@@ -88,6 +88,8 @@ struct TodayView: View {
                     }
                 }
                 .navigationTitle("今日")
+                // Small titles, as on every tab; pages opened from here inherit it.
+                .navigationBarTitleDisplayMode(.inline)
                 .toolbar(editing ? .visible : .hidden, for: .navigationBar)
                 .todaySheets($sheet, d)
                 .task { _ = DataHub.record(for: d.day, in: ctx) }

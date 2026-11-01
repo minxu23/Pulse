@@ -226,6 +226,44 @@ struct AgentAnswerTests {
         #expect(HealthAgent.resolveFollowUp("那周六呢", previous: "明天能跑间歇吗？") == "周六能跑间歇吗？")
         #expect(HealthAgent.resolveFollowUp("我能吃香蕉吗", previous: "今天适合运动吗？") == nil)
         #expect(HealthAgent.resolveFollowUp("那苹果呢？", previous: nil) == nil)
+        // A follow-up that names no topic keeps the one before; follow-ups asked on it don't pile up.
+        #expect(HealthAgent.resolveFollowUp("那该注意什么？", previous: "我最近血压怎么样") == "我最近血压怎么样，那该注意什么？")
+        #expect(HealthAgent.resolveFollowUp("为什么", previous: "我最近血压怎么样，那该注意什么？") == "我最近血压怎么样，为什么")
+        #expect(HealthAgent.resolveFollowUp("怎么办？", previous: "最近脚有点肿。") == "最近脚有点肿，怎么办？")
+        #expect(HealthAgent.resolveFollowUp("今天能跑步吗", previous: "我最近血压怎么样") == nil)
+        #expect(HealthAgent.resolveFollowUp("该注意什么", previous: nil) == nil)
+        #expect(!HealthAgent.isContinuation("血压该注意什么") && !HealthAgent.isContinuation("接下来我该关注什么"))
+    }
+
+    /// 「那该注意什么？」 after a topic is answered on that topic, not with the general next steps.
+    @Test func topicFollowUpsStayOnTopic() throws {
+        let (c, container) = try load(.wangjianguo)
+        _ = container
+        for (first, then, intent) in [("我最近血压怎么样", "那该注意什么？", AgentIntent.bp), ("血糖控制得怎么样", "该怎么办", .glucose),
+                                      ("我的肾功能怎么样？", "那要注意什么", .labs), ("最近脚有点肿", "要紧吗", .symptom),
+                                      ("我能吃香蕉吗", "为什么", .food), ("晚上睡不好怎么办", "那要去看医生吗", .sleep)] {
+            let asked = try #require(HealthAgent.resolveFollowUp(then, previous: first))
+            #expect(HealthAgent.reply(to: asked, context: c).intent == intent, "\(first) → \(then)")
+        }
+        // The model is asked for what is asked now; the verdict isn't pinned again.
+        let full = HealthAgent.reply(to: "我最近血压怎么样，那该注意什么？", context: c)
+        let r = HealthAgent.continuing(full, question: "那该注意什么？")
+        let verdict = try #require(full.conclusion)
+        #expect(r.conclusion == nil && !r.text.contains(verdict) && r.text.contains("• "), "\(r.text)")
+        // 「要紧吗」 asks for the verdict itself.
+        let judged = HealthAgent.continuing(HealthAgent.reply(to: "今天早上血压155，要紧吗", context: c), question: "要紧吗")
+        #expect(judged.conclusion != nil && judged.continuation)
+        // A model that says the verdict again anyway: the opening goes, the list stays and gets a lead-in.
+        let echoed = "我刚刚看你的血压记录，还没达标：近 30 天 15 次测量平均 142/89，目标是 130/80 以下。\n\n• 每天固定时间吃药，别漏\n• 盐每天不超过 5 g"
+        let shown = HealthAgent.finalize(echoed, of: HealthAgent.continuing(AgentReply(text: "还没达标：近 30 天 15 次测量平均 142/89，目标是 130/80 以下。\n• 每天固定时间吃药，别漏", intent: .bp,
+                                                                                    conclusion: "还没达标：近 30 天 15 次测量平均 142/89，目标是 130/80 以下。"),
+                                                                         question: "那该注意什么？"), strict: false)
+        #expect(shown.hasPrefix("可以从这几件事做起：") && shown.contains("• 每天固定时间吃药") && !shown.contains("142/89"), "\(shown)")
+        let fresh = "盐是最容易忽略的一项。\n\n• 每天固定时间吃药"
+        #expect(HealthAgent.withoutRepeat(fresh, of: "还没达标：近 30 天 15 次测量平均 142/89，目标是 130/80 以下。") == fresh)
+        let prompt = HealthAgent.modelPrompt(question: "我最近血压怎么样，那该注意什么？", history: ["用户：我最近血压怎么样", "助手：还没达标"],
+                                             context: c, reply: r, anonymous: true)
+        #expect(prompt.contains("接着上一个问题追问") && !prompt.contains("【第一句】"))
     }
 
     private func chips(_ q: String, _ c: AgentContext, asked: [String] = []) -> [String] {

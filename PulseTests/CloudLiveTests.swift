@@ -3,9 +3,10 @@ import SwiftData
 import Testing
 @testable import Pulse
 
-/// A round of real questions to the cloud model set up in this simulator's Pulse (key in its Keychain):
-/// 全部云端 first, then 端云结合, with the 王建国 sample data. It spends the user's key, so it runs only
-/// when asked — `TEST_RUNNER_PULSE_LIVE_CLOUD=1 xcodebuild test -only-testing:PulseTests/CloudLiveTests …`
+/// A round of real questions to the cloud model set up in this simulator's Pulse (key in its Keychain),
+/// with the 王建国 sample data: 全部云端 (`aRoundOfQuestions()`) and 端云结合 (`hybridRound()`, needs the
+/// health-data consent: questions about the records go out masked and come back whole). It spends the
+/// user's key, so it runs only when asked — `TEST_RUNNER_PULSE_LIVE_CLOUD=1 xcodebuild test -only-testing:PulseTests/CloudLiveTests/hybridRound() …`
 /// — and puts the answer mode back as it found it. `TEST_RUNNER_PULSE_LIVE_ONLY=问题|问题` asks only
 /// the rounds that start with those questions. The answers go to `tmp/pulse-cloud-live.md` in the
 /// app's container.
@@ -35,11 +36,15 @@ struct CloudLiveTests {
         (.chenjie, [["昨晚喝了酒，今天能运动吗"], ["我血压偏高该怎么办"], ["老是熬夜怎么办"], ["计划总是完成不了"]]),
         (.linyue, [["上完夜班能运动吗"], ["我睡眠很乱怎么办"], ["这周总结一下"]]),
     ]
+    /// 端云结合: names, a hospital, a doctor and a phone number in the questions must not go out, and
+    /// must come back in the answer wherever the model mentions them; emergencies stay on the phone.
     private static let hybridQuestions: [[String]] = [
-        ["间歇训练是什么"],
-        ["肾病为什么要少吃盐"],
-        ["我最近血压怎么样"],
+        ["我是王建国，昨天在上海仁济医院找李明医生量的血压 156/98，要紧吗"],
+        ["我女儿小美最近老咳嗽，要不要去瑞金医院看看？有事打我电话 13812345678"],
+        ["我最近血压怎么样", "那该注意什么？"],
         ["帮我记一下血压 138/88"],
+        ["间歇训练是什么"],
+        ["胸口闷"],
     ]
 
     @Test func aRoundOfQuestions() async throws {
@@ -56,13 +61,25 @@ struct CloudLiveTests {
             report += r
             print(r)
         }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("pulse-cloud-live.md")
+        try report.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    @Test func hybridRound() async throws {
+        let settings = CloudModelSettings.shared
+        try #require(settings.cloudReady && settings.consented, "this simulator's Pulse has no tested cloud key with consent")
+        let mode = settings.mode
+        defer { settings.mode = mode }
+        let (c, container) = try LiveRound.context()
+        _ = container
+        var report = "# 端云结合实测 \(Date().formatted(date: .numeric, time: .shortened))\n服务：\(settings.provider.label) · \(settings.model)\n\n"
         settings.mode = .hybrid
         for round in LiveRound.only(Self.hybridQuestions) {
             let r = await LiveRound.ask(round, mode: .hybrid, context: c)
             report += r
             print(r)
         }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("pulse-cloud-live.md")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("pulse-cloud-hybrid.md")
         try report.write(to: url, atomically: true, encoding: .utf8)
     }
 }
@@ -143,6 +160,7 @@ struct OnDeviceLiveTests {
     static let questions: [[String]] = CloudLiveTests.cloudQuestions + [
         ["我有点担心肾功能会变差"],
         ["今天吃了什么比较好"],
+        ["我最近血压怎么样", "那该注意什么？"],
     ]
 
     @Test func aRoundOfQuestions() async throws {
@@ -204,6 +222,7 @@ enum LiveRound {
     static func ask(_ round: [String], mode: AnswerMode, context c: AgentContext) async -> String {
         var c = c
         c.answerMode = mode
+        c.healthDataConsented = CloudModelSettings.shared.consented
         let chat = AgentConversation()
         var out = ""
         for q in round {
@@ -211,12 +230,32 @@ enum LiveRound {
             let start = Date()
             await chat.send(q, context: c)
             let secs = Date().timeIntervalSince(start)
-            let rule = HealthAgent.reply(to: HealthAgent.resolveFollowUp(q, previous: round.first == q ? nil : round.first) ?? q, context: c)
+            let resolved = HealthAgent.resolveFollowUp(q, previous: round.first == q ? nil : round.first) ?? q
+            var rule = HealthAgent.reply(to: resolved, context: c)
+            // As the chat does: a topic follow-up doesn't repeat the verdict before it.
+            if resolved != q, HealthAgent.isContinuation(q) { rule = HealthAgent.continuing(rule, question: q) }
+            // What in the question names someone: none of it may go out, none of the codes may stay.
+            var probe = AgentRouting.mask(for: c)
+            _ = probe.mask(q)
             out += "### [\(mode.label)] \(q)\n"
             for m in chat.messages[before...] where m.role == .agent {
                 out += "- 引擎：\(m.engine.rawValue)，用时 \(String(format: "%.1f", secs)) 秒\(m.general ? "，通用问题" : "")\n"
                 if let n = m.note { out += "- 说明：\(n)\n" }
                 if let p = m.privacy { out += "- \(p)\n" }
+                if let k = m.masked { out += "- 发送前去掉：\(k)\n" }
+                if let sent = m.sent {
+                    // 【问题】 in a records prompt, 「问题：」 in a general one.
+                    let asked = sent.range(of: "【问题】\n").map { String(sent[$0.upperBound...].prefix { $0 != "\n" }) }
+                        ?? sent.components(separatedBy: "\n").last { $0.hasPrefix("问题：") } ?? ""
+                    out += "- 发出的问题：\(asked)\n"
+                    for o in probe.entries.map(\.original) { #expect(!sent.contains(o), "\(q): 「\(o)」 went out") }
+                }
+                #expect(m.text.range(of: #"[\[［【〔](姓名|医生|医院|电话|证件号|编号|邮箱|地址)\d+[\]］】〕]"#, options: .regularExpression) == nil,
+                        "\(q): a code was left in the answer")
+                if mode == .hybrid, rule.urgent { #expect(m.engine == .rules && m.sent == nil, "\(q): emergencies stay on the phone") }
+                if mode == .hybrid, !rule.urgent, !rule.verbatim, m.note == nil, c.healthDataConsented {
+                    #expect(m.engine == .cloud, "\(q): with consent the cloud writes it")
+                }
                 if let k = rule.conclusion { out += "- 规则的第一句：\(k.split(separator: "。").first.map { $0 + "。" } ?? k)\n" }
                 if let s = rule.safety { out += "- 规则的安全提示：\(s)\n" }
                 out += "\n" + m.text + "\n\n"

@@ -56,6 +56,8 @@ struct AgentContext {
     var weatherSource = ""
     /// How answers are produced right now (for questions about privacy).
     var answerMode: AnswerMode = .onDevice
+    /// The user agreed to send health data (端云结合 then sends questions about their records too).
+    var healthDataConsented = false
     /// What the user calls the agent (「Health Agent」 until they name it).
     var agentName = AgentName.standard
     var medications: [MedicationInfo] { profile.medications.filter { $0.isActive(on: now) } }
@@ -233,6 +235,11 @@ struct AgentReply: Equatable {
     var verbatim = false
     /// When to see a doctor or call 120: kept in the answer whatever a model writes.
     var safety: String? = nil
+    /// 「那该注意什么？」 after a question on a topic: answered for what is asked now, without the
+    /// previous answer's numbers and verdict all over again.
+    var continuation = false
+    /// The verdict the answer before gave (a follow-up's model answer drops an opening that repeats it).
+    var alreadySaid: String? = nil
 
     /// Plan changes for the user to adopt (none is adopted while the answer is shown).
     var proposals: [PlanChangeProposal] { blocks.compactMap(\.proposal) }
@@ -321,10 +328,38 @@ enum HealthAgent {
         AgentReply(text: selfHarmWords.contains(where: { q.contains($0) }) ? selfHarmText : emergencyText, urgent: true, intent: .emergency)
     }
 
+    /// 「那该注意什么？」「怎么办」「为什么」: a question about the previous one's topic that names none.
+    private static let continuation = #"^(?:那|那么|所以|那我)?(?:该|要|应该|需要|得)?(?:注意(?:些)?什么|注意啥|怎么办|咋办|怎么做|怎么改善|怎么调整|怎么控制|怎么降|怎么改|为什么|为啥|要紧吗|严重吗|正常吗|有(?:什么|啥)建议|(?:去)?(?:看医生|去医院|就医)吗)[？?。!！]*$"#
+    static func isContinuation(_ q: String) -> Bool {
+        q.trimmingCharacters(in: .whitespacesAndNewlines).range(of: continuation, options: .regularExpression) != nil
+    }
+
+    /// The answer to a topic follow-up (「那该注意什么？」): the topic's facts without the verdict the
+    /// answer before already gave — a model shown it says it all again. 「要紧吗」「严重吗」 ask for the
+    /// verdict, so they keep it.
+    static func continuing(_ r: AgentReply, question q: String) -> AgentReply {
+        var out = r
+        out.continuation = true
+        guard q.range(of: "要紧|严重|正常", options: .regularExpression) == nil, let said = r.conclusion else { return out }
+        out.conclusion = nil
+        out.alreadySaid = said
+        let rest = r.text.replacingOccurrences(of: said, with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !rest.isEmpty { out.text = rest }
+        return out
+    }
+
     /// 「那明天呢？」「那苹果呢？」: the previous question with the new day or food in it, so the rules can
-    /// answer it. nil when the question stands on its own or the change can't be placed.
+    /// answer it. 「那该注意什么？」: the previous question with this one after it, so it keeps its topic.
+    /// nil when the question stands on its own or the change can't be placed.
     static func resolveFollowUp(_ q: String, previous p: String?) -> String? {
         let t = q.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let p, isContinuation(t) {
+            // The topic, without the follow-ups already asked on it (「…，那该注意什么？」 then 「为什么」).
+            var clauses = p.components(separatedBy: "，")
+            while clauses.count > 1, let last = clauses.last, isContinuation(last) { clauses.removeLast() }
+            let topic = clauses.joined(separator: "，").trimmingCharacters(in: CharacterSet(charactersIn: "？?。!！ "))
+            return topic.isEmpty ? nil : topic + "，" + t
+        }
         guard let p, t.count <= 10, t.hasPrefix("那") || t.hasSuffix("呢") || t.hasSuffix("呢？") || t.hasSuffix("呢?"),
               let g = AgentQuestion.groups(#"^(?:那么?)?(.{1,8}?)(?:呢|怎么样|行吗|可以吗)?[？?]?$"#, t), !g[0].isEmpty else { return nil }
         let x = g[0]
@@ -497,25 +532,31 @@ enum HealthAgent {
         return "依据：" + parts.joined(separator: " · ")
     }
 
+    /// Four starters, not a wall of them: the area that matters most for this person, today (or
+    /// tomorrow after bedtime), the one thing worth a look right now, and what to focus on next.
     private static func questions(_ c: AgentContext, watch: [AgentPoint]) -> [String] {
-        var q: [String] = []
-        if c.dimension("rhr")?.status != .improved { q.append("为什么静息心率最近没怎么降？") } else { q.append("静息心率下降说明了什么？") }
-        if c.pastBedtime {
-            q.append("明天适合运动吗？")
-            q.append("睡不着怎么办？")
-        } else {
-            q.append("今天适合运动吗？")
-            q.append("这周有几天没空，帮我调整计划")
+        let ranked = ReviewPriorities.ranked(c, mine: c.profile.reviewPriorities).map(\.area)
+        func ask(_ a: PriorityArea) -> String {
+            switch a {
+            case .rhr: c.dimension("rhr")?.status == .improved ? "静息心率下降说明了什么？" : "为什么静息心率最近没怎么降？"
+            case .sleep: "我的睡眠怎么样？"
+            case .activity: c.race != nil ? "马拉松目标现实吗？" : "我这周的训练量是不是太大了？"
+            case .bloodPressure: "我的血压怎么样？"
+            case .glucose: "我的血糖控制得怎么样？"
+            case .kidney: "我的肾功能怎么样？"
+            case .weight: "我的体重有变化吗？"
+            case .stress: "压力对我的影响有多大？"
+            }
         }
-        if !WeatherPlanner.advice(plan: c.plan, forecast: c.weather, now: c.now, profile: c.profile).affected.isEmpty { q.insert("这几天的天气适合户外训练吗？", at: min(2, q.count)) }
-        q.append(DeviceGuide.usesCGM(c) ? "训练时手表和 CGM 怎么用更准？" : "跑步时手表测的心率准吗？")
-        if watch.contains(where: { $0.title.contains("呼吸") }) { q.append("我需要去看睡眠门诊吗？") }
-        if c.association("alcohol-rhr") != nil { q.append("饮酒对我的影响有多大？") }
-        if c.bp.count > 0 { q.append("我的血压怎么样？") }
-        if c.glucose.readings > 0 { q.append("我的血糖控制得怎么样？") }
-        if c.race != nil { q.append("马拉松目标现实吗？") }
+        var q = [ask(ranked.first ?? .rhr), c.pastBedtime ? "明天适合运动吗？" : "今天适合运动吗？"]
+        let now: String? =
+            if !WeatherPlanner.advice(plan: c.plan, forecast: c.weather, now: c.now, profile: c.profile).affected.isEmpty { "这几天的天气适合户外训练吗？" }
+            else if watch.contains(where: { $0.title.contains("呼吸") }) { "我需要去看睡眠门诊吗？" }
+            else if c.pastBedtime { "睡不着怎么办？" }
+            else { ranked.dropFirst().first.map(ask) }
+        if let now, !q.contains(now) { q.append(now) }
         q.append("接下来我该关注什么？")
-        return Array(q.prefix(7))
+        return q
     }
 
     // MARK: Answers
@@ -1632,6 +1673,9 @@ enum HealthAgent {
                          : "【说明】【要点】里没有要用户去做的建议，这次只回答问题，不要列建议。")
         }
         if let k = r.conclusion { parts.append("【第一句】\n\(k)") }
+        if r.continuation {
+            parts.append("【说明】用户在接着上一个问题追问（见【之前的对话】）：直接回答这次问的，上一条回答已经说过的数字和结论不要从头再讲，需要时一句带过。")
+        }
         if r.intent == .unknown, aboutSomeoneElse(q) {
             parts.append("【说明】用户问的是家人或朋友的情况：不要用【数据】里用户自己的数字回答，给一般性的建议，并提醒以对方医生的意见为准。")
         }
@@ -1820,8 +1864,35 @@ enum HealthAgent {
         return out
     }
 
+    /// A follow-up's answer without an opening that says the earlier verdict again (the same numbers):
+    /// small models copy it from the conversation however they are asked. Left with only a list, the
+    /// list gets a lead-in.
+    static func withoutRepeat(_ text: String, of said: String) -> String {
+        func numbers(_ s: String) -> Set<String> {
+            Set((try? NSRegularExpression(pattern: #"\d+(?:[./]\d+)?"#)).map { re in
+                re.matches(in: s, range: NSRange(s.startIndex..., in: s)).compactMap { Range($0.range, in: s).map { String(s[$0]) } }
+            } ?? [])
+        }
+        let verdict = numbers(said)
+        guard !verdict.isEmpty else { return text }
+        var paragraphs = text.components(separatedBy: "\n\n")
+        var dropped = false
+        while let first = paragraphs.first, !first.hasPrefix("•"), numbers(first).intersection(verdict).count >= min(2, verdict.count) {
+            paragraphs.removeFirst()
+            dropped = true
+        }
+        guard dropped else { return text }
+        if paragraphs.first?.hasPrefix("•") == true { paragraphs.insert("可以从这几件事做起：", at: 0) }
+        return paragraphs.joined(separator: "\n\n")
+    }
+
     static func streamed(_ partial: String, of r: AgentReply, proposing: Bool? = nil) -> String {
         var t = notRecorded(stripLabels(partial, streaming: true), of: r)
+        // A follow-up's opening shows once it is complete and known not to repeat the earlier verdict.
+        if let said = r.alreadySaid {
+            guard t.contains("\n\n") || t.hasPrefix("•") else { return "" }
+            t = withoutRepeat(t, of: said)
+        }
         guard proposing ?? r.proposesPlan else { return t }
         // Day lines show once complete and checked, the way the final answer is.
         if r.intent == .planChange, !r.proposals.isEmpty {
@@ -1852,6 +1923,7 @@ enum HealthAgent {
     /// default those of the rules answer), claims that they are already done are reworded.
     /// `strict` (on-device answers) also keeps suggestions to those the rules made.
     static func finalize(_ text: String, of r: AgentReply, proposals: [PlanChangeProposal]? = nil, strict: Bool = true) -> String {
+        let text = r.alreadySaid.map { withoutRepeat(stripLabels(text), of: $0) } ?? text
         var lines = notRecorded(stripLabels(text), of: r).components(separatedBy: "\n")
         let pending = proposals ?? r.proposals
         if !pending.isEmpty {
@@ -1938,7 +2010,16 @@ enum HealthAgent {
         if r.blocks.contains(where: { $0.record != nil }) {
             var paragraphs = t.components(separatedBy: "\n\n")
             if let i = paragraphs.firstIndex(where: { !$0.contains("\n") && $0.contains("「记下」") && $0.hasPrefix("要记下") }), i < paragraphs.count - 1 {
-                paragraphs.append(paragraphs.remove(at: i))
+                let p = paragraphs.remove(at: i)
+                // 「…点下面的「记下」：…。另外可以这样做：」: the lead-in stays above the list it opens.
+                if let card = p.range(of: "「记下」"), let end = p.range(of: "。", range: card.upperBound..<p.endIndex)?.upperBound, end < p.endIndex {
+                    var rest = p[end...].trimmingCharacters(in: .whitespaces)
+                    if rest.hasPrefix("另外") { rest = String(rest.dropFirst(2)).trimmingCharacters(in: CharacterSet(charactersIn: "，, ")) }
+                    if !rest.isEmpty { paragraphs.insert(rest, at: i) }
+                    paragraphs.append(String(p[..<end]))
+                } else {
+                    paragraphs.append(p)
+                }
                 t = paragraphs.joined(separator: "\n\n")
             } else if !t.contains("「记下」"), let ask = r.text.components(separatedBy: "\n").first(where: { $0.hasPrefix("要记下来的话") }) {
                 t += "\n\n" + ask

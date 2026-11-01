@@ -26,8 +26,8 @@ enum AnswerMode: String, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .onDevice: "所有问题都由 Apple 智能和 Pulse 规则在本机回答，什么都不发送。"
-        case .hybrid: "涉及你健康记录的问题在本机回答；通用问题（比如拉伸怎么做、马拉松怎么补给）只把问题原文发到云端，不附带任何记录。"
-        case .cloud: "所有问题都由云端模型回答，提问时会发送数据摘要。回答最好，隐私让步最多。"
+        case .hybrid: "Pulse 先在本机分析你的记录，把问题和分析要点去掉姓名、电话、证件号、邮箱、地址、医院和医生后，发到云端写回答，再在本机换回原文、补上结论和安全提示。紧急情况和复盘只在本机。没同意发送健康数据时，只发通用问题。"
+        case .cloud: "所有问题和复盘都由云端模型回答，提问时会附带数据摘要（同样先去掉姓名、电话等）。回答最好，隐私让步最多。"
         }
     }
 
@@ -43,15 +43,17 @@ enum AnswerMode: String, CaseIterable, Identifiable {
 
 /// Where one question is answered in 端云结合.
 enum AgentRoute: Equatable {
-    /// Needs the user's records, or says something about their health: answered on this device and
-    /// nothing is sent. The reason is shown with the answer.
+    /// Needs the user's records, or says something about their health. With the user's consent it goes
+    /// to the cloud with Pulse's analysis and identifiers masked (`IdentityMask`); without it, it is
+    /// answered on this device and nothing is sent. The reason is shown with a local answer.
     case device(String)
-    /// A general question: only its text (with contact details masked) goes to the cloud model.
+    /// A general question: only its text (identifiers masked) goes to the cloud model.
     case general(String)
 }
 
-/// Decides, on the device, which questions in 端云结合 may go to the cloud. Anything that needs the
-/// user's records or reveals their health stays local; the cloud only ever sees general questions.
+/// Decides, on the device, which questions in 端云结合 are about the user. Questions that need the
+/// user's records or reveal their health go out only with consent, and never without Pulse's own
+/// analysis; general questions go out as their text alone.
 enum AgentRouting {
     /// Answers that are about the user's own records by nature (or need no model at all).
     static let localIntents: Set<AgentIntent> = [.emergency, .greeting, .daySummary, .meds, .device, .planChange, .trainingCheck, .labs,
@@ -86,22 +88,18 @@ enum AgentRouting {
         if r.intent == .unknown || r.intent == .knowledge {
             // Nothing in the records answers it: it may go out unless it describes the user's health.
             if aboutSelf && bodyWords.contains(where: { q.contains($0) }) { return .device("问题里有你的身体情况") }
-            return .general(redacted(q))
+            return .general(q)
         }
         // A topic Pulse answers from the records (心率, 睡眠, 运动…): only a plain knowledge question goes out.
-        if knowledgeWords.contains(where: { q.contains($0) }) && !aboutSelf { return .general(redacted(q)) }
+        if knowledgeWords.contains(where: { q.contains($0) }) && !aboutSelf { return .general(q) }
         return .device("要用到你的健康记录")
     }
 
-    /// Contact details never go out, whatever the question.
-    static func redacted(_ q: String) -> String {
-        var s = q
-        // Digit boundaries, not \b: Chinese characters count as word characters next to a number.
-        for (pattern, mask) in [(#"(?<!\d)1[3-9]\d{9}(?!\d)"#, "[手机号]"), (#"(?<!\d)\d{17}[\dXx](?![\dXx])"#, "[证件号]"),
-                                (#"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"#, "[邮箱]")] {
-            s = s.replacingOccurrences(of: pattern, with: mask, options: .regularExpression)
-        }
-        return s
+    /// The masker for one request: the user's own name always counts; Health Agent's name, the user's
+    /// medicines and conditions are never taken for a person.
+    static func mask(for c: AgentContext) -> IdentityMask {
+        IdentityMask(knownNames: [c.name],
+                     keep: [c.agentName, AgentName.standard, "Pulse"] + c.profile.medications.map(\.name) + c.profile.conditionNames)
     }
 }
 
