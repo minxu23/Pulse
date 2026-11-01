@@ -108,6 +108,7 @@ struct WeatherPlanCard: View {
     /// Kept while the user acts on it: adopting changes the plan, and the card must still show what
     /// was adopted and offer to undo it.
     @State private var proposal: PlanChangeProposal?
+    @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
         let days = Array(store.days.prefix(7))
@@ -119,13 +120,19 @@ struct WeatherPlanCard: View {
             if days.isEmpty {
                 Text(store.unavailable ?? "正在获取天气预报…").font(.subheadline).foregroundStyle(.secondary)
             } else {
-                HStack(spacing: 0) {
+                // Seven columns; at accessibility sizes one line per day, where a seventh of the row fits one character.
+                let layout = size.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(spacing: Theme.Space.tight)) : AnyLayout(HStackLayout(spacing: 0))
+                layout {
                     ForEach(days) { d in
                         let training = context.plan.contains { $0.day == d.day && WeatherPlanner.isOutdoor($0) }
-                        VStack(spacing: Theme.Space.tight) {
+                        let cell = size.isAccessibilitySize
+                            ? AnyLayout(HStackLayout(spacing: Theme.Space.item)) : AnyLayout(VStackLayout(spacing: Theme.Space.tight))
+                        cell {
                             Text(d.day.isSameDay(context.now) ? "今天" : Weekday.name(d.day.weekday))
                                 .font(.caption.weight(training ? .semibold : .regular))
                                 .foregroundStyle(training ? Color.primary : Color.secondary)
+                            if size.isAccessibilitySize { Spacer(minLength: Theme.Space.item) }
                             Image(systemName: d.icon).symbolRenderingMode(.multicolor).font(.title3).frame(height: 26)
                             Text("\(Int(d.high))°").font(.caption).monospacedDigit()
                             Circle().fill(advice.affected.contains(d.day.weekday) && d.day < context.now.weekStart.adding(days: 7) ? Color.orange

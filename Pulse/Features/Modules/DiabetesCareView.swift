@@ -94,14 +94,17 @@ struct DiabetesCareView: View {
                 ForEach(responses.prefix(5)) { r in
                     HStack(spacing: Theme.Space.block) {
                         IconTile(icon: r.kind.icon, color: Theme.nutrition)
-                        VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                            Text("\(r.kind.label) · \(r.time.formatted(.dateTime.month().day())) \(Clock.text(r.time.minutesOfDay))").font(.subheadline)
-                            Text([r.carbs.map { "\(Int($0)) g 碳水" } ?? "", r.note, "\(r.minutesToPeak) 分钟达峰 \(r.peak.oneDecimal)"]
-                                .filter { !$0.isEmpty }.joined(separator: " · "))
-                                .font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                        AdaptiveRow(spacing: Theme.Space.tight) {
+                            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
+                                Text("\(r.kind.label) · \(r.time.formatted(.dateTime.month().day())) \(Clock.text(r.time.minutesOfDay))").font(.subheadline)
+                                Text([r.carbs.map { "\(Int($0)) g 碳水" } ?? "", r.note, "\(r.minutesToPeak) 分钟达峰 \(r.peak.oneDecimal)"]
+                                    .filter { !$0.isEmpty }.joined(separator: " · "))
+                                    .font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                            }
+                        } trailing: {
+                            StatusLabel(r.rise >= 3 ? .attention("+\(r.rise.oneDecimal)") : .neutral("+\(r.rise.oneDecimal)")).font(.subheadline).monospacedDigit()
+                                .fixedSize()
                         }
-                        Spacer(minLength: Theme.Space.tight)
-                        StatusLabel(r.rise >= 3 ? .attention("+\(r.rise.oneDecimal)") : .neutral("+\(r.rise.oneDecimal)")).font(.subheadline).monospacedDigit()
                     }
                     .frame(minHeight: Theme.Size.tap)
                     .accessibilityElement(children: .combine)
@@ -122,13 +125,15 @@ struct DiabetesCareView: View {
                 let delayedLow = (r.lowestNext12h ?? 99) < p.glucoseLow
                 HStack(spacing: Theme.Space.block) {
                     IconTile(icon: r.type.icon, color: Theme.activity)
-                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                        Text("\(r.type.label) \(Int(r.minutes)) 分钟 · \(r.start.formatted(.dateTime.month().day()))").font(.subheadline)
-                        Text("\(r.before.oneDecimal) → \(r.after.oneDecimal) mmol/L\(r.lowestNext12h.map { " · 之后 12 小时最低 \($0.oneDecimal)" } ?? "")")
-                            .font(.footnote).foregroundStyle(.secondary).monospacedDigit()
+                    AdaptiveRow(spacing: Theme.Space.tight) {
+                        VStack(alignment: .leading, spacing: Theme.Space.hairline) {
+                            Text("\(r.type.label) \(Int(r.minutes)) 分钟 · \(r.start.formatted(.dateTime.month().day()))").font(.subheadline)
+                            Text("\(r.before.oneDecimal) → \(r.after.oneDecimal) mmol/L\(r.lowestNext12h.map { " · 之后 12 小时最低 \($0.oneDecimal)" } ?? "")")
+                                .font(.footnote).foregroundStyle(.secondary).monospacedDigit()
+                        }
+                    } trailing: {
+                        StatusLabel(delayedLow ? .attention("延迟低血糖") : .neutral(r.change.signedText)).font(.footnote).fixedSize()
                     }
-                    Spacer(minLength: Theme.Space.tight)
-                    StatusLabel(delayedLow ? .attention("延迟低血糖") : .neutral(r.change.signedText)).font(.footnote)
                 }
                 .frame(minHeight: Theme.Size.tap)
                 .accessibilityElement(children: .combine)
@@ -265,7 +270,7 @@ struct GlucoseHeroCard: View {
             if metrics.isContinuous {
                 TIRBar(metrics: metrics)
             }
-            HStack(spacing: Theme.Space.item) {
+            AdaptiveStack(spacing: Theme.Space.item) {
                 Button { onLog(.glucose) } label: { Label("记录血糖", systemImage: "plus").frame(maxWidth: .infinity) }
                     .buttonStyle(.borderedProminent).controlSize(.large)
                 Button { onLog(.diet) } label: { Label("记录饮食", systemImage: "fork.knife").frame(maxWidth: .infinity) }
@@ -313,7 +318,7 @@ struct TIRBar: View {
             }
             .frame(height: 12)
             .clipShape(Capsule())
-            HStack(spacing: 0) {
+            AdaptiveStack(spacing: 0, stackedSpacing: Theme.Space.tight) {
                 legend("低于", (m.tbr ?? 0), .red)
                 legend("范围内", m.tir ?? 0, .green)
                 legend("高于", m.tar ?? 0, .orange)

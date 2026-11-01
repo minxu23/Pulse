@@ -85,7 +85,7 @@ struct CardioCareView: View {
                 }
                 .pickerStyle(.segmented)
             }
-            HStack(spacing: Theme.Space.item) {
+            AdaptiveStack(spacing: Theme.Space.item) {
                 Button { log = .bloodPressure } label: { Label("测量血压", systemImage: "plus").frame(maxWidth: .infinity) }
                     .buttonStyle(.borderedProminent).controlSize(.large)
                 Button { log = .symptom } label: { Label("记录症状", systemImage: "person.fill.questionmark").frame(maxWidth: .infinity) }
@@ -232,11 +232,17 @@ struct CardioCareView: View {
 /// Compact emergency reminder with a direct call action.
 struct EmergencyStrip: View {
     var text = "胸痛或胸闷不缓解、晕厥、严重气短、一侧肢体无力或言语不清时"
+    @Environment(\.dynamicTypeSize) private var size
     var body: some View {
-        HStack(alignment: .center, spacing: Theme.Space.iconGap) {
-            Image(systemName: "cross.case.fill").font(.subheadline).imageScale(.small).foregroundStyle(.red).accessibilityHidden(true)
-            Text(text).font(.footnote).fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: Theme.Space.tight)
+        // At accessibility sizes the call button goes under the text instead of squeezing it.
+        let layout = size.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Theme.Space.item)) : AnyLayout(HStackLayout(alignment: .center, spacing: Theme.Space.iconGap))
+        layout {
+            HStack(alignment: .center, spacing: Theme.Space.iconGap) {
+                Image(systemName: "cross.case.fill").font(.subheadline).imageScale(.small).foregroundStyle(.red).accessibilityHidden(true)
+                Text(text).font(.footnote).fixedSize(horizontal: false, vertical: true)
+            }
+            if !size.isAccessibilitySize { Spacer(minLength: Theme.Space.tight) }
             Link(destination: URL(string: "tel://120")!) {
                 Text("拨打 120").font(.subheadline.weight(.semibold))
                     .padding(.horizontal, Theme.Space.block).frame(minHeight: Theme.Size.tap)
@@ -260,11 +266,13 @@ struct HomeBPCard: View {
         let morning = recent.filter { (4..<12).contains($0.time.hour) }
         let evening = recent.filter { $0.time.hour >= 17 }
         VStack(alignment: .leading, spacing: Theme.Space.block) {
-            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
-                Text(status.overallAvg.map { "\(Int($0.sys))/\(Int($0.dia))" } ?? "—")
-                    .font(.system(.title, design: .rounded).weight(.semibold)).monospacedDigit()
-                Text("mmHg 平均").font(.subheadline).foregroundStyle(.secondary)
-                Spacer()
+            AdaptiveRow(alignment: .firstTextBaseline) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
+                    Text(status.overallAvg.map { "\(Int($0.sys))/\(Int($0.dia))" } ?? "—")
+                        .font(.system(.title, design: .rounded).weight(.semibold)).monospacedDigit().fixedSize()
+                    Text("mmHg 平均").font(.subheadline).foregroundStyle(.secondary)
+                }
+            } trailing: {
                 Text("\(Int(status.progress * 14))/14 次").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).monospacedDigit()
             }
             ProgressBar(value: status.progress, color: .gray, height: 6).accessibilityLabel("监测进度")
@@ -290,7 +298,7 @@ struct HomeBPCard: View {
                     }
                 }
                 .chartYScale(domain: ((recent.map(\.value).min() ?? 110) - 8)...((recent.map(\.value).max() ?? 140) + 8))
-                .chartXAxis { AxisMarks(values: .stride(by: .day, count: 4)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day()) } }
+                .chartXAxis { AxisMarks(values: .stride(by: .day, count: 4)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy) } }
                 .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) }
                 .frame(height: 140)
                 .accessibilityLabel("近 14 天晨起与睡前收缩压")

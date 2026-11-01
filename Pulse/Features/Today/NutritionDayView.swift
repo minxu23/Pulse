@@ -261,7 +261,7 @@ struct IntakeHeroCard: View {
                     }
                 }
             }
-            HStack(spacing: Theme.Space.item) {
+            AdaptiveStack(spacing: Theme.Space.item) {
                 Button {
                     data.record?.waterMl += 250
                 } label: { Label("饮水 250 ml", systemImage: "plus").frame(maxWidth: .infinity) }

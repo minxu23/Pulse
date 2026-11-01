@@ -156,6 +156,51 @@ extension View {
     }
 }
 
+/// Side by side, or one above the other at accessibility text sizes: there two or three things in a
+/// row leave each a few characters wide and break words apart. Default sizes look the same as an HStack.
+struct AdaptiveStack<Content: View>: View {
+    var alignment: VerticalAlignment = .center
+    var spacing: CGFloat? = nil
+    /// Spacing when stacked; the row's spacing when nil.
+    var stackedSpacing: CGFloat? = nil
+    @ViewBuilder var content: Content
+    @Environment(\.dynamicTypeSize) private var size
+
+    var body: some View {
+        let layout = size.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: stackedSpacing ?? spacing))
+            : AnyLayout(HStackLayout(alignment: alignment, spacing: spacing))
+        layout { content }
+    }
+}
+
+/// Something on the left and a trailing item pushed to the right edge; at accessibility text sizes the
+/// trailing item goes underneath instead of squeezing the left side into a narrow column.
+struct AdaptiveRow<Leading: View, Trailing: View>: View {
+    var alignment: VerticalAlignment = .center
+    var spacing: CGFloat? = nil
+    var stackedSpacing: CGFloat = Theme.Space.tight
+    @ViewBuilder var leading: Leading
+    @ViewBuilder var trailing: Trailing
+    @Environment(\.dynamicTypeSize) private var size
+
+    var body: some View {
+        if size.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: stackedSpacing) {
+                leading
+                trailing
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            HStack(alignment: alignment, spacing: spacing) {
+                leading
+                Spacer(minLength: spacing)
+                trailing
+            }
+        }
+    }
+}
+
 // MARK: - Calm colour mode for secondary pages
 
 private struct CalmColorsKey: EnvironmentKey { static let defaultValue = false }
@@ -210,18 +255,33 @@ struct CardHeader<Trailing: View>: View {
     var subtitle: String? = nil
     let icon: String
     var color: Color = .secondary
+    /// A disclosure chevron stays at the right edge at every size.
+    var keepsTrailingBeside = false
     @ViewBuilder var trailing: Trailing
     @Environment(\.calmColors) private var calm
+    @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
-        HStack(alignment: .center, spacing: Theme.Space.block) {
+        let heading = HStack(alignment: .center, spacing: Theme.Space.block) {
             IconTile(icon: icon, color: calm ? .secondary : color)
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 Text(title).font(.headline)
                 if let subtitle { Text(subtitle).font(.footnote).foregroundStyle(.secondary) }
             }
-            Spacer(minLength: Theme.Space.item)
-            trailing
+        }
+        // At accessibility sizes the badge or button goes under the title instead of squeezing it.
+        if size.isAccessibilitySize && !keepsTrailingBeside {
+            VStack(alignment: .leading, spacing: Theme.Space.item) {
+                heading
+                trailing
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            HStack(alignment: .center, spacing: Theme.Space.block) {
+                heading
+                Spacer(minLength: Theme.Space.item)
+                trailing
+            }
         }
     }
 }
@@ -293,11 +353,17 @@ struct MetricTile: View {
     }
 }
 
-/// Tiles side by side, all as tall as the tallest and aligned at the top.
+/// Tiles side by side, all as tall as the tallest and aligned at the top; one per line at accessibility
+/// text sizes, where three in a row would be a few characters wide.
 struct MetricRow<Content: View>: View {
     @ViewBuilder var content: Content
+    @Environment(\.dynamicTypeSize) private var size
     var body: some View {
-        HStack(alignment: .top, spacing: Theme.Space.item) { content }.fixedSize(horizontal: false, vertical: true)
+        if size.isAccessibilitySize {
+            VStack(spacing: Theme.Space.item) { content }
+        } else {
+            HStack(alignment: .top, spacing: Theme.Space.item) { content }.fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 

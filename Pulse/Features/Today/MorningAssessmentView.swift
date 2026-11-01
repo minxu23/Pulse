@@ -308,7 +308,7 @@ struct BloodPressureNightCard: View {
                 }
             }
             .chartYScale(domain: ((values.min() ?? 110) - 6)...((values.max() ?? 140) + 6))
-            .chartXAxis { AxisMarks(values: .stride(by: .day, count: 7)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day()) } }
+            .chartXAxis { AxisMarks(values: .stride(by: .day, count: 7)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy) } }
             .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) }
             .frame(height: 120)
             .accessibilityLabel("近 14 天晨起收缩压")

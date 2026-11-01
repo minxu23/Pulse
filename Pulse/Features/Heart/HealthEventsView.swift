@@ -51,14 +51,9 @@ struct EventRow: View {
                 .background(Theme.severity(event.severity).opacity(0.12), in: Circle())
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 Text(event.title).font(.subheadline.weight(.semibold))
-                HStack(spacing: Theme.Space.tight) {
-                    Text(event.severity.label)
-                    Text("·")
-                    Text(event.status.label)
-                    Text("·")
-                    Text(event.relatedDate.formatted(.dateTime.month().day()))
-                }
-                .font(.footnote).foregroundStyle(.secondary)
+                // One text, so at large sizes it wraps as a line instead of splitting into columns.
+                Text([event.severity.label, event.status.label, event.relatedDate.formatted(.dateTime.month().day())].joined(separator: " · "))
+                    .font(.footnote).foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, Theme.Space.hairline)

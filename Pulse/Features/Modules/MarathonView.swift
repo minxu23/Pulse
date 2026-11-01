@@ -93,10 +93,12 @@ struct MarathonView: View {
                         .font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).monospacedDigit()
                 }
             }
-            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
-                Text(km.oneDecimal).font(.system(.title, design: .rounded).weight(.semibold)).monospacedDigit()
-                Text("/ \(Int(week.weeklyKm)) km").font(.subheadline).foregroundStyle(.secondary)
-                Spacer()
+            AdaptiveRow(alignment: .firstTextBaseline) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
+                    Text(km.oneDecimal).font(.system(.title, design: .rounded).weight(.semibold)).monospacedDigit()
+                    Text("/ \(Int(week.weeklyKm)) km").font(.subheadline).foregroundStyle(.secondary)
+                }
+            } trailing: {
                 Text("长距离 \(Int(week.longRunKm)) km").font(.subheadline).foregroundStyle(.secondary)
             }
             ProgressBar(value: km / max(1, week.weeklyKm), color: Theme.activity, height: 6).accessibilityHidden(true)
@@ -173,7 +175,7 @@ struct MarathonView: View {
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray)
                     .annotation(position: .top, alignment: .leading) { Text("本周目标 \(Int(week.weeklyKm))").font(.caption2).foregroundStyle(.secondary) }
             }
-            .chartXAxis { AxisMarks(values: .stride(by: .weekOfYear, count: 2)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day()) } }
+            .chartXAxis { AxisMarks(values: .stride(by: .weekOfYear, count: 2)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy) } }
             .frame(height: 140)
             .accessibilityLabel("近 8 周每周跑量")
             StatusLabel(load.zone == .high || load.zone == .caution ? .attention(load.message) : .neutral(load.message)).font(.subheadline)
@@ -218,6 +220,10 @@ struct MarathonView: View {
         let plan = MarathonPlanner.fuelPlan(minutes: Int(fuelMinutes), carbsPerHour: p.fuelCarbsPerHour)
         let longRuns = sessions.filter { $0.type == .run && $0.minutes >= 90 }.suffix(4).reversed()
         let gels = Int((Double(plan.carbs) / 22).rounded(.up))
+        // From a litre up in litres: "1000–2000 ml" does not fit a third of the row.
+        let fluid = plan.fluidHigh >= 1000
+            ? ("\((Double(plan.fluidLow) / 1000).oneDecimal)–\((Double(plan.fluidHigh) / 1000).oneDecimal)", "L")
+            : ("\(plan.fluidLow)–\(plan.fluidHigh)", "ml")
         return VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("补给计算")
             VStack(alignment: .leading, spacing: Theme.Space.tight) {
@@ -234,7 +240,7 @@ struct MarathonView: View {
             MetricRow {
                 fuelFact("碳水", "\(plan.carbs)", "g", "bolt.fill")
                 fuelFact("能胶约", plan.carbs > 0 ? "\(gels)" : "0", "支", "takeoutbag.and.cup.and.straw.fill")
-                fuelFact("饮水", plan.fluidHigh > 0 ? "\(plan.fluidLow)–\(plan.fluidHigh)" : "按口渴", plan.fluidHigh > 0 ? "ml" : "", "drop.fill")
+                fuelFact("饮水", plan.fluidHigh > 0 ? fluid.0 : "按口渴", plan.fluidHigh > 0 ? fluid.1 : "", "drop.fill")
             }
             Text(plan.note).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if !longRuns.isEmpty {
@@ -342,7 +348,7 @@ struct RaceHeroCard: View {
                 }
             }
             .accessibilityElement(children: .combine)
-            HStack(spacing: 0) {
+            AdaptiveStack(spacing: 0, stackedSpacing: Theme.Space.item) {
                 fact("目标成绩", race.targetMinutes.map(RacePredictor.timeText) ?? "完赛")
                 fact("目标配速", MarathonPlanner.paceText(week.marathonPace))
                 fact("当前估计", prediction.map { RacePredictor.timeText($0.minutes) } ?? "—")
@@ -413,12 +419,14 @@ struct PaceCard: View {
     private func paceRow(_ title: String, _ pace: Double, _ text: String, _ i: Intensity) -> some View {
         HStack(spacing: Theme.Space.block) {
             IconTile(icon: "speedometer", color: Theme.intensity(i))
-            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                Text(title).font(.subheadline.weight(.semibold))
-                Text(text).font(.footnote).foregroundStyle(.secondary)
+            AdaptiveRow {
+                VStack(alignment: .leading, spacing: Theme.Space.hairline) {
+                    Text(title).font(.subheadline.weight(.semibold))
+                    Text(text).font(.footnote).foregroundStyle(.secondary)
+                }
+            } trailing: {
+                Text(MarathonPlanner.paceText(pace)).font(.body.weight(.semibold)).monospacedDigit()
             }
-            Spacer()
-            Text(MarathonPlanner.paceText(pace)).font(.body.weight(.semibold)).monospacedDigit()
         }
         .frame(minHeight: Theme.Size.tap)
         .accessibilityElement(children: .combine)
@@ -482,7 +490,7 @@ struct RaceWeekCard: View {
             IconTextRow(icon: "speedometer", color: Theme.activity, title: "前半程不冲",
                         text: "前 10 km 控制在目标配速 \(MarathonPlanner.paceText(week.marathonPace)) 或稍慢。")
             IconTextRow(icon: "exclamationmark.triangle.fill", color: .red, title: "身体信号优先",
-                        text: "出现胸痛、头晕、意识模糊或异常心悸时立即停止，并向医疗点求助。")
+                        text: "出现胸痛、头晕、意识模糊或异常心悸时立即停止，并向医疗点求助。", urgent: true)
         }
         .cardSurface()
     }

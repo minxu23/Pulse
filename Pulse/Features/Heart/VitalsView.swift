@@ -11,6 +11,7 @@ struct VitalsView: View {
     @Query(sort: \DailyRecord.day) private var records: [DailyRecord]
     @Query(sort: \VitalReading.time, order: .reverse) private var vitals: [VitalReading]
     @State private var logKind: QuickLogKind?
+    @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
         let p = profiles.first?.snapshot(medications: meds) ?? ProfileSnapshot()
@@ -18,7 +19,7 @@ struct VitalsView: View {
         let bp = points.filter { $0.kind == .bloodPressure }
         let glucose = points.filter { $0.kind == .glucose }
         ScreenScroll {
-            HStack(spacing: Theme.Space.item) {
+            AdaptiveStack(spacing: Theme.Space.item) {
                 addButton("血压", "gauge.with.dots.needle.33percent") { logKind = .bloodPressure }
                 addButton("血糖", "drop.fill") { logKind = .glucose }
                 addButton("其他", "plus") { logKind = .vital }
@@ -34,6 +35,17 @@ struct VitalsView: View {
             Disclaimer(text: "指标异常会单独进入「异常跟进」。设备与家用仪器读数可能有误差，需要时请复测或由专业人员核实。")
         }
         .sheet(item: $logKind) { QuickLogSheet(kind: $0) }
+    }
+
+    /// The automatic date axis; at accessibility sizes three dates, which the automatic labels would cut to 「9月…」.
+    @AxisContentBuilder private var dateAxis: some AxisContent {
+        if size.isAccessibilitySize {
+            AxisMarks(values: .automatic(desiredCount: 3)) { _ in
+                AxisGridLine(); AxisTick(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy)
+            }
+        } else {
+            AxisMarks()
+        }
     }
 
     @Query private var labs: [LabResult]
@@ -80,6 +92,7 @@ struct VitalsView: View {
                     }
                 }
                 .chartForegroundStyleScale(["收缩压": Theme.heartData, "舒张压": Theme.heartData.opacity(0.45)])
+                .chartXAxis { dateAxis }
                 .frame(height: 160)
                 if let m = s.morningSys, let e = s.eveningSys {
                     Text("早晨平均收缩压 \(Int(m))，晚间 \(Int(e)) mmHg。").font(.footnote).foregroundStyle(.secondary)
@@ -110,16 +123,18 @@ struct VitalsView: View {
             NavigationLink { DiabetesCareView() } label: {
                 Card {
                     CardHeader(title: "血糖", subtitle: m.isContinuous ? "CGM 连续监测 · 最近 24 小时" : "指尖血糖 · 近 14 天",
-                               icon: "drop.fill", color: Theme.glucose) {
+                               icon: "drop.fill", color: Theme.glucose, keepsTrailingBeside: true) {
                         Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
                     }
                     if let v = last {
-                        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
-                            Text(v.value.oneDecimal).font(.system(.title, design: .rounded).weight(.semibold)).monospacedDigit()
-                            Text("mmol/L").font(.subheadline).foregroundStyle(.secondary)
-                            Text(v.time.isSameDay(.app) ? Clock.text(v.time.minutesOfDay) : v.time.formatted(.dateTime.month().day()))
-                                .font(.footnote).foregroundStyle(.secondary)
-                            Spacer()
+                        AdaptiveRow(alignment: .firstTextBaseline) {
+                            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
+                                Text(v.value.oneDecimal).font(.system(.title, design: .rounded).weight(.semibold)).monospacedDigit()
+                                Text("mmol/L").font(.subheadline).foregroundStyle(.secondary)
+                                Text(v.time.isSameDay(.app) ? Clock.text(v.time.minutesOfDay) : v.time.formatted(.dateTime.month().day()))
+                                    .font(.footnote).foregroundStyle(.secondary)
+                            }
+                        } trailing: {
                             StatusLabel(v.value < p.glucoseLow ? .urgent("低于范围") : (v.value > p.glucoseHigh ? .attention("高于范围") : .good("在范围内")))
                                 .font(.footnote)
                         }
@@ -145,7 +160,7 @@ struct VitalsView: View {
                             if m.isContinuous {
                                 AxisMarks(values: .stride(by: .hour, count: 6)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()) }
                             } else {
-                                AxisMarks(values: .stride(by: .day, count: 3)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day()) }
+                                AxisMarks(values: .stride(by: .day, count: 3)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy) }
                             }
                         }
                         .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) }
@@ -212,6 +227,7 @@ struct VitalsView: View {
                         }
                     }
                     .chartYScale(domain: 80...100)
+                    .chartXAxis { dateAxis }
                     .frame(height: 120)
                 }
                 Text("设备信号与自述线索不等于诊断。多晚偏低时，请在「计划 › 睡眠」中查看睡眠呼吸线索，必要时进行专业睡眠评估。")
@@ -236,22 +252,25 @@ struct VitalsView: View {
 
 struct VitalRow: View {
     let v: VitalReading
+    @Environment(\.dynamicTypeSize) private var size
     var body: some View {
+        // At accessibility sizes the source joins the detail line, so the reading keeps the row's width.
+        let ax = size.isAccessibilitySize
         HStack(spacing: Theme.Space.iconGap) {
             Image(systemName: v.kind.icon).font(.subheadline).imageScale(.small).foregroundStyle(.secondary).frame(width: 24)
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 HStack(spacing: Theme.Space.tight) {
                     Text(v.kind.label).font(.subheadline)
-                    Text(v.valueText).font(.subheadline.weight(.semibold)).monospacedDigit()
+                    Text(v.valueText).font(.subheadline.weight(.semibold)).monospacedDigit().fixedSize()
                     Text(v.kind.unit).font(.caption).foregroundStyle(.secondary)
                 }
                 Text([v.time.formatted(.dateTime.month().day().hour().minute()), v.context.label,
-                      v.medsTaken.map { $0 ? "已服药" : "未服药" } ?? "", v.note]
+                      v.medsTaken.map { $0 ? "已服药" : "未服药" } ?? "", v.note, ax ? v.source.label : ""]
                     .filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                    .font(.footnote).foregroundStyle(.secondary).lineLimit(ax ? nil : 2)
             }
             Spacer()
-            Text(v.source.label).font(.caption).foregroundStyle(.secondary)
+            if !ax { Text(v.source.label).font(.caption).foregroundStyle(.secondary) }
         }
     }
 }
@@ -299,10 +318,12 @@ private struct ForecastSection: View {
         let values = forecast.weeks.flatMap { [$0.low, $0.high] } + [target].compactMap { $0 }
         let lo = (values.min() ?? 0), hi = (values.max() ?? 1), pad = max(1, (hi - lo) * 0.15)
         VStack(alignment: .leading, spacing: Theme.Space.item) {
-            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.item) {
-                Text("趋势预测").font(.subheadline.weight(.semibold))
-                Text("到 \(forecast.end.start.formatted(.dateTime.month().day())) 那周").font(.footnote).foregroundStyle(.secondary)
-                Spacer(minLength: Theme.Space.item)
+            AdaptiveRow(alignment: .firstTextBaseline, spacing: Theme.Space.item) {
+                AdaptiveStack(alignment: .firstTextBaseline, spacing: Theme.Space.item, stackedSpacing: Theme.Space.hairline) {
+                    Text("趋势预测").font(.subheadline.weight(.semibold))
+                    Text("到 \(forecast.end.start.formatted(.dateTime.month().day())) 那周").font(.footnote).foregroundStyle(.secondary)
+                }
+            } trailing: {
                 direction.font(.footnote)
             }
             Chart {
@@ -324,7 +345,7 @@ private struct ForecastSection: View {
                 }
             }
             .chartYScale(domain: (lo - pad)...(hi + pad))
-            .chartXAxis { AxisMarks(values: .stride(by: .weekOfYear, count: 2)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day()) } }
+            .chartXAxis { AxisMarks(values: .stride(by: .weekOfYear, count: 2)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy) } }
             .chartYAxis { AxisMarks(position: .trailing) }
             .frame(height: 130)
             .accessibilityLabel("\(what)：过去 \(observed.count) 周与未来 4 周的推算范围")

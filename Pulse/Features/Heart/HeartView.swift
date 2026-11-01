@@ -41,6 +41,7 @@ struct HeartView: View {
 
 struct RHRTrendView: View {
     @Environment(\.modelContext) private var ctx
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Query private var profiles: [UserProfile]
     @Query private var meds: [MedicationEntry]
     @Query(sort: \DailyRecord.day) private var records: [DailyRecord]
@@ -71,7 +72,7 @@ struct RHRTrendView: View {
 
     private func summaryCard(_ t: RHRTrend) -> some View {
         Card {
-            HStack(alignment: .firstTextBaseline) {
+            AdaptiveRow(alignment: .firstTextBaseline, stackedSpacing: Theme.Space.item) {
                 VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                     Text("最近一次").font(.caption).foregroundStyle(.secondary)
                     HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
@@ -82,8 +83,8 @@ struct RHRTrendView: View {
                         Text("\(l.day.formatted(.dateTime.month().day())) · \(l.source.label)").font(.footnote).foregroundStyle(.secondary)
                     }
                 }
-                Spacer()
-                VStack(alignment: .trailing, spacing: Theme.Space.item) {
+            } trailing: {
+                VStack(alignment: dynamicTypeSize.isAccessibilitySize ? .leading : .trailing, spacing: Theme.Space.item) {
                     statusChip(t)
                     if let c = t.changeFromBaseline {
                         StatusLabel(text: "较基线 \(c.signedText) bpm", icon: c <= -1 ? "arrow.down.circle.fill" : (c >= 2 ? "arrow.up.circle.fill" : "equal.circle.fill"),
@@ -208,9 +209,9 @@ struct RHRTrendView: View {
             CardHeader(title: "偏高的日子与可能背景", subtitle: "近 3 周高于 4 周均值的早晨", icon: "list.bullet.rectangle", color: .orange)
             ForEach(t.elevatedDays.prefix(6)) { d in
                 VStack(alignment: .leading, spacing: Theme.Space.item) {
-                    HStack {
+                    AdaptiveRow {
                         Text(d.day.formatted(.dateTime.month().day().weekday())).font(.subheadline.weight(.medium))
-                        Spacer()
+                    } trailing: {
                         StatusLabel(text: "\(d.value.noDecimal) bpm（+\(d.delta.noDecimal)）", icon: "arrow.up.circle.fill", color: .orange).font(.subheadline).monospacedDigit()
                     }
                     if d.hasExplanation {
@@ -219,9 +220,9 @@ struct RHRTrendView: View {
                             ForEach(d.inferred, id: \.self) { Chip(text: $0, icon: "info.circle", color: .secondary) }
                         }
                     } else {
-                        HStack {
+                        AdaptiveRow(stackedSpacing: Theme.Space.item) {
                             Text("没有记录到相关背景").font(.footnote).foregroundStyle(.secondary)
-                            Spacer()
+                        } trailing: {
                             Button("补充背景") { contextDay = d.day }.buttonStyle(.bordered)
                         }
                     }

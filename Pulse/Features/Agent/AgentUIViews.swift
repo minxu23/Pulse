@@ -39,9 +39,9 @@ private struct BlockHeader: View {
     let icon: String
     var trailing: String? = nil
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
+        AdaptiveRow(alignment: .firstTextBaseline, spacing: Theme.Space.item) {
             Label(title, systemImage: icon).font(.headline)
-            Spacer(minLength: Theme.Space.item)
+        } trailing: {
             if let trailing { Text(trailing).font(.footnote).foregroundStyle(.secondary).lineLimit(1) }
         }
     }
@@ -182,6 +182,8 @@ struct PlanProposalCard: View {
     let proposal: PlanChangeProposal
     @Environment(\.modelContext) private var ctx
     @State private var convo = AgentConversation.shared
+    /// The weekday column grows with the text size, so 「周日」 stays on one line.
+    @ScaledMetric(relativeTo: .subheadline) private var dayColumn: CGFloat = 34
 
     var body: some View {
         let p = proposal
@@ -190,7 +192,7 @@ struct PlanProposalCard: View {
             VStack(alignment: .leading, spacing: Theme.Space.item) {
                 ForEach(p.lines) { line in
                     HStack(alignment: .firstTextBaseline, spacing: Theme.Space.block) {
-                        Text(Weekday.name(line.weekday)).font(.subheadline.weight(.semibold)).frame(width: 34, alignment: .leading)
+                        Text(Weekday.name(line.weekday)).font(.subheadline.weight(.semibold)).frame(width: dayColumn, alignment: .leading)
                         VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                             Text(line.before).font(.footnote).foregroundStyle(.secondary).strikethrough()
                             Text(line.after).font(.subheadline).fixedSize(horizontal: false, vertical: true)

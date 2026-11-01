@@ -35,6 +35,7 @@ extension DayPhase {
 struct TodayView: View {
     @Binding var tab: AppTab
     @Environment(\.modelContext) private var ctx
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var sheet: TodaySheet?
     /// The user's card order and the cards ever laid out (see `HomeLayout`).
     @AppStorage(HomeLayout.orderKey) private var order = ""
@@ -61,12 +62,12 @@ struct TodayView: View {
                             if DayClock.canUndoEarlyStart(d.now, d.p), let s = DayClock.earlyStart { EarlyStartUndoRow(start: s) }
                             ForEach(HomeLayout.rows(cards), id: \.self) { row in
                                 if row[0].isTile {
-                                    HStack(alignment: .top, spacing: Theme.Space.cardGap) {
+                                    AdaptiveStack(alignment: .top, spacing: Theme.Space.cardGap) {
                                         ForEach(row) { c in
                                             TodayModuleCard(data: d, card: c, onRemove: { save(cards.filter { $0 != c }, available) },
                                                             onEdit: { edit(cards) })
                                         }
-                                        if row.count == 1 { Color.clear.frame(maxWidth: .infinity, maxHeight: 1) }
+                                        if row.count == 1 && !dynamicTypeSize.isAccessibilitySize { Color.clear.frame(maxWidth: .infinity, maxHeight: 1) }
                                     }
                                 } else {
                                     card(row[0], d)
@@ -164,6 +165,7 @@ struct TodayView: View {
 struct StateCard: View {
     let data: TodayData
     var onHeart: () -> Void
+    @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
         let r = data.readiness
@@ -176,8 +178,9 @@ struct StateCard: View {
         // After bedtime (and until 5 am) the morning's score no longer says what to do; the next one comes after sleep.
         let night = data.phase == .review
         // The dividers split the card into panes; each pane keeps the card padding on every side.
+        // At accessibility sizes the two numbers and the three advice lines stack instead of sharing a row.
         VStack(alignment: .leading, spacing: Theme.Space.cardPadding) {
-            HStack(alignment: .top, spacing: 0) {
+            AdaptiveStack(alignment: .top, spacing: 0, stackedSpacing: Theme.Space.cardPadding) {
                 if night {
                     let left = max(0, Int(data.window.nextWake.timeIntervalSince(data.now) / 60) - 15)
                     metric(label: "明天的身体准备度", value: "—", unit: "睡醒后评估",
@@ -195,7 +198,9 @@ struct StateCard: View {
                     .buttonStyle(.plain)
                 }
 
-                Rectangle().fill(Color(.separator)).frame(width: 0.5).padding(.horizontal, Theme.Space.cardPadding)
+                if size.isAccessibilitySize { Divider() } else {
+                    Rectangle().fill(Color(.separator)).frame(width: 0.5).padding(.horizontal, Theme.Space.cardPadding)
+                }
 
                 Button(action: onHeart) {
                     metric(label: "静息心率 · 7 日均值",
@@ -209,7 +214,7 @@ struct StateCard: View {
 
             Divider()
 
-            HStack(alignment: .top, spacing: 0) {
+            AdaptiveStack(alignment: .top, spacing: 0, stackedSpacing: Theme.Space.item) {
                 advice("运动", night ? "明天看准备度" : data.guidance.exerciseShort)
                 advice("负荷", night ? "不再加练" : data.guidance.loadShort)
                 advice("恢复", night ? "现在去睡" : data.guidance.recoveryShort)
@@ -220,8 +225,10 @@ struct StateCard: View {
 
     private func metric<Visual: View>(label: String, value: String, unit: String, unitDot: Color? = nil, footnote: String,
                                       @ViewBuilder visual: () -> Visual) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Space.tight) {
-            Text(label).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        // At accessibility sizes the label and footnote may wrap rather than be cut short.
+        let ax = size.isAccessibilitySize
+        return VStack(alignment: .leading, spacing: Theme.Space.tight) {
+            Text(label).font(.caption).foregroundStyle(.secondary).lineLimit(ax ? nil : 1)
             HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                 Text(value).font(.system(.largeTitle, design: .rounded).weight(.bold)).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.6)
@@ -234,7 +241,7 @@ struct StateCard: View {
                 }
             }
             visual().frame(height: 22, alignment: .center)
-            Text(footnote).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+            Text(footnote).font(.caption).foregroundStyle(.secondary).lineLimit(ax ? nil : 1).minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
@@ -263,7 +270,7 @@ struct StateCard: View {
     private func advice(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.tight) {
             Text(title).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
+            Text(value).font(.subheadline.weight(.semibold)).lineLimit(size.isAccessibilitySize ? nil : 1).minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -276,6 +283,7 @@ struct NowCard: View {
     @Binding var sheet: TodaySheet?
     @Binding var tab: AppTab
     @Environment(\.modelContext) private var ctx
+    @Environment(\.dynamicTypeSize) private var size
 
     private struct Content {
         var title: String
@@ -314,7 +322,9 @@ struct NowCard: View {
 
     private func main(_ ph: DayPhase) -> some View {
         let c = content(ph)
-        return HStack(alignment: .center, spacing: Theme.Space.block) {
+        // At accessibility sizes the action goes under the text and the lines may wrap.
+        let ax = size.isAccessibilitySize
+        return AdaptiveStack(alignment: .center, spacing: Theme.Space.block) {
             NavigationLink { TodayPhaseView(phase: ph, tab: $tab) } label: {
                 HStack(alignment: .center, spacing: Theme.Space.block) {
                     Image(systemName: c.icon)
@@ -323,11 +333,11 @@ struct NowCard: View {
                         .background(ph.color, in: RoundedRectangle(cornerRadius: Theme.Radius.tile(Theme.Size.tileIcon), style: .continuous))
                     VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         Text("现在 · \(ph.title)").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                        Text(c.title).font(.headline).lineLimit(1)
+                        Text(c.title).font(.headline).lineLimit(ax ? nil : 1)
                         Text(c.detail).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         if let w = c.weather {
                             StatusLabel(text: w.short, icon: w.icon, color: .orange, secondaryText: true)
-                                .font(.footnote).lineLimit(1).symbolRenderingMode(.multicolor)
+                                .font(.footnote).lineLimit(ax ? nil : 1).symbolRenderingMode(.multicolor)
                         }
                         if let p = c.progress { ProgressBar(value: p, color: ph.color, height: 4).padding(.top, Theme.Space.hairline) }
                     }

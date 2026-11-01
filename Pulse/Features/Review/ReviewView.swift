@@ -466,9 +466,11 @@ struct WeekDaysCard: View {
     let context: AgentContext
     let weekStart: Date
     @State private var picked: Date?
+    @Environment(\.dynamicTypeSize) private var size
 
     private let rowHeight: CGFloat = 28
-    private let labelWidth: CGFloat = 52
+    /// Grows with the text size, so the row names stay clear of the first day.
+    @ScaledMetric(relativeTo: .caption) private var labelWidth: CGFloat = 52
 
     var body: some View {
         let today = context.logicalToday
@@ -593,7 +595,10 @@ struct WeekDaysCard: View {
             Text(items.map { $0.0 + $0.1 }.joined(separator: "；")).font(.subheadline).foregroundStyle(.secondary)
                 .frame(minHeight: 40, alignment: .topLeading)
         } else {
-            HStack(alignment: .top, spacing: Theme.Space.item) {
+            // Four in a row; two by two at accessibility sizes, where a quarter of the row fits two characters.
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Theme.Space.item, alignment: .topLeading),
+                                     count: size.isAccessibilitySize ? 2 : max(1, items.count)),
+                      alignment: .leading, spacing: Theme.Space.item) {
                 ForEach(items, id: \.0) { label, value in
                     VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         Text(label).font(.caption).foregroundStyle(.secondary)
@@ -851,11 +856,12 @@ struct NextWeekPlanCard: View {
     let applied: Bool
     let reviewed: Bool
     var onApply: () -> Void
+    @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
         let trainings = plan.sessions.filter { $0.kind.isTraining }
         VStack(alignment: .leading, spacing: Theme.Space.block) {
-            HStack(alignment: .top, spacing: Theme.Space.item) {
+            AdaptiveStack(alignment: .top, spacing: Theme.Space.item) {
                 stat("训练", "\(trainings.count) 次")
                 stat("总时长", "\(trainings.map(\.minutes).reduce(0, +)) 分钟")
                 stat("有氧目标", plan.targetMinutes == currentTarget ? "\(plan.targetMinutes) 分钟" : "\(currentTarget) → \(plan.targetMinutes) 分钟")
@@ -909,9 +915,10 @@ struct NextWeekPlanCard: View {
         .cardSurface()
     }
 
-    /// Columns of a session row: the weekday and the kind glyph, so titles line up down the list.
-    private let dayColumn: CGFloat = 36
-    private let iconColumn: CGFloat = 24
+    /// Columns of a session row: the weekday and the kind glyph, so titles line up down the list. They grow
+    /// with the text size, so 「周二」 never breaks into two lines.
+    @ScaledMetric(relativeTo: .subheadline) private var dayColumn: CGFloat = 36
+    @ScaledMetric(relativeTo: .subheadline) private var iconColumn: CGFloat = 24
 
     /// One session: the day, what it is, and how long and hard on the right where the eye can run down them.
     private func session(_ s: PlannedSession) -> some View {
@@ -919,16 +926,18 @@ struct NextWeekPlanCard: View {
             Text(Weekday.name(s.weekday)).font(.subheadline.weight(.semibold)).frame(width: dayColumn, alignment: .leading)
             Image(systemName: s.kind.icon).font(.subheadline).imageScale(.small).foregroundStyle(Theme.activity)
                 .frame(width: iconColumn).accessibilityHidden(true)
-            HStack(spacing: Theme.Space.iconGap) {
-                Text(s.title).font(.subheadline).fixedSize(horizontal: false, vertical: true)
-                if s.isKey {
-                    Image(systemName: "star.fill").font(.caption).foregroundStyle(.yellow).accessibilityLabel("重点")
+            AdaptiveRow(spacing: Theme.Space.item, stackedSpacing: Theme.Space.hairline) {
+                HStack(spacing: Theme.Space.iconGap) {
+                    Text(s.title).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                    if s.isKey {
+                        Image(systemName: "star.fill").font(.caption).foregroundStyle(.yellow).accessibilityLabel("重点")
+                    }
                 }
-            }
-            Spacer(minLength: Theme.Space.item)
-            VStack(alignment: .trailing, spacing: Theme.Space.hairline) {
-                Text("\(s.minutes) 分钟").font(.subheadline).monospacedDigit()
-                Text(s.intensity.label).font(.caption).foregroundStyle(.secondary)
+            } trailing: {
+                VStack(alignment: size.isAccessibilitySize ? .leading : .trailing, spacing: Theme.Space.hairline) {
+                    Text("\(s.minutes) 分钟").font(.subheadline).monospacedDigit()
+                    Text(s.intensity.label).font(.caption).foregroundStyle(.secondary)
+                }
             }
         }
         .padding(.vertical, Theme.Space.item)

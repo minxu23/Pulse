@@ -17,7 +17,7 @@ struct BreathingCues: Equatable {
             switch self {
             case .none: "暂无明显线索"
             case .some: "存在少量线索"
-            case .notable: "线索较多，建议专业评估"
+            case .notable: "线索较多"
             }
         }
     }

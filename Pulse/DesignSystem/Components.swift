@@ -39,12 +39,14 @@ struct CardTitle<Trailing: View>: View {
     let title: String
     var detail: String? = nil
     @ViewBuilder var trailing: Trailing
+    @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.item) {
+        // At accessibility sizes the detail and the button go under the title.
+        AdaptiveStack(alignment: .firstTextBaseline, spacing: Theme.Space.item, stackedSpacing: Theme.Space.tight) {
             Text(title).font(.headline).accessibilityAddTraits(.isHeader)
             if let detail { Text(detail).font(.footnote).foregroundStyle(.secondary) }
-            Spacer(minLength: Theme.Space.item)
+            if !size.isAccessibilitySize { Spacer(minLength: Theme.Space.item) }
             trailing
         }
     }
@@ -67,14 +69,24 @@ struct HealthMetricCard<Footer: View>: View {
     var status: MetricStatus? = nil
     var valueFont: Font = .system(.title, design: .rounded).weight(.semibold)
     @ViewBuilder var footer: Footer
+    @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.item) {
-            HStack(spacing: Theme.Space.iconGap) {
-                Image(systemName: icon).font(.subheadline.weight(.semibold)).imageScale(.small).foregroundStyle(color)
-                Text(title).font(.subheadline.weight(.semibold))
-                Spacer(minLength: Theme.Space.tight)
-                if let time { Text(time).font(.footnote).foregroundStyle(.secondary) }
+            // At accessibility sizes the time goes under the title, which would otherwise be one character wide.
+            if size.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: Theme.Space.hairline) {
+                    Label { Text(title) } icon: { Image(systemName: icon).foregroundStyle(color) }
+                        .font(.subheadline.weight(.semibold)).labelStyle(.inline)
+                    if let time { Text(time).font(.footnote).foregroundStyle(.secondary) }
+                }
+            } else {
+                HStack(spacing: Theme.Space.iconGap) {
+                    Image(systemName: icon).font(.subheadline.weight(.semibold)).imageScale(.small).foregroundStyle(color)
+                    Text(title).font(.subheadline.weight(.semibold))
+                    Spacer(minLength: Theme.Space.tight)
+                    if let time { Text(time).font(.footnote).foregroundStyle(.secondary) }
+                }
             }
             HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                 Text(value).font(valueFont).monospacedDigit()
@@ -101,12 +113,13 @@ extension HealthMetricCard where Footer == EmptyView {
     }
 }
 
-/// Two equal columns for metric cards, spaced like cards in a stack.
+/// Two equal columns for metric cards, spaced like cards in a stack; one column at accessibility sizes.
 struct MetricGrid<Content: View>: View {
     @ViewBuilder var content: Content
+    @Environment(\.dynamicTypeSize) private var size
     var body: some View {
         let gap = Theme.Space.cardGap
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: gap), GridItem(.flexible(), spacing: gap)], spacing: gap) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: gap), count: size.isAccessibilitySize ? 1 : 2), spacing: gap) {
             content
         }
     }
@@ -116,11 +129,11 @@ struct SectionTitle: View {
     let title: String
     var subtitle: String? = nil
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.item) {
+        AdaptiveStack(alignment: .firstTextBaseline, spacing: Theme.Space.item, stackedSpacing: Theme.Space.hairline) {
             Text(title).font(.title3.bold())
             if let subtitle { Text(subtitle).font(.subheadline).foregroundStyle(.secondary) }
-            Spacer()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Theme.Space.tight)
         // In a card stack: a section gap above, and the title sits closer to its own cards than cards to each other.
         .padding(.top, Theme.Space.section - Theme.Space.cardGap)
@@ -149,6 +162,8 @@ struct IconTextRow: View {
     let color: Color
     let title: String
     let text: String
+    /// A step to act on (stop, get help): its text reads as body text, not as grey detail.
+    var urgent = false
 
     var body: some View {
         HStack(alignment: .top, spacing: Theme.Space.block) {
@@ -156,7 +171,9 @@ struct IconTextRow: View {
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 if !title.isEmpty { Text(title).font(.subheadline.weight(.semibold)) }
                 if !text.isEmpty {
-                    Text(text).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    // Without a title the text is the row itself, so it is body text too.
+                    Text(text).font(.subheadline).foregroundStyle(title.isEmpty || urgent ? .primary : .secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 0)
@@ -274,9 +291,12 @@ struct LogActionBar: View {
         let action: () -> Void
     }
     let items: [Item]
+    @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
-        HStack(spacing: Theme.Space.item) {
+        // One row; two by two at accessibility sizes, so the labels are not cut short.
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Theme.Space.item),
+                                 count: size.isAccessibilitySize ? 2 : max(1, items.count)), spacing: Theme.Space.item) {
             ForEach(items) { item in
                 Button(action: item.action) {
                     VStack(spacing: Theme.Space.tight) {

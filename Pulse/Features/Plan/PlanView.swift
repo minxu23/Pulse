@@ -216,11 +216,12 @@ struct WeeklyPlanView: View {
                         }
                         RuleMark(y: .value("良好", 85))
                             .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray)
-                            .annotation(position: .top, alignment: .leading) { Text("85% 完成良好").font(.caption2).foregroundStyle(.secondary) }
                     }
                     .chartYScale(domain: 0...100)
                     .chartYAxis { AxisMarks(values: [0, 50, 100]) { v in AxisGridLine(); AxisValueLabel { Text("\(v.as(Int.self) ?? 0)%") } } }
                     .frame(height: 120)
+                    // Below the chart, not on it: bars reach the line and would cover the label.
+                    Text("虚线为 85%，达到即为完成良好").font(.footnote).foregroundStyle(.secondary)
                 }
             }
         }

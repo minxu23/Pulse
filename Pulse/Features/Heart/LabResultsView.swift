@@ -199,7 +199,7 @@ struct LabSummaryCard: View {
         let shown = LabAnalyzer.latest(points).filter { [.egfr, .uacr, .potassium, .hemoglobin].contains($0.kind) }.prefix(3)
         NavigationLink { LabResultsView() } label: {
             Card {
-                CardHeader(title: "化验结果", subtitle: points.isEmpty ? nil : "最近 \(points.map(\.date).max()!.formatted(.dateTime.month().day()))", icon: "testtube.2", color: Theme.labs) {
+                CardHeader(title: "化验结果", subtitle: points.isEmpty ? nil : "最近 \(points.map(\.date).max()!.formatted(.dateTime.month().day()))", icon: "testtube.2", color: Theme.labs, keepsTrailingBeside: true) {
                     Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
                 }
                 if shown.isEmpty {
