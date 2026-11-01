@@ -146,7 +146,8 @@ extension HealthAgent {
             exerciseLine,
             bullets(steps),
         ]), sources: ["你说的读数", "血压 近 30 天"], followUps: ["我的血压控制得怎么样？"], destination: .vitals, intent: .reading,
-                          conclusion: first, safety: crisis ? steps[1] + "；" + steps[2] + "。" : nil)
+                          conclusion: first, safety: crisis ? steps[1] + "；" + steps[2] + "。" : nil,
+                          status: crisis ? AgentStatus(tone: .urgent, label: "很高") : (high || veryHigh ? .attention(veryHigh ? "明显偏高" : "偏高") : (low ? .attention("偏低") : .good("正常"))))
     }
 
     /// 「晚饭后血糖12正常吗」: this reading, with the target for when it was taken.
@@ -209,7 +210,9 @@ extension HealthAgent {
         parts.append(bullets(steps))
         return AgentReply(text: lines(parts), sources: ["你说的读数", c.glucose.isContinuous ? "CGM 近 14 天" : "血糖记录"],
                           followUps: ["血糖老是高怎么办？"], destination: .glucose, intent: .reading, conclusion: verdict,
-                          safety: v < 3.0 ? "意识不清、吞咽困难时不要喂东西，立即拨打 120。" : (v >= 16.7 ? steps.last.map { $0 + "。" } : nil))
+                          safety: v < 3.0 ? "意识不清、吞咽困难时不要喂东西，立即拨打 120。" : (v >= 16.7 ? steps.last.map { $0 + "。" } : nil),
+                          status: v < 3.0 ? AgentStatus(tone: .urgent, label: "严重低血糖") : (v < p.glucoseLow ? AgentStatus(tone: .urgent, label: "低血糖")
+                            : (v > upper ? .attention(v >= 16.7 ? "明显偏高" : "偏高") : .good(diabetes ? "在目标内" : "正常"))))
     }
 
     /// 「昨晚只睡了5个小时，今天怎么安排」: a recovery day, by what is left of it.

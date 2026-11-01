@@ -7,7 +7,7 @@ import Foundation
 // the user picks or submits goes back into the conversation.
 
 enum AgentChartMetric: String, CaseIterable, Equatable {
-    case rhr, sleep, activity, glucose, bp, wear
+    case rhr, sleep, activity, glucose, bp, wear, hrv, egfr
     var title: String {
         switch self {
         case .rhr: "静息心率"
@@ -16,10 +16,19 @@ enum AgentChartMetric: String, CaseIterable, Equatable {
         case .glucose: "CGM 血糖"
         case .bp: "血压"
         case .wear: "佩戴与数据记录"
+        case .hrv: "心率变异性"
+        case .egfr: "eGFR（肾功能）"
         }
     }
-    /// Sensible window in days (the CGM curve shows hours, so it is capped at 3 days).
-    func clampDays(_ d: Int) -> Int { self == .glucose ? min(max(d, 1), 3) : min(max(d, 7), 90) }
+    /// Sensible window in days (the CGM curve shows hours, so it is capped at 3 days; lab results
+    /// come months apart).
+    func clampDays(_ d: Int) -> Int {
+        switch self {
+        case .glucose: min(max(d, 1), 3)
+        case .egfr: min(max(d, 90), 1100)
+        default: min(max(d, 7), 90)
+        }
+    }
 }
 
 struct AgentFormField: Equatable, Identifiable {
@@ -261,7 +270,7 @@ enum AgentUI {
     - {"type":"form","id":"…","title":"…","fields":[字段],"submit":"发送"}；字段：
       {"id":"…","label":"…","kind":"choice","options":["…","…"],"multiple":false} ／ {"id":"…","label":"…","kind":"weekdays"} ／
       {"id":"…","label":"…","kind":"number","min":0,"max":90,"step":5,"value":30,"unit":"分钟"} ／ {"id":"…","label":"…","kind":"toggle"}
-    - {"type":"chart","metric":"rhr|sleep|activity|glucose|bp|wear","days":28,"caption":"…"}（数据由 App 从用户记录中填充，你只选择指标）
+    - {"type":"chart","metric":"rhr|sleep|activity|glucose|bp|wear|hrv|egfr","days":28,"caption":"…"}（数据由 App 从用户记录中填充，你只选择指标）
     - {"type":"checklist","id":"…","title":"…","items":[{"title":"…","detail":"…"}]}
     - {"type":"steps","title":"…","steps":[{"icon":"applewatch|sensor.fill|drop.fill|figure.run|timer|bell.badge|moon.stars.fill|fork.knife","title":"…","detail":"…"}]}
     组件文字用简体中文、简短；不包含药物、剂量或胰岛素调整建议。不需要界面时不要输出 <ui>。

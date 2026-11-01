@@ -240,6 +240,10 @@ struct AgentReply: Equatable {
     var continuation = false
     /// The verdict the answer before gave (a follow-up's model answer drops an opening that repeats it).
     var alreadySaid: String? = nil
+    /// How the verdict reads at a glance (「还没达标」), shown as a tag above it.
+    var status: AgentStatus? = nil
+    /// The numbers the answer stands on, drawn as tiles and a small chart with it.
+    var figure: AgentFigure? = nil
 
     /// Plan changes for the user to adopt (none is adopted while the answer is shown).
     var proposals: [PlanChangeProposal] { blocks.compactMap(\.proposal) }
@@ -325,7 +329,8 @@ enum HealthAgent {
 
     /// The fixed reply for an emergency: thoughts of self-harm first, then the medical one.
     static func emergencyReply(for q: String) -> AgentReply {
-        AgentReply(text: selfHarmWords.contains(where: { q.contains($0) }) ? selfHarmText : emergencyText, urgent: true, intent: .emergency)
+        AgentReply(text: selfHarmWords.contains(where: { q.contains($0) }) ? selfHarmText : emergencyText, urgent: true, intent: .emergency,
+                   status: AgentStatus(tone: .urgent, label: "需要马上处理"))
     }
 
     /// 「那该注意什么？」「怎么办」「为什么」: a question about the previous one's topic that names none.
@@ -342,6 +347,9 @@ enum HealthAgent {
         out.continuation = true
         guard q.range(of: "要紧|严重|正常", options: .regularExpression) == nil, let said = r.conclusion else { return out }
         out.conclusion = nil
+        // The tag and the numbers went with that verdict.
+        out.status = nil
+        out.figure = nil
         out.alreadySaid = said
         let rest = r.text.replacingOccurrences(of: said, with: "").trimmingCharacters(in: .whitespacesAndNewlines)
         if !rest.isEmpty { out.text = rest }
@@ -622,6 +630,7 @@ enum HealthAgent {
         case .condition, .food, .reading, .symptom, .about, .knowledge, .unknown: r = unknown(c)
         }
         r.intent = i
+        if r.figure == nil { r.figure = i == .rhr ? .rhr(c) : (i == .hrv ? .hrv(c) : nil) }
         if let t = told { r = withCondition(r, t, question: question, context: c, before: base) }
         return r
     }
@@ -944,7 +953,9 @@ enum HealthAgent {
             r.confidence == .low ? "今天的数据不全（\(r.confidence.label)），以你自己的感受为准。" : nil,
             r.overrides.first,
         ]), sources: ["昨夜睡眠", "静息心率与 HRV", "近期负荷", "醒后感受"],
-                          followUps: ["准备度是怎么算的？", "这周的训练完成得怎么样？"], conclusion: first)
+                          followUps: ["准备度是怎么算的？", "这周的训练完成得怎么样？"],
+                          conclusion: first, status: [.high, .moderate].contains(r.level) ? .good(r.level.label) : .attention(r.level.label),
+                          figure: .readiness(c))
     }
 
     static func sleep(_ c: AgentContext, question q: String = "") -> AgentReply {
@@ -1011,7 +1022,8 @@ enum HealthAgent {
             bullets(tips),
             c.breathing.level != .none ? "另外，近 30 天记录到睡眠呼吸线索（打鼾 \(c.breathing.snoring) 晚），可以问我「需要去看睡眠门诊吗？」" : nil,
             c.pastBedtime ? "现在 \(c.clock)，已过你平时的入睡时间，今晚先睡吧，其他的明天再看。" : nil,
-        ]), sources: ["睡眠 \(s.nights) 晚"], followUps: ["我需要去看睡眠门诊吗？", "咖啡因对我睡眠有影响吗？"], destination: .sleep)
+        ]), sources: ["睡眠 \(s.nights) 晚"], followUps: ["我需要去看睡眠门诊吗？", "咖啡因对我睡眠有影响吗？"], destination: .sleep,
+                          status: avg < c.profile.sleepNeedMinutes - 30 ? .attention("睡得不够") : .good("睡得够"), figure: .sleep(c))
     }
 
     /// Sleep around night shifts, with this roster's times.
@@ -1360,8 +1372,11 @@ enum HealthAgent {
                              : [onBPMeds ? "每天固定时间吃药，别漏" : "每周 150 分钟以上的有氧，比如快走、骑车",
                                 "盐每天不超过 \(p.saltLimitG.noDecimal) g，酱油、咸菜、外卖都算",
                                 onBPMeds ? "这样坚持 2–4 周还没降到目标，带着记录找医生调整方案" : "坚持 2–4 周再看平均值；家庭血压平均一直在 135/85 以上，去看医生"]))
-        return AgentReply(text: lines(parts), sources: ["血压 \(s.count) 次"], followUps: ["少吃盐有什么技巧？", "我需要去看医生吗？"],
-                          destination: c.profile.hasCardiac ? .cardio : .vitals, conclusion: verdict)
+        var r = AgentReply(text: lines(parts), sources: ["血压 \(s.count) 次"], followUps: ["少吃盐有什么技巧？", "我需要去看医生吗？"],
+                           destination: c.profile.hasCardiac ? .cardio : .vitals, conclusion: verdict)
+        r.status = ok ? .good("控制得不错") : .attention("还没达标")
+        r.figure = .bloodPressure(c)
+        return r
     }
 
     static func glucose(_ c: AgentContext, question q: String = "") -> AgentReply {
@@ -1388,9 +1403,9 @@ enum HealthAgent {
             parts.append("偏高的时候多在\(top.0)：这段时间有 \(Int((top.1 * 100).rounded()))% 高于 \(c.profile.glucoseHigh.oneDecimal)。")
         }
         if m.isContinuous {
-            parts.append("近 14 天 CGM：目标范围内 \(Int((m.tir ?? 0) * 100))%（参考 >70%），低于范围 \(String(format: "%.1f", (m.tbr ?? 0) * 100))%（参考 <4%），高于范围 \(Int((m.tar ?? 0) * 100))%；平均 \(m.mean?.oneDecimal ?? "—") mmol/L，波动 CV \(Int(m.cv ?? 0))%。")
+            parts.append("近 14 天 CGM：目标范围内 \(tir)%（参考 >70%），低于范围 \(String(format: "%.1f", (m.tbr ?? 0) * 100))%（参考 <4%），高于范围 \(Int(((m.tar ?? 0) * 100).rounded()))%；平均 \(m.mean?.oneDecimal ?? "—") mmol/L，波动 CV \(Int(m.cv ?? 0))%。")
         } else {
-            parts.append("近 14 天 \(m.readings) 次指尖血糖，平均 \(m.mean?.oneDecimal ?? "—") mmol/L，目标范围内 \(Int((m.tir ?? 0) * 100))%。")
+            parts.append("近 14 天 \(m.readings) 次指尖血糖，平均 \(m.mean?.oneDecimal ?? "—") mmol/L，目标范围内 \(tir)%。")
         }
         if !c.lows.isEmpty {
             parts.append("有 \(c.lows.count) 次低于 \(c.profile.glucoseLow.oneDecimal)，其中夜间 \(c.lows.filter(\.nocturnal).count) 次。低血糖时按 15-15 原则处理：15–20 g 快速碳水，15 分钟后复测。")
@@ -1402,8 +1417,11 @@ enum HealthAgent {
                                   "连续两周达标时间都在 70% 以下，带着记录问医生要不要调整方案（药怎么调由医生定）"]))
         }
         parts.append("在「血糖管理」里能看到每餐后升了多少、运动前后的变化。")
-        return AgentReply(text: lines(parts), sources: [m.isContinuous ? "CGM 近 14 天" : "血糖 \(m.readings) 次"], followUps: ["今天吃什么好？"],
-                          destination: .glucose, conclusion: verdict)
+        var r = AgentReply(text: lines(parts), sources: [m.isContinuous ? "CGM 近 14 天" : "血糖 \(m.readings) 次"], followUps: ["今天吃什么好？"],
+                           destination: .glucose, conclusion: verdict)
+        r.status = tir >= 70 ? .good("控制得不错") : .attention("还没达标")
+        r.figure = .glucose(c)
+        return r
     }
 
     /// Medicines: what the question is about first (stopping, the dose, insulin), the records that
@@ -1510,7 +1528,7 @@ enum HealthAgent {
         }
         parts.append(LabAnalyzer.rangeNote)
         return AgentReply(text: lines(parts), sources: ["化验记录"], followUps: ["饮食上要注意什么？", "今天适合运动吗？"], destination: .labs,
-                          conclusion: lead)
+                          conclusion: lead, figure: asked == nil || asked == .egfr ? .kidney(c) : nil)
     }
 
     static func doctor(_ c: AgentContext) -> AgentReply {

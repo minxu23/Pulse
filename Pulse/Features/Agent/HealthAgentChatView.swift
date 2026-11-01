@@ -314,36 +314,52 @@ private struct AgentMessageView: View {
         } else {
             let hasBlocks = !message.blocks.isEmpty && !message.streaming
             VStack(alignment: .leading, spacing: Theme.Space.block) {
-                HStack(alignment: .top, spacing: Theme.Space.block) {
-                    AgentAvatar(size: Theme.Size.iconTile)
-                    VStack(alignment: .leading, spacing: Theme.Space.block) {
-                        if message.text.isEmpty && message.streaming {
+                // The answer: a card as wide as the page, so its numbers and lists have room.
+                VStack(alignment: .leading, spacing: Theme.Space.block) {
+                    if message.text.isEmpty && message.streaming {
+                        HStack(spacing: Theme.Space.block) {
+                            AgentAvatar(size: Theme.Size.iconTile)
                             TypingDots()
-                        } else {
-                            Text(Self.attributed(message.text)).font(.body).fixedSize(horizontal: false, vertical: true)
-                                .textSelection(.enabled)
                         }
-                        if let note = message.note {
-                            StatusLabel(.neutral(note)).font(.footnote)
+                        // The numbers are the rules' own: they show while the words are written.
+                        if message.reply?.figure != nil || message.reply?.status != nil {
+                            AgentAnswerView(text: "", reply: message.reply, context: context)
                         }
-                        if !hasBlocks { footer }
+                    } else {
+                        AgentAnswerView(text: message.text, reply: message.reply, context: context, cards: hasBlocks ? message.blocks : [])
                     }
-                    .padding(Theme.Space.block)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.Radius.bubble, style: .continuous))
+                    if let note = message.note {
+                        StatusLabel(.neutral(note)).font(.footnote)
+                    }
+                    if !hasBlocks { actions }
+                    if message.reply != nil, !message.streaming { byline }
                 }
-                // Generated components get the full width; the actions follow them.
+                .cardSurface()
+                // Generated components get their own cards; the actions follow them.
                 if hasBlocks {
-                    AgentBlocksView(blocks: message.blocks, messageID: message.id, context: context, onSubmit: onFollowUp)
-                    // Under the bubble: the avatar's width plus its gap.
-                    VStack(alignment: .leading, spacing: Theme.Space.block) { footer }
-                        .padding(.leading, Theme.Size.iconTile + Theme.Space.block)
+                    AgentBlocksView(blocks: shownBlocks, messageID: message.id, context: context, onSubmit: onFollowUp)
+                    actions
+                }
+                if isLast, let r = message.reply, !message.streaming, !r.followUps.isEmpty {
+                    FlowLayout(spacing: Theme.Space.item) {
+                        ForEach(r.followUps, id: \.self) { q in
+                            Button { onFollowUp(q) } label: { Text(q).frame(minHeight: Theme.Size.borderedLabel) }
+                                .buttonStyle(.bordered)
+                        }
+                    }
                 }
             }
         }
     }
 
-    @ViewBuilder private var footer: some View {
+    /// A chart the answer's own figure already draws is not drawn twice.
+    private var shownBlocks: [AgentUIBlock] {
+        guard let m = message.reply?.figure?.chart else { return message.blocks }
+        return message.blocks.filter { if case .chart(m, _, _) = $0 { false } else { true } }
+    }
+
+    /// What to do next from the answer: call 120, open the page with the details.
+    @ViewBuilder private var actions: some View {
         if let r = message.reply, !message.streaming {
             if r.urgent {
                 Link(destination: URL(string: "tel://120")!) {
@@ -363,11 +379,24 @@ private struct AgentMessageView: View {
                 }
                 .buttonStyle(.bordered)
             }
-            HStack(spacing: Theme.Space.item) {
-                Text(([message.engine == .onDevice ? "Apple 智能" : (message.engine == .cloud ? "云端 · \(CloudModelSettings.shared.model)"
-                        : (r.urgent ? "固定急救提示（不经过模型）" : "Pulse 规则分析（未经大模型）"))] + [message.privacy].compactMap { $0 }
-                       + [message.masked.map { "发送前去掉了\($0)" }].compactMap { $0 } + r.sources).joined(separator: " · "))
-                    .font(.footnote).foregroundStyle(.secondary).lineLimit(3)
+        }
+    }
+
+    /// Where the answer comes from — the records it read and who wrote it — and reading it aloud.
+    @ViewBuilder private var byline: some View {
+        if let r = message.reply {
+            Divider()
+            HStack(alignment: .center, spacing: Theme.Space.item) {
+                VStack(alignment: .leading, spacing: Theme.Space.hairline) {
+                    if !r.sources.isEmpty {
+                        Text("依据：" + r.sources.joined(separator: "、")).lineLimit(2)
+                    }
+                    Text(([message.engine == .onDevice ? "Apple 智能" : (message.engine == .cloud ? "云端 · \(CloudModelSettings.shared.model)"
+                            : (r.urgent ? "固定急救提示（不经过模型）" : "Pulse 规则分析（未经大模型）"))] + [message.privacy].compactMap { $0 }
+                           + [message.masked.map { "发送前去掉了\($0)" }].compactMap { $0 }).joined(separator: " · "))
+                        .lineLimit(3)
+                }
+                .font(.footnote).foregroundStyle(.secondary)
                 Spacer(minLength: Theme.Space.tight)
                 Button(action: onSpeak) {
                     Image(systemName: speaking ? "speaker.wave.2.fill" : "speaker.wave.2")
@@ -385,21 +414,9 @@ private struct AgentMessageView: View {
                 .buttonStyle(.plain).foregroundStyle(Theme.accent)
                 .sheet(isPresented: $showSent) { SentContentSheet(text: sent, masked: message.masked) }
             }
-            if isLast && !r.followUps.isEmpty {
-                FlowLayout(spacing: Theme.Space.item) {
-                    ForEach(r.followUps, id: \.self) { q in
-                        Button { onFollowUp(q) } label: { Text(q).frame(minHeight: Theme.Size.borderedLabel) }
-                            .buttonStyle(.bordered)
-                    }
-                }
-            }
         }
     }
 
-    /// Renders inline Markdown (bold from the language model) and keeps line breaks.
-    static func attributed(_ s: String) -> AttributedString {
-        (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
-    }
 }
 
 /// What one answer sent to the cloud model, word for word.

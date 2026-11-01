@@ -117,6 +117,11 @@ enum AgentTranscript {
         var followUps: [String] = []
         var destination: String?
         var intent: String?
+        /// The answer's layout: its tag, its verdict and its safety line.
+        var statusTone: String?
+        var statusLabel: String?
+        var conclusion: String?
+        var safety: String?
     }
 
     static var url: URL? {
@@ -130,9 +135,10 @@ enum AgentTranscript {
         guard let url, let data = try? Data(contentsOf: url), let stored = try? JSONDecoder().decode([Stored].self, from: data) else { return [] }
         return stored.compactMap { s in
             guard let role = AgentMessage.Role(rawValue: s.role) else { return nil }
+            let status = s.statusTone.flatMap(AgentStatus.Tone.init(rawValue:)).flatMap { t in s.statusLabel.map { AgentStatus(tone: t, label: $0) } }
             let reply = role == .agent
                 ? AgentReply(text: s.text, sources: s.sources, followUps: s.followUps, destination: s.destination.flatMap(AgentDestination.init(rawValue:)),
-                             intent: s.intent.flatMap(AgentIntent.init(rawValue:)) ?? .unknown) : nil
+                             intent: s.intent.flatMap(AgentIntent.init(rawValue:)) ?? .unknown, conclusion: s.conclusion, safety: s.safety, status: status) : nil
             return AgentMessage(id: s.id, role: role, text: s.text, reply: reply, engine: AgentMessage.Engine(rawValue: s.engine) ?? .rules,
                                 note: s.note, withdrawn: s.withdrawn, general: s.general, privacy: s.privacy, masked: s.masked, date: s.date)
         }
@@ -145,7 +151,8 @@ enum AgentTranscript {
         let stored = kept.map { m in
             Stored(id: m.id, role: m.role.rawValue, text: m.text, engine: m.engine.rawValue, date: m.date, withdrawn: m.withdrawn,
                    general: m.general, note: m.note, privacy: m.privacy, masked: m.masked, sources: m.reply?.sources ?? [], followUps: m.reply?.followUps ?? [],
-                   destination: m.reply?.destination?.rawValue, intent: m.reply?.intent.rawValue)
+                   destination: m.reply?.destination?.rawValue, intent: m.reply?.intent.rawValue,
+                   statusTone: m.reply?.status?.tone.rawValue, statusLabel: m.reply?.status?.label, conclusion: m.reply?.conclusion, safety: m.reply?.safety)
         }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         // Health information: kept encrypted while the phone is locked.

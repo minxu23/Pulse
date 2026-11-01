@@ -231,6 +231,7 @@ enum FoodGuide {
         return AgentReply(text: text, sources: [kHigh || limitsK ? "化验结果" : nil, saltReasons.isEmpty ? nil : "饮食限制", "健康状况"].compactMap { $0 },
                           followUps: diabetes ? ["血糖老是高怎么办？", "今天吃什么好？"] : ["今天吃什么好？"],
                           destination: concerns.contains(.potassium) && !c.labs.isEmpty ? .labs : (diabetes && concerns.contains(.sugar) ? .glucose : nil), intent: .food,
-                          conclusion: first)
+                          conclusion: first,
+                          status: level == .avoid ? .attention("先不\(v)") : (level == .limit ? .attention("少\(v)一点") : .good(level == .fine ? "可以\(v)" : "适量\(v)")))
     }
 }

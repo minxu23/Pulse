@@ -425,104 +425,161 @@ struct AgentChartBlock: View {
     let context: AgentContext
 
     var body: some View {
-        let c = context
-        let start = c.now.startOfDay.adding(days: -(days - 1))
         VStack(alignment: .leading, spacing: Theme.Space.block) {
-            BlockHeader(title: metric.title, icon: icon, trailing: metric == .glucose ? "近 \(days * 24) 小时" : "近 \(days) 天")
-            switch metric {
-            case .rhr:
-                let pts = c.trend.points.filter { $0.day >= start }
-                if pts.count < 3 { EmptyLine("静息心率数据还不够。") } else {
-                    Chart {
-                        if let b = c.trend.baseline {
-                            RuleMark(y: .value("基线", b)).lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray)
-                        }
-                        ForEach(pts) { p in
-                            LineMark(x: .value("日期", p.day), y: .value("bpm", p.value)).foregroundStyle(Theme.heartData).interpolationMethod(.monotone)
-                        }
-                    }
-                    .chartYScale(domain: .automatic(includesZero: false))
-                    .frame(height: 140)
-                    .accessibilityLabel("静息心率，近 \(days) 天，\(c.trend.avg7.map { "近 7 天平均 \($0.noDecimal)" } ?? "")")
-                }
-            case .sleep:
-                let ds = c.days.filter { $0.day >= start && $0.sleepMinutes != nil }
-                if ds.isEmpty { EmptyLine("还没有睡眠数据。") } else {
-                    Chart {
-                        RuleMark(y: .value("目标", c.profile.sleepNeedMinutes / 60)).lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray)
-                        ForEach(ds) { d in BarMark(x: .value("日期", d.day, unit: .day), y: .value("小时", (d.sleepMinutes ?? 0) / 60)).foregroundStyle(Theme.sleep) }
-                    }
-                    .frame(height: 140)
-                    .accessibilityLabel("睡眠时长，\(ds.count) 晚有记录")
-                }
-            case .activity:
-                let ds = c.days.filter { $0.day >= start }
-                Chart { ForEach(ds) { d in BarMark(x: .value("日期", d.day, unit: .day), y: .value("分钟", d.activeMinutes)).foregroundStyle(Theme.activity) } }
-                    .frame(height: 140)
-                    .accessibilityLabel("每日活动分钟，近 \(days) 天")
-            case .glucose:
-                let pts = c.vitals.filter { $0.kind == .glucose && $0.time > c.now.addingTimeInterval(-Double(days) * 86400) }
-                if pts.isEmpty { EmptyLine("这段时间没有血糖数据。") } else {
-                    Chart {
-                        GlucoseRangeMarks(low: c.profile.glucoseLow, high: c.profile.glucoseHigh)
-                        ForEach(Array(pts.enumerated()), id: \.offset) { _, v in
-                            LineMark(x: .value("时间", v.time), y: .value("mmol/L", v.value))
-                                .foregroundStyle(Theme.glucose).interpolationMethod(.monotone)
-                                .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
-                        }
-                        ForEach(Array(c.workouts.filter { $0.start > c.now.addingTimeInterval(-Double(days) * 86400) }.enumerated()), id: \.offset) { _, w in
-                            RuleMark(x: .value("训练", w.start)).foregroundStyle(Theme.activity.opacity(0.6))
-                                .annotation(position: .top, spacing: Theme.Space.hairline) { Image(systemName: "figure.run").font(.caption).foregroundStyle(Theme.activity) }
-                        }
-                    }
-                    .frame(height: 150)
-                    .padding(.top, Theme.Space.block)
-                    .accessibilityLabel("CGM 血糖曲线，虚线为目标范围 \(c.profile.glucoseLow.oneDecimal) 到 \(c.profile.glucoseHigh.oneDecimal)")
-                    Text("虚线为目标范围，\(Image(systemName: "figure.run")) 为训练开始。").font(.footnote).foregroundStyle(.secondary)
-                }
-            case .bp:
-                let pts = c.vitals.filter { $0.kind == .bloodPressure && $0.time >= start }
-                if pts.isEmpty { EmptyLine("这段时间没有血压记录。") } else {
-                    Chart {
-                        ForEach(Array(pts.enumerated()), id: \.offset) { _, v in
-                            PointMark(x: .value("日期", v.time), y: .value("收缩压", v.value)).foregroundStyle(by: .value("类型", "收缩压")).symbol(by: .value("类型", "收缩压"))
-                            if let d = v.value2 {
-                                PointMark(x: .value("日期", v.time), y: .value("舒张压", d)).foregroundStyle(by: .value("类型", "舒张压")).symbol(by: .value("类型", "舒张压"))
-                            }
-                        }
-                    }
-                    .chartForegroundStyleScale(["收缩压": Theme.heartData, "舒张压": Theme.heartData.opacity(0.45)])
-                    .frame(height: 140)
-                }
-            case .wear:
-                let all = (0..<days).map { start.adding(days: $0) }
-                let byDay = Dictionary(c.days.map { ($0.day, $0) }, uniquingKeysWith: { a, _ in a })
-                let recorded = all.filter { byDay[$0]?.rhr != nil || byDay[$0]?.sleepMinutes != nil }.count
-                Chart {
-                    ForEach(all, id: \.self) { d in
-                        let has = byDay[d]?.rhr != nil || byDay[d]?.sleepMinutes != nil
-                        BarMark(x: .value("日期", d, unit: .day), y: .value("记录", 1))
-                            .foregroundStyle(by: .value("状态", has ? "有夜间数据" : "缺失"))
-                    }
-                }
-                .chartForegroundStyleScale(["有夜间数据": Theme.heartData, "缺失": Color.gray.opacity(0.3)])
-                .chartYAxis(.hidden)
-                .frame(height: 70)
-                .accessibilityLabel("佩戴记录：近 \(days) 天中 \(recorded) 天有夜间数据")
-                Text("\(recorded)/\(days) 天有夜间心率或睡眠数据。").font(.footnote).foregroundStyle(.secondary)
-            }
+            BlockHeader(title: metric.title, icon: metric.icon, trailing: metric == .glucose ? "近 \(days * 24) 小时" : "近 \(days) 天")
+            AgentMetricChart(metric: metric, days: days, context: context)
             if let caption { Text(caption).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
         }
     }
+}
 
-    private var icon: String {
+/// A metric drawn from the user's own records: full size in a card, smaller inside an answer.
+struct AgentMetricChart: View {
+    let metric: AgentChartMetric
+    let days: Int
+    let context: AgentContext
+    var height: CGFloat = 140
+
+    var body: some View {
+        let c = context
+        let start = c.now.startOfDay.adding(days: -(days - 1))
         switch metric {
+        case .rhr:
+            let pts = c.trend.points.filter { $0.day >= start }
+            if pts.count < 3 { EmptyLine("静息心率数据还不够。") } else {
+                Chart {
+                    if let b = c.trend.baseline {
+                        RuleMark(y: .value("基线", b)).lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray)
+                    }
+                    ForEach(pts) { p in
+                        LineMark(x: .value("日期", p.day), y: .value("bpm", p.value)).foregroundStyle(Theme.heartData).interpolationMethod(.monotone)
+                    }
+                }
+                .chartYScale(domain: .automatic(includesZero: false))
+                .frame(height: height)
+                .accessibilityLabel("静息心率，近 \(days) 天，\(c.trend.avg7.map { "近 7 天平均 \($0.noDecimal)" } ?? "")")
+                if c.trend.baseline != nil { Legend("虚线为个人基线。") }
+            }
+        case .hrv:
+            let ds = c.days.filter { $0.day >= start && $0.hrv != nil }
+            if ds.count < 3 { EmptyLine("HRV 数据还不够。") } else {
+                Chart {
+                    ForEach(ds) { d in
+                        LineMark(x: .value("日期", d.day), y: .value("ms", d.hrv ?? 0)).foregroundStyle(Theme.heartData).interpolationMethod(.monotone)
+                    }
+                }
+                .chartYScale(domain: .automatic(includesZero: false))
+                .frame(height: height)
+                .accessibilityLabel("心率变异性，近 \(days) 天，\(ds.count) 天有数据")
+            }
+        case .sleep:
+            let ds = c.days.filter { $0.day >= start && $0.sleepMinutes != nil }
+            if ds.isEmpty { EmptyLine("还没有睡眠数据。") } else {
+                Chart {
+                    RuleMark(y: .value("目标", c.profile.sleepNeedMinutes / 60)).lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray)
+                    ForEach(ds) { d in BarMark(x: .value("日期", d.day, unit: .day), y: .value("小时", (d.sleepMinutes ?? 0) / 60)).foregroundStyle(Theme.sleep) }
+                }
+                .frame(height: height)
+                .accessibilityLabel("睡眠时长，\(ds.count) 晚有记录")
+                Legend("虚线为你需要的睡眠时长。")
+            }
+        case .activity:
+            let ds = c.days.filter { $0.day >= start }
+            Chart { ForEach(ds) { d in BarMark(x: .value("日期", d.day, unit: .day), y: .value("分钟", d.activeMinutes)).foregroundStyle(Theme.activity) } }
+                .frame(height: height)
+                .accessibilityLabel("每日活动分钟，近 \(days) 天")
+        case .glucose:
+            let pts = c.vitals.filter { $0.kind == .glucose && $0.time > c.now.addingTimeInterval(-Double(days) * 86400) }
+            if pts.isEmpty { EmptyLine("这段时间没有血糖数据。") } else {
+                Chart {
+                    GlucoseRangeMarks(low: c.profile.glucoseLow, high: c.profile.glucoseHigh)
+                    ForEach(Array(pts.enumerated()), id: \.offset) { _, v in
+                        LineMark(x: .value("时间", v.time), y: .value("mmol/L", v.value))
+                            .foregroundStyle(Theme.glucose).interpolationMethod(.monotone)
+                            .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
+                    }
+                    ForEach(Array(c.workouts.filter { $0.start > c.now.addingTimeInterval(-Double(days) * 86400) }.enumerated()), id: \.offset) { _, w in
+                        RuleMark(x: .value("训练", w.start)).foregroundStyle(Theme.activity.opacity(0.6))
+                            .annotation(position: .top, spacing: Theme.Space.hairline) { Image(systemName: "figure.run").font(.caption).foregroundStyle(Theme.activity) }
+                    }
+                }
+                .frame(height: height + 10)
+                .padding(.top, Theme.Space.block)
+                .accessibilityLabel("CGM 血糖曲线，虚线为目标范围 \(c.profile.glucoseLow.oneDecimal) 到 \(c.profile.glucoseHigh.oneDecimal)")
+                Legend("虚线为目标范围，\(Image(systemName: "figure.run")) 为训练开始。")
+            }
+        case .bp:
+            let pts = c.vitals.filter { $0.kind == .bloodPressure && $0.time >= start }
+            if pts.isEmpty { EmptyLine("这段时间没有血压记录。") } else {
+                Chart {
+                    RuleMark(y: .value("目标", c.profile.bpTargetSys)).lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray)
+                    ForEach(Array(pts.enumerated()), id: \.offset) { _, v in
+                        PointMark(x: .value("日期", v.time), y: .value("收缩压", v.value)).foregroundStyle(by: .value("类型", "收缩压")).symbol(by: .value("类型", "收缩压"))
+                        if let d = v.value2 {
+                            PointMark(x: .value("日期", v.time), y: .value("舒张压", d)).foregroundStyle(by: .value("类型", "舒张压")).symbol(by: .value("类型", "舒张压"))
+                        }
+                    }
+                }
+                .chartForegroundStyleScale(["收缩压": Theme.heartData, "舒张压": Theme.heartData.opacity(0.45)])
+                .chartYScale(domain: .automatic(includesZero: false))
+                .frame(height: height)
+                .accessibilityLabel("血压，近 \(days) 天 \(pts.count) 次测量，虚线为收缩压目标 \(c.profile.bpTargetSys)")
+                Legend("虚线为收缩压目标 \(c.profile.bpTargetSys)。")
+            }
+        case .egfr:
+            let pts = LabAnalyzer.egfrSeries(c.labs).filter { $0.date >= start }
+            if pts.isEmpty { EmptyLine("这段时间没有 eGFR 结果。") } else {
+                Chart {
+                    // 60: below it kidney function counts as reduced (G3 and lower).
+                    RuleMark(y: .value("参考", 60)).lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray)
+                    ForEach(Array(pts.enumerated()), id: \.offset) { _, p in
+                        LineMark(x: .value("日期", p.date), y: .value("eGFR", p.value)).foregroundStyle(Theme.labs)
+                        PointMark(x: .value("日期", p.date), y: .value("eGFR", p.value)).foregroundStyle(Theme.labs)
+                    }
+                }
+                .chartYScale(domain: .automatic(includesZero: false))
+                .frame(height: height)
+                .accessibilityLabel("eGFR，\(pts.count) 次化验，最近一次 \(pts.last?.valueText ?? "")")
+                Legend("虚线为 60：低于它算肾功能下降。")
+            }
+        case .wear:
+            let all = (0..<days).map { start.adding(days: $0) }
+            let byDay = Dictionary(c.days.map { ($0.day, $0) }, uniquingKeysWith: { a, _ in a })
+            let recorded = all.filter { byDay[$0]?.rhr != nil || byDay[$0]?.sleepMinutes != nil }.count
+            Chart {
+                ForEach(all, id: \.self) { d in
+                    let has = byDay[d]?.rhr != nil || byDay[d]?.sleepMinutes != nil
+                    BarMark(x: .value("日期", d, unit: .day), y: .value("记录", 1))
+                        .foregroundStyle(by: .value("状态", has ? "有夜间数据" : "缺失"))
+                }
+            }
+            .chartForegroundStyleScale(["有夜间数据": Theme.heartData, "缺失": Color.gray.opacity(0.3)])
+            .chartYAxis(.hidden)
+            .frame(height: 70)
+            .accessibilityLabel("佩戴记录：近 \(days) 天中 \(recorded) 天有夜间数据")
+            Legend("\(recorded)/\(days) 天有夜间心率或睡眠数据。")
+        }
+    }
+
+    /// The line under a chart that says what its marks mean.
+    private struct Legend: View {
+        let text: Text
+        init(_ s: LocalizedStringKey) { text = Text(s) }
+        var body: some View { text.font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+    }
+}
+
+extension AgentChartMetric {
+    var icon: String {
+        switch self {
         case .rhr: "heart.fill"
         case .sleep: "bed.double.fill"
         case .activity: "figure.walk"
         case .glucose: "drop.fill"
         case .bp: "heart.text.square.fill"
         case .wear: "applewatch"
+        case .hrv: "waveform.path.ecg"
+        case .egfr: "testtube.2"
         }
     }
 }

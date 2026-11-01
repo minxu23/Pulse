@@ -24,6 +24,16 @@ enum TrainingCheck {
 
     enum Verdict: Equatable {
         case go, easier, notAdvised, morning
+
+        /// The tag over the answer; none while it waits for the morning.
+        var status: AgentStatus? {
+            switch self {
+            case .go: .good("可以练")
+            case .easier: .attention("降低强度")
+            case .notAdvised: .attention("不建议")
+            case .morning: nil
+            }
+        }
     }
 
     static func isRequest(_ q: String) -> Bool {
@@ -275,6 +285,8 @@ enum TrainingCheck {
         // The user's own word for the activity, when it is a plain one ("跑步"), for the weather sentence.
         let asked = ["跑步", "骑行", "骑车", "快走", "散步", "徒步", "爬山", "游泳"].first { q.contains($0) } ?? (q.contains("跑") ? "跑步" : session.label)
         var head: String
+        // The tag over the answer, as the verdict reads; a rest day or a tired day says so instead.
+        var status = verdict.status
         switch verdict {
         case .notAdvised: head = "不建议\(dayText)做\(session.label)。"
         case .easier: head = session == .easy ? "\(dayText)可以做轻松的活动，但量要少一点。" : "\(dayText)可以练，但要降低强度。"
@@ -293,6 +305,7 @@ enum TrainingCheck {
             }
         } else if defaulted, plannedTraining.isEmpty, verdict == .go, target == today {
             head = "\(dayText)计划里是休息，状态不错，想动的话做点轻松活动就好。"
+            status = .good("状态不错")
         }
         // Tired today: the answer is about how the user feels, with the plan for the day.
         if AskedSymptom.find(in: q) == .fatigue, target == today, verdict != .notAdvised {
@@ -304,6 +317,7 @@ enum TrainingCheck {
                                   destination: .plan, conclusion: rest)
             }
             head = "累的话\(dayText)的「\(plannedTraining[0].title)」降一级：强度放轻、时间缩短三分之一，练着更累就停。"
+            status = .attention("降一级")
         }
         var parts: [String] = [([head] + facts + blockers).joined(separator: "")]
         if !(cautions + weatherNotes).isEmpty { parts.append((cautions + weatherNotes).joined(separator: "")) }
@@ -361,7 +375,8 @@ enum TrainingCheck {
                           destination: blocks.isEmpty ? .plan : nil, blocks: blocks,
                           // Not advised: the reason goes with the verdict, so a model rewording it keeps both.
                           conclusion: head + (sleepLine ?? (verdict == .notAdvised ? blockers.first ?? "" : ""))
-                            + (weatherLine.flatMap { w in c.weather(on: target)?.movesIndoors == true ? w : nil } ?? ""))
+                            + (weatherLine.flatMap { w in c.weather(on: target)?.movesIndoors == true ? w : nil } ?? ""),
+                          status: status, figure: measured ? .readiness(c) : nil)
     }
 
     /// "现在 / 今晚适合…吗？" near or after bedtime: graded by the time left before sleep.
