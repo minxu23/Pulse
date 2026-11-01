@@ -14,6 +14,14 @@ struct PulseApp: App {
         }
     }()
 
+    init() {
+        // Pulse is written in Simplified Chinese only. On a device that lists Traditional Chinese
+        // before Simplified, computed strings and text fields were set the Traditional way (centred
+        // ，。 and other glyph forms) while strings from the app bundle stayed Simplified, so pages
+        // looked like two fonts. Takes effect before the first text is drawn.
+        UserDefaults.standard.set(["zh-Hans"], forKey: "AppleLanguages")
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

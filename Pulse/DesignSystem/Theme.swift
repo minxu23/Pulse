@@ -94,6 +94,9 @@ extension Theme {
         static let tight: CGFloat = 4
         /// An inline glyph and its text (every icon + text pair).
         static let iconGap: CGFloat = 6
+        /// Extra space between the lines of Chinese text read as prose (Health Agent answers): the
+        /// system line height is made for Latin letters and packs Chinese lines tight.
+        static let readingLine: CGFloat = 6
         /// Rows, chips and tiles of one group.
         static let item: CGFloat = 8
         /// Blocks inside a card; an icon tile and its text; padding inside a nested tile.

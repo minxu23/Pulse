@@ -10,6 +10,7 @@ struct AgentAnswerView: View {
     let context: AgentContext
     /// The cards shown under the answer; what a plan card shows is not repeated in the text.
     var cards: [AgentUIBlock] = []
+    @ScaledMetric(relativeTo: .body) private var lineGap = Theme.Space.readingLine
 
     var body: some View {
         let sections = AgentAnswerLayout.sections(of: text, reply: reply, cards: cards)
@@ -36,6 +37,7 @@ struct AgentAnswerView: View {
                 }
             }
         }
+        .lineSpacing(lineGap)
         .textSelection(.enabled)
     }
 
