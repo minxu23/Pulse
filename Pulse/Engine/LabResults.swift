@@ -243,34 +243,36 @@ enum LabAnalyzer {
 
     /// Readings that should not wait for the next visit: potassium far out of range, eGFR in the
     /// kidney-failure range, or a fall of a quarter since the previous result.
-    static func alert(for new: [LabPoint], history: [LabPoint], profile p: ProfileSnapshot) -> AlertCandidate? {
+    static func alerts(for new: [LabPoint], history: [LabPoint], profile p: ProfileSnapshot) -> [AlertCandidate] {
         let day = AlertEngine.dayKey(new.first?.date ?? .app)
+        var out: [AlertCandidate] = []
         if let k = new.first(where: { $0.kind == .potassium }), status(.potassium, k.value, profile: p).level == .urgent {
-            return AlertCandidate(
+            out.append(AlertCandidate(
                 dedupeKey: "labK-\(day)", kind: .labAbnormal, severity: .urgent,
                 title: "血钾\(k.value < 3.5 ? "明显偏低" : "明显偏高")（\(k.valueText) mmol/L）",
                 detail: "化验日期 \(k.date.formatted(.dateTime.month().day()))，常见参考范围 3.5–5.3 mmol/L。",
                 guidance: "血钾过高或过低都会影响心跳。请今天就联系开化验单的医生，按医生的安排复查或处理；在这之前不做运动，不自己加减补钾药、利尿剂等药物，也不自己大量吃或停吃含钾食物。\n出现心慌、心跳不规律、胸闷或明显无力时，" + AlertEngine.emergencyLine,
-                relatedDate: k.date, valueText: "\(k.valueText) mmol/L")
+                relatedDate: k.date, valueText: "\(k.valueText) mmol/L"))
         }
-        guard let e = new.first(where: { $0.kind == .egfr }) else { return nil }
+        guard let e = new.first(where: { $0.kind == .egfr }) else { return out }
         if e.value < 15 {
-            return AlertCandidate(
+            out.append(AlertCandidate(
                 dedupeKey: "labEgfr-\(day)", kind: .labAbnormal, severity: .consult,
                 title: "eGFR 低于 15", detail: "\(e.valueText) mL/min/1.73m²（\(e.date.formatted(.dateTime.month().day()))），在肾衰竭范围。",
                 guidance: "请尽快和肾内科医生沟通结果和下一步安排。出现明显水肿、气短、尿量明显减少或恶心呕吐时，尽快就医。",
-                relatedDate: e.date, valueText: e.valueText)
+                relatedDate: e.date, valueText: e.valueText))
+            return out
         }
         let earlier = egfrSeries(history).filter { $0.date < e.date && $0.date > e.date.adding(days: -400) }
         if let prev = earlier.last, (e.value - prev.value) / prev.value <= -0.25 {
-            return AlertCandidate(
+            out.append(AlertCandidate(
                 dedupeKey: "labEgfrDrop-\(day)", kind: .labAbnormal, severity: .consult,
                 title: "eGFR 比上次下降 \(Int(((prev.value - e.value) / prev.value * 100).rounded()))%",
                 detail: "\(prev.date.formatted(.dateTime.month().day())) \(prev.valueText) → \(e.date.formatted(.dateTime.month().day())) \(e.valueText)。",
                 guidance: "肾功能短时间明显下降，可能和脱水、感染、新用的药（比如止痛药）有关，也可能是病情变化。请尽快把结果给医生看，按医生的安排复查。不要自己停用或加用药物。",
-                relatedDate: e.date, valueText: e.valueText)
+                relatedDate: e.date, valueText: e.valueText))
         }
-        return nil
+        return out
     }
 
     /// One line for the language models and the clinician summary.

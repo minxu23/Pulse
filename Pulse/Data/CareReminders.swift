@@ -127,6 +127,14 @@ enum CareReminders {
         return pending.filter { $0.hasPrefix(prefix) && !kept.contains($0) }
     }
 
+    /// When a reminder rings. The calendar goes with the numbers: without it iOS reads them on the
+    /// phone's own calendar, where 2026 can be a year long past (the Buddhist calendar) or far ahead.
+    static func when(_ fire: Date) -> DateComponents {
+        var c = Calendar.pulse.dateComponents([.year, .month, .day, .hour, .minute], from: fire)
+        c.calendar = Calendar.pulse
+        return c
+    }
+
     /// The last schedule change: each waits for the one before, so the newest always ends up in place.
     @MainActor private static var latest: _Concurrency.Task<Void, Never>?
 
@@ -152,9 +160,8 @@ enum CareReminders {
                 content.title = p.title
                 content.body = p.body
                 content.sound = .default
-                let when = Calendar.pulse.dateComponents([.year, .month, .day, .hour, .minute], from: p.fire)
                 try? await center.add(UNNotificationRequest(identifier: p.id, content: content,
-                                                            trigger: UNCalendarNotificationTrigger(dateMatching: when, repeats: false)))
+                                                            trigger: UNCalendarNotificationTrigger(dateMatching: when(p.fire), repeats: false)))
             }
         }
         latest = change

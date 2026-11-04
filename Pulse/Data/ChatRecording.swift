@@ -26,6 +26,25 @@ extension DataHub {
         var planItem: UUID? = nil
         var planMinutes: Int? = nil
         var planStatus: PlanStatus? = nil
+        /// Alerts the record raised, and those it made more serious as they were before.
+        var events: [UUID] = []
+        var raised: [EventBefore] = []
+    }
+
+    /// An alert as it stood, to put back if the record that changed it is taken back.
+    struct EventBefore: Equatable {
+        let id: UUID, severity: String, status: String, title: String, detail: String, guidance: String, value: String
+        let date: Date, followUpDue: Date?, resolvedAt: Date?
+
+        init(_ e: HealthEvent) {
+            id = e.id; severity = e.severityRaw; status = e.statusRaw; title = e.title; detail = e.detail
+            guidance = e.guidance; value = e.valueText; date = e.relatedDate; followUpDue = e.followUpDue; resolvedAt = e.resolvedAt
+        }
+
+        func restore(_ e: HealthEvent) {
+            e.severityRaw = severity; e.statusRaw = status; e.title = title; e.detail = detail; e.guidance = guidance
+            e.valueText = value; e.relatedDate = date; e.followUpDue = followUpDue; e.resolvedAt = resolvedAt
+        }
     }
 
     /// Records the card's items; the reminder's date is the one shown on the card. New readings are
@@ -33,6 +52,7 @@ extension DataHub {
     @discardableResult
     static func applyRecord(_ p: RecordProposal, reminderDue: Date? = nil, in ctx: ModelContext) -> RecordUndo {
         var undo = RecordUndo()
+        let storedEvents = ((try? ctx.fetch(FetchDescriptor<HealthEvent>())) ?? []).map(EventBefore.init)
         let snap = profile(in: ctx)?.snapshot(medications: medications(in: ctx)) ?? ProfileSnapshot()
         var newLabs: [LabPoint] = []
         let history = ((try? ctx.fetch(FetchDescriptor<LabResult>())) ?? []).map(\.point)
@@ -57,7 +77,7 @@ extension DataHub {
                 let r = record(for: p.time, in: ctx)
                 r.waterMl += ml
                 undo.waterDay = r.day
-                undo.waterMl = ml
+                undo.waterMl += ml
             case .swelling, .urine, .foamyUrine:
                 let r = record(for: p.time, in: ctx)
                 if undo.signsDay == nil {
@@ -134,10 +154,17 @@ extension DataHub {
                 undo.tasks.append(t.id)
             }
         }
-        if let c = LabAnalyzer.alert(for: newLabs, history: history, profile: snap) { addEvent(c, in: ctx) }
+        for c in LabAnalyzer.alerts(for: newLabs, history: history, profile: snap) { addEvent(c, in: ctx) }
         try? ctx.save()
         if !undo.vitals.isEmpty || undo.signsDay != nil { refreshAlerts(in: ctx) }
         try? ctx.save()
+        for e in (try? ctx.fetch(FetchDescriptor<HealthEvent>())) ?? [] {
+            if let before = storedEvents.first(where: { $0.id == e.id }) {
+                if before.severity != e.severityRaw { undo.raised.append(before) }
+            } else {
+                undo.events.append(e.id)
+            }
+        }
         if !undo.tasks.isEmpty { CareReminders.sync(in: ctx) }
         return undo
     }
@@ -159,6 +186,14 @@ extension DataHub {
         for id in u.sessions {
             for s in (try? ctx.fetch(FetchDescriptor<ActivitySession>(predicate: #Predicate { $0.id == id }))) ?? [] { ctx.delete(s) }
         }
+        // What the record raised goes with it: a mistyped reading must not leave an alert behind.
+        for id in u.events {
+            for e in (try? ctx.fetch(FetchDescriptor<HealthEvent>(predicate: #Predicate { $0.id == id }))) ?? [] { ctx.delete(e) }
+        }
+        for before in u.raised {
+            let id = before.id
+            if let e = ((try? ctx.fetch(FetchDescriptor<HealthEvent>(predicate: #Predicate { $0.id == id }))) ?? []).first { before.restore(e) }
+        }
         if let d = u.dietDay, u.diet.count == 4 {
             let r = record(for: d, in: ctx)
             r.proteinFoods = u.diet[0]; r.potassiumFoods = u.diet[1]; r.phosphorusFoods = u.diet[2]; r.saltSources = u.diet[3]
@@ -178,6 +213,11 @@ extension DataHub {
             r.edema = u.edema; r.edemaPlaces = u.places; r.urineOutput = u.urine; r.foamyUrine = u.foamy
         }
         try? ctx.save()
+        // Anything else the rules found while the record was there is found again without it.
+        if !u.events.isEmpty || !u.raised.isEmpty {
+            refreshAlerts(in: ctx)
+            try? ctx.save()
+        }
         if !u.tasks.isEmpty { CareReminders.sync(in: ctx) }
     }
 }

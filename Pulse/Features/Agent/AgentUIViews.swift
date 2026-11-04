@@ -222,8 +222,7 @@ struct PlanProposalCard: View {
         case nil:
             HStack(spacing: Theme.Space.item) {
                 Button {
-                    let undo = DataHub.applyPlanChange(p, in: ctx)
-                    convo.planOutcomes[p.id] = .applied(undo)
+                    convo.planOutcomes[p.id] = DataHub.isOutdated(p, in: ctx) ? .outdated : .applied(DataHub.applyPlanChange(p, in: ctx))
                 } label: { Text("采纳").fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel) }
                 .buttonStyle(.borderedProminent)
                 Button { convo.planOutcomes[p.id] = .dismissed } label: { Text("不用了").frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel) }
@@ -247,6 +246,8 @@ struct PlanProposalCard: View {
             StatusLabel(.neutral("没有采纳，计划保持不变")).font(.subheadline)
         case .undone:
             StatusLabel(.neutral("已撤销，计划恢复原样")).font(.subheadline)
+        case .outdated:
+            StatusLabel(.neutral("这张卡片已过期：\(p.scope.label)的计划后来有了变化，这次没有改动。再说一次想怎么调整，我按现在的计划来。")).font(.subheadline)
         }
     }
 }

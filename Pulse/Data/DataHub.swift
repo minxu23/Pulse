@@ -312,12 +312,21 @@ enum DataHub {
         var trails: [UUID: Bool] = [:]
     }
 
+    /// A card made for a plan that has since changed: the week it would create exists by now, or
+    /// sessions it would change are gone. Adopting it would add a second set of sessions, or nothing.
+    static func isOutdated(_ p: PlanChangeProposal, in ctx: ModelContext) -> Bool {
+        let items = planItems(weekStart: p.weekStart, in: ctx)
+        if p.generated { return !items.isEmpty }
+        let current = Set(items.map(\.id))
+        return p.before.contains { !current.contains($0.id) }
+    }
+
     /// Writes a plan change agreed with the Health Agent. Only sessions that are still planned
     /// change; each keeps an adjustment trail so the plan shows what was changed and why.
     @discardableResult
     static func applyPlanChange(_ p: PlanChangeProposal, in ctx: ModelContext, now: Date = .app) -> PlanUndo {
         var undo = PlanUndo()
-        guard let profile = profile(in: ctx) else { return undo }
+        guard let profile = profile(in: ctx), !isOutdated(p, in: ctx) else { return undo }
         let snap = profile.snapshot(medications: medications(in: ctx))
         let items = planItems(weekStart: p.weekStart, in: ctx)
         let request = p.request.count > 40 ? String(p.request.prefix(40)) + "…" : p.request

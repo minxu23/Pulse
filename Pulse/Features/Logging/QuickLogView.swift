@@ -510,7 +510,7 @@ struct LabLogForm: View {
             ctx.insert(r)
             added.append(r.point)
         }
-        if let c = LabAnalyzer.alert(for: added, history: labs.map(\.point), profile: p) { DataHub.addEvent(c, in: ctx) }
+        for c in LabAnalyzer.alerts(for: added, history: labs.map(\.point), profile: p) { DataHub.addEvent(c, in: ctx) }
         try? ctx.save()
     }
 }

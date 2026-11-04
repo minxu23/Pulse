@@ -16,6 +16,8 @@ final class SpeechInput {
     private let engine = AVAudioEngine()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
+    /// Which listening results belong to: anything from an earlier one is ignored.
+    private(set) var run = 0
 
     var onDevice: Bool { recognizer?.supportsOnDeviceRecognition ?? false }
 
@@ -60,15 +62,13 @@ final class SpeechInput {
             try engine.start()
             transcript = ""
             isRecording = true
+            run += 1
+            let current = run
 
             task = recognizer.recognitionTask(with: req) { [weak self] result, error in
                 let text = result?.bestTranscription.formattedString
                 let done = error != nil || (result?.isFinal ?? false)
-                Task { @MainActor in
-                    guard let self else { return }
-                    if let text { self.transcript = text }
-                    if done { self.finish() }
-                }
+                Task { @MainActor in self?.receive(text, done: done, run: current) }
             }
         } catch {
             errorMessage = "无法开始录音：\(error.localizedDescription)"
@@ -76,11 +76,26 @@ final class SpeechInput {
         }
     }
 
+    /// What the recognizer heard.
+    func receive(_ text: String?, done: Bool, run from: Int) {
+        guard from == run else { return }
+        if let text { transcript = text }
+        if done { finish() }
+    }
+
     /// Stops listening; the final transcript stays in `transcript`.
     func stop() {
         guard isRecording else { return }
         request?.endAudio()
         finish()
+    }
+
+    /// Stops listening and forgets what was heard: once the words are sent or replaced, a final
+    /// result still on its way must not fill the input again.
+    func discard() {
+        run += 1
+        stop()
+        transcript = ""
     }
 
     private func finish() {

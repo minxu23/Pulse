@@ -390,7 +390,7 @@ enum ChatRecord {
     }
 
     /// 「每天」「每晚」「每周一三五」「每周一和周四」「每个月 5 号」.
-    static let repeatWords = #"每隔\s*[0-9一二两三四五六七八九十]+\s*天|每\s*[0-9两三四五六七]\s*天|隔一?天|每(?:天|日|晚|早)|天天|每个?(?:周|星期|礼拜)(?:[一二三四五六日天、和及]|周|星期|礼拜)*|每个?月(?:\s*\d{1,2}\s*[号日])?"#
+    static let repeatWords = #"每隔\s*[0-9一二两三四五六七八九十]+\s*天|每\s*[0-9两三四五六七]\s*天|隔一?天|每(?:天|日|晚|早)|天天|每个?(?:周|星期|礼拜)\s*[0-9一二两三四五六七]\s*次|每个?(?:周|星期|礼拜)(?:[一二三四五六日天、和及]|周|星期|礼拜)*|每个?月(?:\s*\d{1,2}\s*[号日]|\s*[一1]\s*次)?"#
 
     /// The repeat a reminder asks for; a weekly or monthly one without its day has an empty day
     /// (filled in by `reminder`).
@@ -404,6 +404,11 @@ enum ChatRecord {
         }
         if q.range(of: #"隔一?天"#, options: .regularExpression) != nil { return .everyDays(2) }
         if q.range(of: #"每(?:天|日|晚|早)|天天"#, options: .regularExpression) != nil { return .daily }
+        // 「每周三次」 says how often, not which day: spread over the week. Once a week keeps the day named.
+        if let g = AgentQuestion.groups(#"每个?(?:周|星期|礼拜)\s*([0-9一二两三四五六七])\s*次"#, q), let n = AgentQuestion.number(g[0]), n >= 1 {
+            let spread: [Int: [Int]] = [1: [], 2: [2, 5], 3: [2, 4, 6], 4: [2, 3, 5, 7], 5: [2, 3, 4, 5, 6], 6: [2, 3, 4, 5, 6, 7]]
+            return spread[Int(n)].map { .weekly($0) } ?? .daily
+        }
         if let r = q.range(of: #"每个?(?:周|星期|礼拜)(?:[一二三四五六日天、和及]|周|星期|礼拜)*"#, options: .regularExpression) {
             let names: [Character: Int] = ["一": 2, "二": 3, "三": 4, "四": 5, "五": 6, "六": 7, "日": 1, "天": 1]
             let days = Set(q[r].dropFirst().compactMap { names[$0] })
@@ -422,7 +427,7 @@ enum ChatRecord {
             let nextMonday = today.weekStart.adding(days: 7)
             return (nextMonday.adding(days: Weekday.mondayFirst.firstIndex(of: wd) ?? 0), g[0] + g[1])
         }
-        if let g = AgentQuestion.groups(#"((?:这|本)?(?:周|星期|礼拜))([一二三四五六日天])"#, q), let wd = names[Character(g[1])] {
+        if let g = AgentQuestion.groups(#"((?:这|本)?(?:周|星期|礼拜))([一二三四五六日天])(?!\s*次)"#, q), let wd = names[Character(g[1])] {
             var d = today.weekStart.adding(days: Weekday.mondayFirst.firstIndex(of: wd) ?? 0)
             if d < today { d = d.adding(days: 7) }
             return (d, g[0] + g[1])

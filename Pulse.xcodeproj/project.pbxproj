@@ -275,7 +275,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Pulse;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Pulse 读取静息心率、心率变异性、睡眠、活动、血压、血糖等数据，用于分析静息心率趋势、评估身体准备度和生成个人化计划。数据保存在本机；只有在你主动开启「云端模型（测试）」时，向 Health Agent 提问才会发送数据摘要。";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Pulse 读取静息心率、心率变异性、睡眠、活动、血压、血糖等数据，用于分析静息心率趋势、评估身体准备度和生成个人化计划。数据保存在本机；只有你在「回答方式」里选择了云端，向 Health Agent 提问时才会发送问题和相关的健康数据，发送前会去掉姓名、电话等信息。";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Pulse 不会向健康 App 写入数据。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Pulse 用你的大致位置获取天气预报，按天气调整户外训练。位置只用于向 Apple 天气查询，不会保存或发送给其他服务。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "向 Health Agent 语音提问时使用麦克风。录音只用于转成文字，不会保存。";
@@ -311,7 +311,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Pulse;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Pulse 读取静息心率、心率变异性、睡眠、活动、血压、血糖等数据，用于分析静息心率趋势、评估身体准备度和生成个人化计划。数据保存在本机；只有在你主动开启「云端模型（测试）」时，向 Health Agent 提问才会发送数据摘要。";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Pulse 读取静息心率、心率变异性、睡眠、活动、血压、血糖等数据，用于分析静息心率趋势、评估身体准备度和生成个人化计划。数据保存在本机；只有你在「回答方式」里选择了云端，向 Health Agent 提问时才会发送问题和相关的健康数据，发送前会去掉姓名、电话等信息。";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Pulse 不会向健康 App 写入数据。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Pulse 用你的大致位置获取天气预报，按天气调整户外训练。位置只用于向 Apple 天气查询，不会保存或发送给其他服务。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "向 Health Agent 语音提问时使用麦克风。录音只用于转成文字，不会保存。";

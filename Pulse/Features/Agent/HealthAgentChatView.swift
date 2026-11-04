@@ -147,18 +147,17 @@ private struct AgentChatContent: View {
 
     /// 重新编辑: the question back in the input field.
     private func edit(_ text: String) {
-        if speech.isRecording { speech.stop() }
+        speech.discard()
         input = text
         focused = true
     }
 
     private func submit() {
-        if speech.isRecording { speech.stop() }
         let q = input
         let voice = usedVoice
+        speech.discard()
         input = ""
         usedVoice = false
-        speech.transcript = ""
         ask(q, spoken: voice)
     }
 

@@ -171,6 +171,8 @@ enum PlanOutcome: Equatable {
     case applied(DataHub.PlanUndo)
     case dismissed
     case undone
+    /// The plan changed after the card was made, so nothing was written.
+    case outdated
 }
 
 /// What happened to a 记下 card for a reading, water, a symptom or a reminder.

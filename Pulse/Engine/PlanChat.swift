@@ -88,15 +88,7 @@ enum PlanChat {
                 hits.append((r, wd))
             }
         }
-        // Before 5 am the night is not over: "明天" is the coming daytime.
-        let early = TrainingCheck.isBeforeWake(now, profile: p) ? 1 : 0
-        for (word, offset) in [("今天", 0), ("明天", 1 - early), ("后天", 2 - early)] {
-            var from = q.startIndex
-            while let r = q.range(of: word, range: from..<q.endIndex) {
-                hits.append((r, now.adding(days: offset).weekday))
-                from = r.upperBound
-            }
-        }
+        hits += relativeDays(in: q, now: now, profile: p).map { ($0.range, $0.day.weekday) }
         hits.sort { $0.0.lowerBound < $1.0.lowerBound }
         var out: [Int] = []
         for (i, h) in hits.enumerated() {
@@ -108,6 +100,21 @@ enum PlanChat {
                 }
             }
             if !out.contains(h.1) { out.append(h.1) }
+        }
+        return out
+    }
+
+    /// 今天, 明天 and 后天 in a question, with the dates they mean. Before 5 am the night is not
+    /// over: "明天" is the coming daytime.
+    static func relativeDays(in q: String, now: Date, profile p: ProfileSnapshot? = nil) -> [(range: Range<String.Index>, day: Date)] {
+        let early = TrainingCheck.isBeforeWake(now, profile: p) ? 1 : 0
+        var out: [(range: Range<String.Index>, day: Date)] = []
+        for (word, offset) in [("今天", 0), ("明天", 1 - early), ("后天", 2 - early)] {
+            var from = q.startIndex
+            while let r = q.range(of: word, range: from..<q.endIndex) {
+                out.append((r, now.startOfDay.adding(days: offset)))
+                from = r.upperBound
+            }
         }
         return out
     }
@@ -178,10 +185,13 @@ enum PlanChat {
 
     static func parse(_ q: String, context c: AgentContext) -> Parse {
         var scope: PlanScope = q.contains("下周") || q.contains("下个星期") ? .nextWeek : .thisWeek
+        // 「明天没空」 said on a Sunday is about next week's Monday.
+        let named = relativeDays(in: q, now: c.now, profile: c.profile).map(\.day)
+        if scope == .thisWeek, !named.isEmpty, named.allSatisfy({ $0 >= weekStart(.nextWeek, now: c.now) }) { scope = .nextWeek }
         var (ws, items, _) = slots(scope, context: c)
         var open = editable(items, weekStart: ws, now: c.now)
-        // Nothing left to change this week: work on next week instead.
-        if scope == .thisWeek, !open.contains(where: { !training(items, on: day($0, ws)).isEmpty }) {
+        // Nothing left to change this week: work on next week instead (a day named stays that day).
+        if scope == .thisWeek, named.isEmpty, !open.contains(where: { !training(items, on: day($0, ws)).isEmpty }) {
             scope = .nextWeek
             (ws, items, _) = slots(scope, context: c)
             open = editable(items, weekStart: ws, now: c.now)
@@ -595,7 +605,7 @@ enum PlanChat {
     /// The first sentence of an answer with a plan change, pinned so the change is never presented as made.
     /// Asked about this week when nothing is left in it, it says why the change is for next week.
     static func lead(for p: PlanChangeProposal) -> String {
-        let movedOn = p.scope == .nextWeek && !p.request.contains("下周") && !p.request.contains("下个星期")
+        let movedOn = p.scope == .nextWeek && !["下周", "下个星期", "明天", "后天"].contains { p.request.contains($0) }
         return movedOn ? "这周剩下的日子已经没有训练了，下周计划可以这样调整，点「采纳」后才会生效。"
             : "按你说的，\(p.scope.label)计划可以这样调整，点「采纳」后才会生效。"
     }

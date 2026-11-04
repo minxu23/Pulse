@@ -64,12 +64,12 @@ struct LabDietTests {
         #expect(LabAnalyzer.egfrSeries(mixed).map(\.value) == [50, 47])
 
         let p = ProfileSnapshot()
-        let k = LabAnalyzer.alert(for: [lab(0, .potassium, 6.2)], history: [], profile: p)
+        let k = LabAnalyzer.alerts(for: [lab(0, .potassium, 6.2)], history: [], profile: p).first
         #expect(k?.severity == .urgent && k?.kind == .labAbnormal && k?.guidance.contains("不做运动") == true)
-        #expect(LabAnalyzer.alert(for: [lab(0, .potassium, 5.0)], history: [], profile: p) == nil)
-        let drop = LabAnalyzer.alert(for: [lab(0, .egfr, 42)], history: [lab(150, .egfr, 60)], profile: p)
+        #expect(LabAnalyzer.alerts(for: [lab(0, .potassium, 5.0)], history: [], profile: p).first == nil)
+        let drop = LabAnalyzer.alerts(for: [lab(0, .egfr, 42)], history: [lab(150, .egfr, 60)], profile: p).first
         #expect(drop?.title == "eGFR 比上次下降 30%")
-        #expect(LabAnalyzer.alert(for: [lab(0, .egfr, 55)], history: [lab(150, .egfr, 60)], profile: p) == nil)
+        #expect(LabAnalyzer.alerts(for: [lab(0, .egfr, 55)], history: [lab(150, .egfr, 60)], profile: p).first == nil)
     }
 
     @Test func kidneyDietAgainstTheDoctorsAmounts() {
