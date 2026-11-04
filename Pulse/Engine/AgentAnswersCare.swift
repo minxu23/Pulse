@@ -313,7 +313,7 @@ extension HealthAgent {
         // The headline already says the story's main thread; the bright spot and the difficulty follow.
         let story = [b.story?.bright.map { "好的一面是，\($0)。" }, b.story?.hard.map { "需要留意的是，\($0)。" }].compactMap { $0 }.joined()
         return AgentReply(text: lines([first, story.isEmpty ? nil : story, bullets(numbers), "完整的复盘在「复盘 › \(last ? "本周复盘（切到上周）" : "本周复盘")」。"]),
-                          sources: ["本周记录"], followUps: ["接下来我该关注什么？"], intent: .overall, conclusion: first)
+                          sources: ["本周记录"], followUps: ["接下来我该关注什么？"], intent: .overall, conclusion: first, asWrittenOnDevice: true)
     }
 
     static func bestDays(_ a: AgentQuestion, context c: AgentContext) -> AgentReply {

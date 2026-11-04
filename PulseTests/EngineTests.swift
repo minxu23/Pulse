@@ -1184,11 +1184,11 @@ struct AgentPlanDeviceTests {
         #expect(prompt.contains(k))
         // A model answer that drops or flips the verdict gets it put back in front; labels are stripped.
         #expect(HealthAgent.finalize("结论：明天适合练，注意热身。", of: r).hasPrefix(k))
-        #expect(HealthAgent.finalize(k + "现在先睡。", of: r) == k + "现在先睡。")
+        #expect(HealthAgent.finalize(k + "现在先睡。", of: r).hasPrefix(k + "现在先睡。"))
         #expect(!HealthAgent.finalize("用户数据摘要：\n" + k, of: r).contains("用户数据摘要"))
         #expect(!HealthAgent.finalize("【现在】" + k, of: r).contains("【"))
         for echoed in ["第一句：", "第一句:", "第一句话：", "**第一句**：", "**第一句：**"] {
-            #expect(HealthAgent.finalize(echoed + k, of: r) == k, "\(echoed)")
+            #expect(HealthAgent.finalize(echoed + k, of: r) == HealthAgent.finalize(k, of: r) && HealthAgent.finalize(echoed + k, of: r).hasPrefix(k), "\(echoed)")
         }
         // While streaming: a label is stripped as soon as it is complete and held back while half-written.
         #expect(HealthAgent.stripLabels("第一句：根据当前", streaming: true) == "根据当前")

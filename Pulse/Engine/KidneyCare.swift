@@ -286,6 +286,10 @@ enum Dialysis {
         guard p.onHemodialysis else { return nil }
         var s = "血液透析：\(schedule(p))" + (p.dryWeightKg.map { "，干体重 \($0.oneDecimal) kg" } ?? "")
         if isDay(now, p) { s += "，今天是透析日" }
+        // Said outright: 「周一、三、五」 left a model to work out that tomorrow isn't one.
+        if let n = (1...7).first(where: { isDay(now.adding(days: $0), p) }) {
+            s += "，下一次透析是\(["明天", "后天"].indices.contains(n - 1) ? ["明天", "后天"][n - 1] : "\(n) 天后")（\(Weekday.name(now.adding(days: n).weekday))）"
+        }
         if let g = gain(vitals, profile: p, now: now) { s += "；最近体重比\(g.against)多 \(g.kg.oneDecimal) kg" }
         return s + "。透析日不安排训练；饮水按透析中心定的量。"
     }

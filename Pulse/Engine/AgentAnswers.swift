@@ -48,6 +48,12 @@ extension HealthAgent {
             if s == .fatigue, TrainingCheck.isRequest(q) { return nil }
             return SymptomGuide.reply(s, a, context: c)
         }
+        // 「肾病为什么要少吃盐」 has an answer of its own, below.
+        if let e = a.effect, e.cause != .salt || a.form != .why { return effectAnswer(e, a, context: c) }
+        if let ask = runVolumeAsk(a) { return runVolume(ask, a, context: c) }
+        if let r = shiftExercise(a, context: c) ?? glucoseWhy(a, context: c) { return r }
+        if asksActivityLeft(a) { return activityLeft(a, context: c) }
+        if let ask = sleepAmountAsk(a) { return sleepAmount(ask, a, context: c) }
         if let k = knowledge(a, context: c) { return k }
         if let r = careAnswer(a, context: c) { return r }
         switch a.reading {
@@ -64,8 +70,14 @@ extension HealthAgent {
             return medTiming(a, context: c)
         }
         if q.contains("空腹"), a.has(["跑", "运动", "练", "锻炼", "健身"]) { return fastedExercise(c) }
-        if a.has(["马拉松", "全马", "半马"]), a.form == .canI || a.has(["适合", "能跑", "可以跑", "准备"]) {
-            if c.race == nil { return marathonFit(a, context: c) }
+        // A race the plan isn't built around is judged on its own: 「下个月想跑半马」 with a marathon set.
+        if let race = a.race, a.form != .explain, !a.has(["补给", "能量胶"]) {
+            if c.race == nil, a.form == .canI || a.form == .how || a.has(["适合", "能跑", "可以跑", "准备", "想跑", "要跑", "来得及", "怎么练", "配速"]) {
+                return marathonFit(a, context: c)
+            }
+            if c.race != nil, race.differs(from: c) { return marathonFit(a, context: c) }
+        }
+        if c.race != nil, a.has(["马拉松", "全马", "半马"]), a.form == .canI || a.has(["适合", "能跑", "可以跑", "准备"]) {
             var r = marathon(c, question: q)
             r.intent = .marathon
             return r
@@ -419,30 +431,74 @@ extension HealthAgent {
                           sources: ["运动常识"], followUps: ["跑步前吃香蕉好吗？"], destination: .plan, intent: .exercise, conclusion: first)
     }
 
-    /// 「我适合跑马拉松吗」 without a race set: from the running of the last 8 weeks.
+    /// A race other than the one set, or with none set (「我适合跑马拉松吗」): judged from the running
+    /// of the last 8 weeks, and from the time left when the question says when.
     static func marathonFit(_ a: AgentQuestion, context c: AgentContext) -> AgentReply {
         let p = c.profile
         let runs = c.workouts.filter { $0.type == .run && $0.start > c.now.adding(days: -56) }
         let km = runs.compactMap(\.distanceKm)
         let weekly = km.reduce(0, +) / 8
         let longest = km.max() ?? 0
-        let full = !a.has(["半马"])
+        let race = a.race ?? AskedRace(distance: .full)
+        let label = race.distance.label
+        let base = runs.isEmpty ? 0 : ((weekly < 15 || longest < 8) ? 1 : ((weekly < 30 || longest < 16) ? 2 : 3))
+        let record = runs.isEmpty ? "记录里近 8 周还没有跑步" : "近 8 周你平均每周跑 \(Int(weekly)) km，最长一次 \(longest.oneDecimal) km"
+        let needed = race.distance.weeksNeeded(base: base)
         var first: String
-        if runs.isEmpty {
-            first = "要看你现在的跑步基础：记录里近 8 周还没有跑步。先从每周 3 次、每次 20–30 分钟的轻松跑开始，能连续跑 1 小时以后再考虑比赛。"
-        } else if weekly < 15 || longest < 8 {
-            first = "现在先准备 10 公里或半马更合适：近 8 周你平均每周跑 \(Int(weekly)) km，最长一次 \(longest.oneDecimal) km。"
-        } else if weekly < 30 || longest < 16 {
-            first = full ? "全马还需要再积累 3–4 个月；半马现在就可以开始准备（8–12 周）：近 8 周你平均每周 \(Int(weekly)) km，最长一次 \(longest.oneDecimal) km。"
-                : "半马可以，准备 8–12 周就够：近 8 周你平均每周 \(Int(weekly)) km，最长一次 \(longest.oneDecimal) km。"
+        var advice: String? = nil
+        var plan: [String] = []
+        if a.has(["配速"]) {
+            if let pr = c.racePrediction {
+                let minutes = RacePredictor.riegel(distanceKm: pr.basisKm, minutes: pr.basisMinutes, targetKm: race.distance.km)
+                first = "按近 8 周最好的一次训练（\(pr.basisKm.oneDecimal) km）估算，\(label)约 \(RacePredictor.timeText(Int(minutes.rounded())))，平均配速约 \(MarathonPlanner.paceText(minutes / race.distance.km))。"
+                advice = "训练跑通常不是全力，这个估算偏保守。"
+                plan = ["起跑别快，前 3 公里比这个配速慢 5–10 秒", "后半程还有力气再提一点"]
+            } else {
+                first = "记录里近 8 周还没有 5 公里以上的跑步，估不出\(label)配速。"
+                advice = "先用能完整说话的速度跑，跑过一次 5–10 公里后再算。"
+            }
+        } else if let weeks = race.weeks, let when = race.when {
+            if weeks >= needed {
+                first = "\(when)跑\(label)来得及：\(record)，按这个基础大约要准备 \(needed) 周。"
+            } else if weeks * 2 >= needed {
+                first = "\(when)跑\(label)时间有点紧：\(record)，按这个基础最好准备 \(needed) 周。"
+                advice = "如果已经报了名，就当成一次长距离：跑走结合，以完赛、不受伤为目标。"
+            } else {
+                first = "\(when)跑\(label)来不及，不建议：\(record)，按这个基础至少要准备 \(needed) 周。"
+                advice = "可以换一场更短的比赛，或者定一场 \(needed) 周以后的。"
+            }
         } else {
-            first = "有基础：近 8 周你平均每周 \(Int(weekly)) km，最长一次 \(longest.oneDecimal) km，准备全马一般需要 16–20 周的专项训练。"
+            switch (base, race.distance) {
+            case (0, _):
+                first = "要看你现在的跑步基础：记录里近 8 周还没有跑步。先从每周 3 次、每次 20–30 分钟的轻松跑开始，能连续跑 1 小时以后再考虑比赛。"
+            case (1, .tenK): first = "10 公里可以，准备 6–8 周就够：\(record)。"
+            case (1, .half): first = "半马可以，但要先打基础，大约准备 12 周：\(record)。"
+            case (1, .full): first = "现在先准备 10 公里或半马更合适：\(record)。"
+            case (2, .tenK), (3, .tenK): first = "10 公里没问题：\(record)。"
+            case (2, .half): first = "半马可以，准备 8–12 周就够：\(record)。"
+            case (2, .full): first = "全马还需要再积累 3–4 个月；半马现在就可以开始准备（8–12 周）：\(record)。"
+            case (_, .half): first = "半马没问题，准备 4–6 周就够：\(record)。"
+            default: first = "有基础：\(record)，准备全马一般需要 16–20 周的专项训练。"
+            }
         }
-        var parts: [String?] = [first]
+        var parts: [String?] = [first, advice]
+        if let set = c.race, race.differs(from: c) {
+            parts.append("你在「专项运动」里设的是 \(set.weeksToRace) 周后的\(c.raceName.isEmpty ? "全程马拉松" : c.raceName)，计划是按它排的，这场没有算进去。")
+        }
         if p.cardiacLimited || p.intensityCapped {
             parts.append("你记录了\((p.intensityCaps + (p.cardiacLimited ? ["心血管相关情况"] : [])).joined(separator: "、"))，报名前先请医生评估能不能做长时间的耐力训练。")
         }
-        parts.append(bullets(["每周加量不超过 10%，每 3–4 周减量一周", "在「专项运动」里填上比赛日期和目标，Pulse 会按周排出计划"]))
+        if a.form == .how || a.has(["怎么练", "怎么跑", "准备"]) {
+            let week: [String] = switch race.distance {
+            case .tenK: ["每周跑 3 次：两次轻松跑，一次节奏跑或间歇", "长距离慢慢加到 10–12 km"]
+            case .half: ["每周跑 3–4 次：一次长距离，一次节奏跑，其余轻松跑", "长距离慢慢加到 16–18 km，赛前一周减量"]
+            case .full: ["每周跑 4–5 次，长距离每 2–3 周加一点", "赛前 2–3 周开始减量"]
+            }
+            plan += week
+        }
+        plan += ["每周加量不超过 10%，每 3–4 周减量一周",
+                 c.race == nil ? "在「专项运动」里填上比赛日期和目标，Pulse 会按周排出计划" : "想以这场为主，就到「专项运动」改比赛日期，Pulse 会重排计划"]
+        parts.append(bullets(plan))
         return AgentReply(text: lines(parts), sources: ["跑步记录 近 8 周"], followUps: ["怎样安排运动更有效？"], destination: .marathon,
                           intent: .marathon, conclusion: first)
     }

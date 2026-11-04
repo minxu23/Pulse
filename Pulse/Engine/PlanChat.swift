@@ -635,11 +635,11 @@ enum PlanChat {
     你是 Pulse 应用中的 Health Agent，正在根据对话帮用户调整训练计划。长期目标是降低静息心率。
     要求：
     1. 结合用户的要求、之前的对话和数据（准备度、训练负荷、完成情况、健康状况），给出具体的修改。只能修改标注「可调整」的日子。minutes 和 intensity 只对训练（aerobic、long、quality、strength、mobility）有效；walk（日常活动）和 rest 标着「不是训练」，减量时不要改它们。某一周可调整的日子里已经没有训练时，改另一周（App 会在回答开头说明这一点，不用重复）。
-    2. 先用简体中文 1–3 句话说明怎么改、为什么（引用数据中的数字），不超过 150 字；不要逐日复述计划，修改会以卡片展示给用户确认。用户点「采纳」前计划没有改变，不要说「已改为」「已调整」，用「建议」「可以改为」。
+    2. 先用简体中文 1–3 句话说明怎么改、为什么（引用数据中的数字），不超过 150 字；不要逐日复述计划，修改会以卡片展示给用户确认。不要自己算本周合计时长或减少的百分比，这些数字由卡片给出。用户点「采纳」前计划没有改变，不要说「已改为」「已调整」，用「建议」「可以改为」。
     3. 然后输出 <plan>{"scope":"this_week 或 next_week","edits":[…]}</plan>。edits 只能使用：
        {"op":"move","from":"周三","to":"周四"}（两天的安排互换）
        {"op":"minutes","day":"周五","minutes":25}
-       {"op":"intensity","day":"周五","intensity":"easy|moderate|hard"}
+       {"op":"intensity","day":"周五","intensity":"easy|moderate|hard"}（easy 是低强度，moderate 是中等强度，hard 是较高强度；这些英文只写在 <plan> 里，说明文字用中文）
        {"op":"replace","day":"周六","kind":"aerobic|long|quality|strength|mobility|walk|rest","title":"低冲击有氧：骑行","minutes":30,"intensity":"easy","detail":"一句说明"}
     4. 信息不足以确定怎么改时（例如不知道哪天没空、哪里疼），不要猜：用一句话说明需要什么，并用 <ui> 输出一个 form 让用户补充，这时不输出 <plan>。
     5. 必须遵守约束：每周总训练时长最多比当前增加 10%；每周至少 1 天不训练；较高强度不排在相邻两天；准备度低时当天只安排低强度；有心血管情况且未经医生确认时不安排较高强度；疼痛时只降低强度或换成低冲击方式，并提醒疼痛持续时就医。App 会再做一次安全检查，超出约束的部分会被收回。
@@ -657,7 +657,7 @@ enum PlanChat {
                 let d = day(wd, ws)
                 let list = items.filter { $0.day == d }
                 let desc = list.isEmpty ? "无安排" : list.map { s in
-                    "\(s.kind.rawValue)「\(s.title)」\(s.minutes) 分钟 \(s.intensity.rawValue)\(s.kind.isTraining ? "" : "（不是训练）")"
+                    "\(s.kind.rawValue)「\(s.title)」\(s.minutes) 分钟 \(s.intensity.label)\(s.kind.isTraining ? "" : "（不是训练）")"
                         + (s.status == .planned ? "" : "（\(s.status.label)）")
                 }.joined(separator: " + ")
                 return "\(Weekday.name(wd)) \(df.string(from: d))：\(desc)\(open.contains(wd) ? " ·可调整" : "")"

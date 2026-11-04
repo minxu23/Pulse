@@ -352,7 +352,7 @@ final class AgentConversation {
             let prompt = HealthAgent.modelPrompt(question: asked, history: Array(history.suffix(2)), context: context, reply: rule, anonymous: false)
             do {
                 let text = try await OnDeviceModel.respond(instructions: Self.named(HealthAgent.groundedInstructions, context), prompt: prompt) { [weak self] partial in
-                    self?.edit(id) { $0.text = AgentName.firstPerson(HealthAgent.streamed(partial, of: rule), name: context.agentName) }
+                    self?.edit(id) { $0.text = AgentName.firstPerson(HealthAgent.streamed(partial, of: rule, onDevice: true), name: context.agentName) }
                 }
                 guard turn == mine else { return }
                 guard !text.isEmpty else { throw CloudModelError.empty }

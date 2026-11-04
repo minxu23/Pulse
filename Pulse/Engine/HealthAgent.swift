@@ -244,6 +244,10 @@ struct AgentReply: Equatable {
     var status: AgentStatus? = nil
     /// The numbers the answer stands on, drawn as tiles and a small chart with it.
     var figure: AgentFigure? = nil
+    /// Shown as the rules wrote it on the device, though a cloud model may write it. A week's numbers
+    /// beside the 14- and 30-day ones in the digest get mixed up (「平均睡眠 6.0 小时」 for a week of 5.8),
+    /// and 「常见的原因（不一定都是你的情况）」 turns into causes.
+    var asWrittenOnDevice = false
 
     /// Plan changes for the user to adopt (none is adopted while the answer is shown).
     var proposals: [PlanChangeProposal] { blocks.compactMap(\.proposal) }
@@ -251,7 +255,12 @@ struct AgentReply: Equatable {
     /// Shown as the rules wrote it when the on-device model would answer: it turns 「25 → 20 分钟」
     /// into reasons of its own, and 「从你的记录看，可能有关的（不一定是原因）」 into causes
     /// (「睡得少一点」), while the card or the cautious wording is the point.
-    var readsAsWrittenOnDevice: Bool { intent == .planChange || intent == .symptom }
+    var readsAsWrittenOnDevice: Bool { intent == .planChange || intent == .symptom || asWrittenOnDevice }
+    /// On the device the rules' lists are shown word for word after what the model writes: it never
+    /// sees them, because it turns 「睡眠不足 6 小时的早晨…」 into 「睡够 6 小时」 for someone whose
+    /// goal is 7. A list that goes with a plan card or a form keeps its own rules.
+    var listsAsWritten: Bool { intent != .unknown && intent != .planChange && proposals.isEmpty && !hasForm }
+    var hasForm: Bool { blocks.contains { if case .form = $0 { true } else { false } } }
 }
 
 enum AgentIntent: String, CaseIterable {
@@ -288,7 +297,7 @@ enum AgentIntent: String, CaseIterable {
         case .rhr: ["静息心率", "心率", "心跳", "基线"]
         case .readiness: ["准备度", "今天适合", "今天能", "今天要不要", "今天练", "能不能练", "能练", "适合运动", "适合跑", "要不要练", "累"]
         case .sleep: ["睡眠", "睡觉", "失眠", "早睡", "作息", "熬夜", "睡不着", "困", "怎么睡", "补觉", "睡好", "睡不好", "睡不踏实", "睡不安稳", "睡眠差", "早醒", "睡得", "倒班", "夜班"]
-        case .exercise: ["运动", "训练", "计划", "锻炼", "跑步", "有氧", "力量", "步数", "下周"]
+        case .exercise: ["运动", "训练", "计划", "锻炼", "跑步", "有氧", "力量", "步数", "下周", "练得", "练够"]
         case .events: ["异常", "提醒", "警告", "事件"]
         case .doctor: ["医生", "就医", "看病", "复诊", "医院", "门诊", "检查"]
         case .next: ["接下来", "下一步", "关注", "注意什么", "重点", "建议", "该做"]
@@ -594,8 +603,10 @@ enum HealthAgent {
             if let t = told { k = withCondition(k, t, question: question, context: c, before: base) }
             return k
         }
-        if ![.planChange, .device].contains(i) || AgentQuestion(asked).symptom != nil,
-           var r = specific(AgentQuestion(asked), context: c) {
+        // 「这周跑量是不是太多了」「这周还要练多久」 are asked, not ordered, though they read like plan changes.
+        let parsed = AgentQuestion(asked)
+        if ![.planChange, .device].contains(i) || parsed.symptom != nil || runVolumeAsk(parsed) != nil || asksActivityLeft(parsed),
+           var r = specific(parsed, context: c) {
             if let t = told { r = withCondition(r, t, question: question, context: c, before: base) }
             return r
         }
@@ -1620,10 +1631,11 @@ enum HealthAgent {
         let w = c.window
         d.append("现在：\(c.now.formatted(Date.FormatStyle().month().day().weekday(.abbreviated).locale(Locale(identifier: "zh_CN")))) \(Clock.text(c.now.minutesOfDay))\(c.pastBedtime ? "，已过\(c.bedPhrase) 的入睡时间，下次起床约 \(Clock.text(w.nextWake.minutesOfDay))" : "")。")
         if let s = p.shift, let k = w.kind {
-            let next = (1...3).map { s.kind(on: c.logicalToday.adding(days: $0)).label }.joined(separator: "、")
+            // Named one by one: 「之后三天：休息、白班、白班」 was read as two day shifts from tomorrow.
+            let next = zip(["明天", "后天", "大后天"], 1...3).map { $0 + s.kind(on: c.logicalToday.adding(days: $1)).label }.joined(separator: "、")
             var line = "倒班：今天\(k.label)"
             if k == .night { line += " \(Clock.text(s.nightStart))–\(Clock.text(s.nightEnd))" } else if k == .day { line += " \(Clock.text(s.dayStart))–\(Clock.text(s.dayEnd))" }
-            line += "；今天 \(Clock.text(w.wake.minutesOfDay)) 起床，主睡眠 \(Clock.text(w.bed.minutesOfDay)) 开始\(w.afterNightShift ? "（夜班后白天补觉）" : "")；之后三天：\(next)。"
+            line += "；今天 \(Clock.text(w.wake.minutesOfDay)) 起床，主睡眠 \(Clock.text(w.bed.minutesOfDay)) 开始\(w.afterNightShift ? "（夜班后白天补觉）" : "")；\(next)。"
             d.append(line)
         }
         var who = "用户：\(anonymous ? "" : "\(c.name)，")\(p.age) 岁，BMI \(p.bmi.oneDecimal)，活动水平\(p.level.label)"
@@ -1655,7 +1667,7 @@ enum HealthAgent {
         if !dims.isEmpty { add(.progress, "长期进展：\(dims.joined(separator: "、"))。") }
         if c.bp.count > 0 { add(.bp, "血压：近30天平均 \(Int(c.bp.avgSys ?? 0))/\(Int(c.bp.avgDia ?? 0))，\(c.bp.category)；目标 \(p.bpTargetSys)/\(p.bpTargetDia)。") }
         if c.glucose.readings > 0 { add(.glucose, "血糖：14天平均 \(c.glucose.mean?.oneDecimal ?? "—")，范围内 \(Int((c.glucose.tir ?? 0) * 100))%，低于范围 \(String(format: "%.1f", (c.glucose.tbr ?? 0) * 100))%。") }
-        if let r = c.race { add(.race, "赛事：\(c.raceName)，距比赛 \(r.weeksToRace) 周，\(r.phase.label)，本周跑量 \(Int(r.weeklyKm)) km。") }
+        if let r = c.race { add(.race, "赛事：\(c.raceName)，距比赛 \(r.weeksToRace) 周，\(r.phase.label)，本周目标跑量 \(Int(r.weeklyKm)) km（这是目标，不是已跑的量）。") }
         if !c.weather.isEmpty {
             add(.weather, "天气预报（\(c.weatherSource)）：" + c.weather.prefix(4).map { weatherText($0, now: c.now) }.joined(separator: "；") + "。")
             let notes = WeatherPlanner.advice(plan: c.plan, forecast: c.weather, now: c.now, profile: c.profile).notes
@@ -1681,13 +1693,14 @@ enum HealthAgent {
         parts.append("【问题】\n\(q)")
         parts.append(r.intent == .unknown
                      ? "【要点】\nPulse 的规则里没有专门针对这个问题的分析，可以用常识回答。\n如果问题和健康、运动（包括装备、拉伸、跑姿）、饮食、睡眠有关：第一句直接回答，再给一两条具体可做的建议；【数据】里和问题直接相关的才提，不相关的不要提；涉及诊断和用药的，说明要问医生。\n只有和健康、身体、运动、饮食、睡眠都无关的问题（比如写诗、编程、股票）才只回复这一句：\(offTopicReply)"
-                     : "【要点】（Pulse 根据记录得出的回答，事实和结论以它为准）\n" + String(r.text.prefix(900)))
+                     : "【要点】（Pulse 根据记录得出的回答，事实和结论以它为准）\n" + String((!anonymous && r.listsAsWritten ? withoutLists(r.text) : r.text).prefix(900)))
         // On the device, suggestions come from the rules answer or not at all: a small model otherwise
         // fills the list with whatever the data has (snoring under a diet question, weather under training
-        // load). A cloud model (anonymous prompt) may add its own.
+        // load), and rewords the rules' own until they mean something else. A cloud model (anonymous
+        // prompt) may add its own.
         if !anonymous, r.intent != .unknown, !r.proposesPlan {
             parts.append(r.text.contains("• ")
-                         ? "【说明】要列建议的话，只用【要点】里以「• 」开头的那几条，可以说得更口语，不要另外加。"
+                         ? "【说明】建议和清单由 Pulse 放在你的回答后面，这次不要写。"
                          : "【说明】【要点】里没有要用户去做的建议，这次只回答问题，不要列建议。")
         }
         if let k = r.conclusion { parts.append("【第一句】\n\(k)") }
@@ -1708,6 +1721,63 @@ enum HealthAgent {
             parts.append("【说明】下面会显示一个表单让用户补充信息：只用一两句话说明需要用户选什么，不要给建议，也不要自己安排日期。")
         }
         return parts.joined(separator: "\n\n")
+    }
+
+    /// The rules' answer without its lists and the lead-ins above them; all of it if that leaves nothing.
+    static func withoutLists(_ text: String) -> String {
+        var kept: [String] = []
+        for line in text.components(separatedBy: "\n") {
+            if line.hasPrefix("•") {
+                // The lead-in may stand a blank line above its list.
+                while kept.last?.isEmpty == true { kept.removeLast() }
+                if let last = kept.last, last.hasSuffix("：") || last.hasSuffix(":") { kept.removeLast() }
+            } else {
+                kept.append(line)
+            }
+        }
+        let t = kept.joined(separator: "\n").replacingOccurrences(of: "\n\n\n", with: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? text : t
+    }
+
+    /// The rules' lists, each with its lead-in, word for word, without what `said` already gives.
+    static func rulesLists(in text: String, after said: String) -> String {
+        func squeeze(_ s: String) -> String { s.filter { !$0.isWhitespace && !"。；，".contains($0) } }
+        let given = squeeze(said)
+        var blocks: [[String]] = []
+        var lead: String? = nil
+        var open = false
+        for raw in text.components(separatedBy: "\n") {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty {
+                open = false
+                continue
+            }
+            guard line.hasPrefix("•") else {
+                open = false
+                lead = line.hasSuffix("：") || line.hasSuffix(":") ? line : nil
+                continue
+            }
+            let item = squeeze(String(line.dropFirst()))
+            if item.count >= 6, given.contains(item) { continue }
+            if !open {
+                blocks.append(lead.map { given.contains(squeeze($0)) ? [] : [$0] } ?? [])
+                lead = nil
+                open = true
+            }
+            blocks[blocks.count - 1].append(line)
+        }
+        return blocks.map { $0.joined(separator: "\n") }.joined(separator: "\n\n")
+    }
+
+    /// The plan's values, which a model carries over from the <plan> format (「强度降为 easy」), in the
+    /// words the app uses. Lower case and whole words only: 「HRV」 and 「easy-going」 stay.
+    static func inOurWords(_ text: String) -> String {
+        var t = text
+        let words = [Intensity.easy, .moderate, .hard].map { ($0.rawValue, $0.label) } + [PlanKind.aerobic, .quality, .strength, .mobility].map { ($0.rawValue, $0.label) }
+        for (word, label) in words where t.contains(word) {
+            t = t.replacingOccurrences(of: "(?<![A-Za-z-])\\s*\(word)\\s*(?![A-Za-z-])", with: label, options: .regularExpression)
+        }
+        return t
     }
 
     /// Prompt labels the model sometimes echoes at the start of a line.
@@ -1904,8 +1974,12 @@ enum HealthAgent {
         return paragraphs.joined(separator: "\n\n")
     }
 
-    static func streamed(_ partial: String, of r: AgentReply, proposing: Bool? = nil) -> String {
-        var t = notRecorded(stripLabels(partial, streaming: true), of: r)
+    static func streamed(_ partial: String, of r: AgentReply, proposing: Bool? = nil, onDevice: Bool = false) -> String {
+        var t = notRecorded(stripLabels(inOurWords(partial), streaming: true), of: r)
+        // The rules' own list comes at the end; a list the model starts anyway is never shown.
+        if onDevice, r.listsAsWritten {
+            t = t.components(separatedBy: "\n").filter { !$0.hasPrefix("•") }.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         // A follow-up's opening shows once it is complete and known not to repeat the earlier verdict.
         if let said = r.alreadySaid {
             guard t.contains("\n\n") || t.hasPrefix("•") else { return "" }
@@ -1929,11 +2003,24 @@ enum HealthAgent {
     /// Whether a model answer opens with the rules' conclusion (spacing aside). A small model that
     /// opens with something else has usually lost the question; the rules answer is shown instead.
     static func keepsConclusion(_ text: String, of r: AgentReply) -> Bool {
-        guard let k = r.conclusion else { return true }
+        guard let k = r.conclusion else { return saysSomething(text, of: r) }
         func squeeze(_ s: String) -> String { s.filter { !$0.isWhitespace && $0 != "*" } }
         let verdict = squeeze(k.split(separator: "。", maxSplits: 1).first.map(String.init) ?? k)
         let head = squeeze(stripLabels(text)).prefix(verdict.count + 30)
         return head.contains(verdict)
+    }
+
+    /// With no verdict to hold it to, a model answer must still say something of the rules' answer:
+    /// a small model sometimes gives only 「Pulse 的健康助手根据当前情况整理如下。」.
+    static func saysSomething(_ text: String, of r: AgentReply) -> Bool {
+        let prose = stripLabels(text).components(separatedBy: "\n").filter { !$0.hasPrefix("•") }.joined()
+        // Without Latin letters: 「Pulse」 in both says nothing.
+        let plain = Array(prose.filter { !$0.isWhitespace && !$0.isPunctuation && !($0.isASCII && $0.isLetter) && $0 != "*" })
+        guard plain.count >= 8 else { return false }
+        // Nothing to compare with: the model answers these from common sense.
+        guard r.intent != .unknown, !r.text.isEmpty else { return true }
+        let source = r.text.filter { !$0.isWhitespace }
+        return (0...(plain.count - 3)).contains { source.contains(String(plain[$0..<($0 + 3)])) }
     }
 
     /// Cleans a model answer: drops echoed section labels, keeps a form question short, and puts a
@@ -1941,7 +2028,8 @@ enum HealthAgent {
     /// default those of the rules answer), claims that they are already done are reworded.
     /// `strict` (on-device answers) also keeps suggestions to those the rules made.
     static func finalize(_ text: String, of r: AgentReply, proposals: [PlanChangeProposal]? = nil, strict: Bool = true) -> String {
-        let text = r.alreadySaid.map { withoutRepeat(stripLabels(text), of: $0) } ?? text
+        let words = inOurWords(text)
+        let text = r.alreadySaid.map { withoutRepeat(stripLabels(words), of: $0) } ?? words
         var lines = notRecorded(stripLabels(text), of: r).components(separatedBy: "\n")
         let pending = proposals ?? r.proposals
         if !pending.isEmpty {
@@ -1949,21 +2037,13 @@ enum HealthAgent {
             lines = lines.map { notApplied($0, changedDays: days) }
             if r.intent == .planChange { lines = checkedDayLines(onlyChangedDays(lines, days: days, rules: r.text), proposals: pending) }
         }
-        if r.blocks.contains(where: { if case .form = $0 { true } else { false } }) {
+        if r.hasForm {
             lines = lines.filter { !$0.hasPrefix("•") }
         }
-        // Suggestions only where the rules made some, and one list of them: a small model otherwise
-        // adds a second list, or one from unrelated data.
-        if strict, r.intent != .unknown, r.intent != .planChange, pending.isEmpty {
-            if !r.text.contains("• ") {
-                lines = lines.filter { !$0.hasPrefix("•") }
-            } else if let start = lines.firstIndex(where: { $0.hasPrefix("•") }) {
-                // One list, and no longer than the rules' own.
-                let allowed = r.text.components(separatedBy: "\n").filter { $0.hasPrefix("• ") }.count
-                let end = min(lines[start...].firstIndex { !$0.hasPrefix("•") } ?? lines.endIndex, start + max(allowed, 1))
-                lines = lines.enumerated().filter { i, l in !l.hasPrefix("•") || (start..<end).contains(i) }.map(\.element)
-            }
-        }
+        // The model's words are for the explanation; the list is the rules' own (`listsAsWritten`).
+        // A small model otherwise adds one from unrelated data, or rewords one until it says something else.
+        let ownLists = strict && r.listsAsWritten && pending.isEmpty
+        if ownLists { lines = lines.filter { !$0.hasPrefix("•") } }
         while let last = lines.last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }), last.hasSuffix("：") || last.hasSuffix(":"),
               let i = lines.lastIndex(of: last), !(r.text.hasSuffix(last)) {
             lines.remove(at: i)
@@ -2019,6 +2099,10 @@ enum HealthAgent {
             return item.count < 6 || !said.contains(item)
         }
         t = kept.joined(separator: "\n").replacingOccurrences(of: "\n\n\n", with: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        if ownLists {
+            let lists = rulesLists(in: r.text, after: t)
+            if !lists.isEmpty { t += "\n\n" + lists }
+        }
         // When to see a doctor stays, however the model shortened the answer.
         if let s = r.safety, !says(t, safety: s) { t += "\n\n" + s }
         // The visit summary is made by the user, in the app; the model can't make it for them.
@@ -2069,9 +2153,9 @@ enum HealthAgent {
     要求：
     1. 第一句就回答用户问的事，不要先复述问题。有【第一句】时原样用它开头，后面不能和它矛盾。
     2. 事实、数字和结论以【要点】为准。只说和【问题】有关的内容，不要从【数据】里另找不相关的事来说（比如问饮食时不要谈打鼾、天气、静息心率）。
-    3. 建议最多 3 条，每条单独一行、以「• 」开头；按【说明】列或不列，不要从【数据】里另外编。
+    3. 除非【说明】要求，不要写「• 」开头的清单；不要从【数据】里另外编建议。
     4. 不做诊断；不建议开始、停止或调整任何药物和剂量；【要点】没有提到急救时，不要提急救或 120。
-    5. 不超过 180 字，不加标题。
+    5. 不超过 120 字，不加标题。
     """
 
     static let offTopicReply = "这个我帮不上忙。我可以根据你的数据回答睡眠、静息心率、运动计划、血压和血糖等问题。"

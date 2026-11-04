@@ -24,6 +24,10 @@ struct AgentQuestion {
     let reading: Reading?
     let food: Food?
     let symptom: AskedSymptom?
+    /// 「喝酒对血压有影响吗」: what one thing does to another.
+    let effect: AskedEffect?
+    /// 「下个月想跑半马」: the race it names, which need not be the one set in 专项运动.
+    let race: AskedRace?
 
     init(_ question: String) {
         let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -34,6 +38,8 @@ struct AgentQuestion {
         // A food only counts when the question is about eating it.
         let eating = ["吃", "喝", "能", "可以", "好吗", "行吗", "要紧", "正常"].contains { q.contains($0) }
         food = eating ? FoodGuide.find(in: q) : nil
+        effect = AskedEffect.find(in: q)
+        race = AskedRace.find(in: q)
     }
 
     func has(_ words: [String]) -> Bool { words.contains { text.contains($0) } }
@@ -139,6 +145,78 @@ struct AgentQuestion {
         if s.hasPrefix("十"), let last = s.last, let d = digit[last] { return 10 + d }
         if s.count == 1, let c = s.first, let d = digit[c] { return d }
         return nil
+    }
+}
+
+// MARK: - Races
+
+/// A race a question names: how far, and how many weeks off if it says.
+struct AskedRace: Equatable {
+    enum Distance: Equatable {
+        case tenK, half, full
+
+        var label: String {
+            switch self {
+            case .tenK: "10 公里"
+            case .half: "半马"
+            case .full: "全马"
+            }
+        }
+        var km: Double {
+            switch self {
+            case .tenK: 10
+            case .half: 21.0975
+            case .full: 42.195
+            }
+        }
+        /// Weeks to get ready from a running base of 0 (none), 1 (little), 2 (some) or 3 (solid).
+        func weeksNeeded(base: Int) -> Int {
+            let weeks: [Int] = switch self {
+            case .tenK: [10, 6, 3, 2]
+            case .half: [16, 12, 8, 4]
+            case .full: [40, 32, 24, 16]
+            }
+            return weeks[min(max(base, 0), 3)]
+        }
+    }
+
+    var distance: Distance
+    var weeks: Int?
+    /// When, as the question put it: 「下个月」.
+    var when: String?
+
+    static func find(in q: String) -> AskedRace? {
+        let distance: Distance
+        if ["半马", "半程"].contains(where: { q.contains($0) }) { distance = .half }
+        else if ["全马", "全程马拉松", "马拉松"].contains(where: { q.contains($0) }) { distance = .full }
+        // 「今天跑 10 公里」 is a run; only a race counts.
+        else if ["10公里", "10 公里", "十公里", "10K", "10k"].contains(where: { q.contains($0) }), q.contains("赛") { distance = .tenK }
+        else { return nil }
+        let when = time(in: q)
+        return AskedRace(distance: distance, weeks: when?.weeks, when: when?.text)
+    }
+
+    static func time(in q: String) -> (weeks: Int, text: String)? {
+        if q.contains("下下周") { return (2, "下下周") }
+        if ["下周", "下星期", "下个星期"].contains(where: { q.contains($0) }) { return (1, "下周") }
+        if ["这周", "本周", "这个周末", "这周末"].contains(where: { q.contains($0) }) { return (0, "这周") }
+        if ["下个月", "下月"].contains(where: { q.contains($0) }) { return (6, "下个月") }
+        if q.contains("半年后") || q.contains("半年以后") { return (26, "半年后") }
+        let n = "([0-9一二两三四五六七八九十]+)"
+        if let g = AgentQuestion.groups(n + #"\s*个?\s*(?:周|星期|礼拜)(?:后|以后|之后)"#, q), let v = AgentQuestion.number(g[0]) { return (Int(v), "\(Int(v)) 周后") }
+        if let g = AgentQuestion.groups(n + #"\s*个月(?:后|以后|之后)"#, q), let v = AgentQuestion.number(g[0]) { return (Int(v) * 4, "\(Int(v)) 个月后") }
+        return nil
+    }
+
+    /// The distance of the race set in 专项运动, as its name says; a marathon unless it says otherwise.
+    static func distance(ofSet name: String) -> Distance {
+        name.contains("半") ? .half : (name.contains("10") ? .tenK : .full)
+    }
+
+    /// Whether this is some other race than the one set: another distance, or a month or more apart.
+    func differs(from c: AgentContext) -> Bool {
+        guard let set = c.race else { return true }
+        return distance != Self.distance(ofSet: c.raceName) || (weeks.map { abs($0 - set.weeksToRace) > 4 } ?? false)
     }
 }
 

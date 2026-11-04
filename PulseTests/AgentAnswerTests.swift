@@ -113,7 +113,7 @@ struct AgentAnswerTests {
         let food = HealthAgent.reply(to: "我能吃香蕉吗", context: c)
         let prompt = HealthAgent.modelPrompt(question: "我能吃香蕉吗", history: [], context: c, reply: food, anonymous: false)
         #expect(!prompt.contains("打鼾") && !prompt.contains("天气预报") && prompt.contains("化验"))
-        #expect(prompt.contains("不要另外加"))
+        #expect(prompt.contains("这次不要写") && !prompt.contains("• "), "the rules' list is shown as it is, so the model never gets to reword it")
         #expect(!HealthAgent.groundedInstructions.contains("降低静息心率"), "not every answer is about resting heart rate")
 
         let load = HealthAgent.reply(to: "我这周的训练量是不是太大了", context: c)
@@ -381,6 +381,35 @@ struct AgentAnswerTests {
         #expect(names.name == "阿康", "the answer to 「你想叫我什么」 is the name")
         await chat.send("改回原来的名字", context: c)
         #expect(names.custom == nil && names.name == AgentName.standard)
+    }
+
+    @Test func onTheDeviceTheListIsTheRulesOwnWordForWord() {
+        let list = "从你的记录看：\n• 睡眠不足 6 小时的早晨，静息心率平均高 1.0\n\n• 每天固定时间吃药，别漏"
+        let r = AgentReply(text: "你的静息心率没有变高。\n\n" + list, intent: .rhr, conclusion: "你的静息心率没有变高。")
+        // A threshold reworded into a goal never reaches the reader.
+        let t = HealthAgent.finalize("你的静息心率没有变高。近 7 天和基线差不多。\n\n可以这样做：\n• 尽量保证每晚睡够 6 小时", of: r)
+        #expect(t == "你的静息心率没有变高。近 7 天和基线差不多。\n\n" + list)
+        // The model is never given the list to reword, whatever its lead-in.
+        #expect(HealthAgent.withoutLists(r.text) == "你的静息心率没有变高。")
+        #expect(HealthAgent.withoutLists("化验结果：\n\n• 血钾 5.4\n\n血钾偏高会影响心跳。") == "血钾偏高会影响心跳。")
+        #expect(HealthAgent.withoutLists("• 只有清单") == "• 只有清单")
+        // What the model already said in its own sentence is not said again.
+        #expect(HealthAgent.rulesLists(in: r.text, after: "每天固定时间吃药，别漏") == "从你的记录看：\n• 睡眠不足 6 小时的早晨，静息心率平均高 1.0")
+        // While it is written, only what will stay is shown.
+        #expect(HealthAgent.streamed("你的静息心率没有变高。\n• 尽量保证", of: r, onDevice: true) == "你的静息心率没有变高。")
+        // A cloud model keeps its own wording; a plan card and a form keep their own rules.
+        #expect(HealthAgent.finalize("你的静息心率没有变高。\n• 尽量保证每晚睡够", of: r, strict: false).contains("尽量保证"))
+        #expect(HealthAgent.streamed("可以。\n• 尽量保证", of: r).contains("尽量保证"))
+    }
+
+    @Test func aModelAnswerThatSaysNothingIsNotUsed() {
+        let r = AgentReply(text: "全程马拉松：距比赛 19 周，当前处于基础期。", intent: .marathon)
+        #expect(!HealthAgent.keepsConclusion("Pulse 的健康助手。", of: r))
+        #expect(!HealthAgent.keepsConclusion("Pulse 的健康助手根据当前情况整理如下。", of: r))
+        #expect(HealthAgent.keepsConclusion("距比赛还有 19 周，现在还在基础期，先把跑量打好。", of: r))
+        // An open question has no rules' answer to compare with.
+        #expect(HealthAgent.keepsConclusion("跑鞋大约跑 600 公里换一双。", of: AgentReply(text: "这个问题 Pulse 现在还答不好。", intent: .unknown)))
+        #expect(!HealthAgent.keepsConclusion("好的。", of: AgentReply(text: "这个问题 Pulse 现在还答不好。", intent: .unknown)))
     }
 
     @Test func modelAnswersStayWithinTheRules() {
