@@ -1,76 +1,155 @@
-# Pulse · 静息心率健康管理
+# Pulse
 
-围绕智能穿戴设备的 iOS 应用（SwiftUI + SwiftData + HealthKit，iOS 18+）。以降低静息心率为长期目标，按
-**了解个人基础 → 改善日常行为 → 按身体状态调整 → 验证长期效果** 串联运动、睡眠、饮食、身体指标与恢复。
+**把手表里的各项数据，变成今天该怎么做。**
 
-## 运行
+可穿戴设备测到的心率、睡眠、血压、血糖、血氧等数据，一起看才看得懂。Pulse 按你的目标排计划，每天根据身体状态调整运动、睡眠和恢复，还能用你自己的数据，验证哪些习惯真的在影响身体。
 
-**直接演示**：双击 `Demo/启动演示.command`，会启动 iOS 模拟器并打开预先构建的 Pulse（不需要打开 Xcode 或 Claude Code），详见 `Demo/README.md`。
+![Pulse 的六个界面：定目标排计划、看懂身体状态、直接提问、一周复盘、验证习惯的影响、长期趋势](Demo/Pulse界面一览.png)
 
-**开发**：用 Xcode 打开 `Pulse.xcodeproj`，选择 iPhone 模拟器运行。首次启动可选「先用示例数据体验」（120 天模拟记录）。
+Pulse 是 iPhone 和 iPad 上的中文应用，需要 iOS 18 或更新的系统，用 SwiftUI、SwiftData 和 HealthKit 编写。它还没有上架 App Store，目前要从源代码构建，见[运行](#运行)。
 
-**示例用户**（「我的 › 示例用户」或启动参数 `-PulsePersona`）：
+## 怎么用
 
-| 用户 | 情况 |
+| 什么时候 | 做什么 |
 |---|---|
-| 晓林 `xiaolin` | 39 岁，坚持得不错，静息心率 74 → 66，饮酒与次日心率的关联正在验证 |
-| 陈杰 `chenjie` | 45 岁，久坐、超重，血压偏高未就诊，熬夜、周末饮酒多、打鼾明显；计划完成约 15%，晨起记录很少，体检复查已逾期 |
-| 林悦 `linyue` | 34 岁，倒班护士（白班 / 夜班 / 休息轮换），入睡时间波动大、咖啡因多，有两段 9 天没有数据；计划几乎没有完成 |
-| 王建国 `wangjianguo` | 57 岁，2 型糖尿病与高血压，服三种药但漏服约 1/3；CGM 目标范围内约 68%，夜间低血糖数次，血压约 142/86；HbA1c 复查已逾期 |
+| 开始时 | 填写身体情况、生活节奏和目标，Pulse 排出第一周计划。没有手表也能用，可以手动记录。 |
+| 每天早上 | 在「今日」看身体准备度：它综合睡眠、夜间心率、醒后感受和训练负荷，下面直接写着今天怎么练。 |
+| 情况有变时 | 累了、加班、膝盖疼或天气不好，计划可以跟着调整。改动先显示修改前后的对比，采纳后才生效，也可以撤销。 |
+| 拿不准的时候 | 问 Health Agent。它根据你的记录回答，并列出依据。 |
+| 一周结束 | 在「复盘」和上周比较，采纳建议，生成下周计划。 |
+| 想弄清原因时 | 复盘会找出习惯和身体指标的关联，比如喝酒后第二天静息心率偏高。点「开始验证」，试两周再看结果，确实有效才标为「已确认」。 |
+| 几个月下来 | 分清一天的波动和长期的变化，看每个目标走到了哪个阶段。 |
 
-后三位都是「开始积极、之后逐渐放弃」：计划完成、晨起记录和活动量随时间下降，静息心率没有改善。
+## 读取哪些数据
 
-命令行启动参数：`-PulseDemo -PulseReset` 载入示例数据（可加 `-PulsePersona chenjie` 等指定用户）；`-PulseInMemory` 使用不落盘的临时数据；`-PulseTab heart|plan|review|me` 指定打开的标签页。
-仅 Debug 构建（截图 / 检查用）：`-PulseSegment vitals|events|long` 打开分段；`-PulseOpen glucose|cardio|marathon|agent|nutrition|evening|review|readiness` 直接打开页面；`-PulseAsk "问题"` 配合 `agent` 自动提问；`-PulseTrainingToday` 让示例数据的今天成为训练日。
+Pulse 从 Apple 健康读取手表和其他设备写入的数据，只读不写：静息心率、心率、心率变异性、呼吸频率、血氧、血压、血糖、体重、睡眠、睡眠时的呼吸紊乱、步数、活动能量、锻炼时间、最大摄氧量、跑步和骑行距离、体能训练，以及心律不齐和心率过高、过低的提示。
 
-测试：`xcodebuild -project Pulse.xcodeproj -scheme Pulse -destination 'platform=iOS Simulator,name=iPhone 17' test`
-
-## 页面结构
+## 页面
 
 | 标签 | 内容 |
 |---|---|
-| **今日** | 「今日状态」：静息心率长期目标 + Body Readiness 及运动 / 负荷 / 恢复安排；「全天安排」：晨起评估 · 运动 · 饮食与指标 · 睡前 · 全天回顾，每个阶段一行摘要，点进查看详情 |
-| **趋势** | 静息心率趋势（单次波动 / 持续变化 / 长期趋势、背景因素、判断局限）· 关键指标（血压、CGM 连续血糖、夜间指标）· 异常跟进 |
-| **计划** | 每周运动计划（含精简版与进阶）· 睡眠与睡眠呼吸（STOP-BANG、就诊摘要、CPAP 跟进）· 恢复 |
-| **复盘** | 以 Health Agent 为主导：本周复盘（Agent 结论 + 与上周同期比较、可一键采纳的建议、三问引导式复盘、每天数据按需展开）· 长期复盘（管理方向结论、多维进展、关联 → 个人验证 → 已确认、习惯坚持度、下一阶段策略）· 底部常驻「问问 Health Agent」（文字 / 语音） |
-| **我的** | 个人健康基础（含「作息与倒班」）、静息心率基线、专业支持模块、数据来源、记录历史与修改、隐私与导出 |
-
-## 需求对应
-
-| 需求 | 主要实现 |
-|---|---|
-| 1 建立个人健康基础与管理目标 | `Onboarding/`、`Profile/ProfileEditors.swift`、基线 `RHRTrendAnalyzer.computeBaseline` |
-| 2 持续了解静息心率变化 | `Engine/RHRTrendAnalyzer.swift`、`Heart/HeartView.swift` |
-| 3 晨起状态与身体准备度 | `Engine/ReadinessEngine.swift`、`Engine/DailyFlow.swift`（夜间血压 / 血糖 / 呼吸）、`Today/TodayMorning.swift` |
-| 4 可持续的运动与日常活动安排 | `Engine/PlanGenerator.swift`、`Plan/PlanView.swift` |
-| 5 根据实际情况调整当天安排 | `Engine/PlanAdjuster.swift`、`Today/AdjustPlanView.swift`、身体活力度 `VitalityEngine` |
-| 6 改善睡眠并跟进睡眠呼吸问题 | `Engine/CareAnalyzers.swift`（`SleepAnalyzer`）、`Plan/SleepCareView.swift` |
-| 7 管理影响恢复的日常行为 | `Plan/HabitsView.swift`、睡前记录 `Today/EveningCheckInView.swift`、`RecoveryAdvisor` |
-| 8 相关身体指标与异常事件 | `Engine/AlertEngine.swift`、`Heart/VitalsView.swift`、`Heart/HealthEventsView.swift` |
-| 9 回顾行为与健康变化 | `Engine/ReviewEngine.swift`、`Review/ReviewView.swift` |
-| 10 低负担记录与数据掌控 | `Logging/QuickLogView.swift`、`Data/HealthKitService.swift`、`Profile/HistoryView.swift`、`Data/DataExporter.swift` |
-| 专项运动 / 心血管健康 / 血糖管理 | `Features/Modules/`、`Engine/ProAnalyzers.swift`：赛事可行性（Riegel 预测）、训练负荷比、配速与心率区间、补给演练、乳酸阈值（仅专项运动）；7 天家庭血压监测、服药依从、运动处方；CGM 达标时间、每日规律、餐后 / 运动反应、低血糖时段 |
-| Health Agent | `Engine/HealthAgent.swift`（综合评价、问答规则与安全规则）、`Engine/ReviewCoach.swift`（复盘结论、建议、引导式复盘）、`Engine/PlanChat.swift`（对话调整计划与安全检查）、`Engine/DeviceGuide.swift`（穿戴设备指导）、`Engine/TrainingCheck.swift`（某天是否适合训练）、`Engine/AgentUI.swift`（Generative UI 组件目录与校验）、`Features/Agent/`（对话、语音输入与朗读、设备端 Apple 智能、组件渲染） |
-
-引擎层（`Engine/`）是不依赖存储的纯函数，单元测试见 `PulseTests/EngineTests.swift`。
+| **今日** | 今日状态、现在最该做的一件事、全天安排（晨起评估、运动、饮食与指标、睡前、全天回顾），以及血糖、血压、专项运动和本周进度。首页卡片可以自己调整。 |
+| **趋势** | 静息心率（单次波动、持续变化和长期趋势，最长看 1 年）、关键指标（血压、CGM 连续血糖、夜间指标、化验结果）、异常跟进。 |
+| **计划** | 运动（一周安排，有精简版和进阶版，可按天气调整）、睡眠（含睡眠呼吸筛查、就诊摘要、CPAP 跟进）、恢复（饮食、饮水、咖啡因、饮酒和压力）。 |
+| **复盘** | 每日回顾；本周复盘（与上周比较、建议、三问复盘、下周计划）；长期复盘（各目标所处阶段、多维进展、习惯坚持、发现的关联、下一阶段）。底部随时可以问 Health Agent。 |
+| **我的** | 健康档案、作息与倒班、专业支持、提醒、数据来源、记录历史、隐私与导出、回答方式与云端模型、示例用户。 |
 
 ## Health Agent
 
-- **由大模型回答**：除急救提示外，每个问题都由大模型结合你的身体数据回答——开启云端模型时用云端模型（OpenRouter / Anthropic / OpenAI 兼容），否则用设备端 Apple 智能（Foundation Models，数据不离开本机）。提示词包含数据摘要（含当前时间）、最近的对话、问题，以及规则引擎从记录中算出的事实（【数据】【问题】【要点】）。
-- **复盘卡片由大模型撰写**：本周复盘（结论、说明、「下周」）、Agent 的建议理由、下周计划的调整说明、长期复盘结论与「下一阶段策略」的文字，都由大模型根据 Pulse 算出的事实撰写（Apple 智能用结构化生成，云端模型输出 JSON）。结论、数字、可采纳的操作和计划内容仍由规则决定；每段文字都会核对：出现事实里没有的数字、条数不对或涉及用药调整的，那一段改用规则文字。同一份事实只写一次（本机缓存），卡片上注明撰写者，可「重写」；生成中显示占位，没有可用的大模型时注明原因并显示规则文字。
-- **结论由 Pulse 锁定**：「明天适合练吗」「现在能喝咖啡吗」、静息心率前提纠正、计划表单等安全相关的结论由规则引擎算出，作为【第一句】交给模型，模型必须原样开头；如果模型丢掉或改写了结论，Pulse 会把结论放回最前面。模型复述的提示词标签会被清理。
-- **没有大模型时会说明**：Apple 智能不可用且没有启用云端模型时，回答标注「Pulse 规则分析（未经大模型）」并说明原因，附「设置云端模型」入口；不再提供关闭大模型的开关。
-- **安全**：涉及胸痛、呼吸困难、晕厥等紧急情况时直接给出固定的急救提示（拨打 120）；不做诊断，不提供开始、停止或调整药物的建议；关联始终表述为「观察到的关联」。
-- **语音**：中文听写（支持时使用设备端识别），用语音提问时自动朗读回复；也可在菜单中开启「朗读回复」。
-- **云端模型（测试）**：「我的 › 实验功能」中可接入 **OpenRouter**（默认，一个密钥调用 Anthropic Claude、OpenAI、Google、DeepSeek、通义千问、Kimi、智谱等，可浏览全部模型）、Anthropic Claude 或任意 OpenAI 兼容接口。用 `Demo/` 中的脚本启动时，会读取 `~/.spark/keys/openrouter.key` 与 `anthropic.key`（与 Spark、summit2md 共用），只在本次运行中传给 App，不写入任何文件；设置 `PULSE_NO_CLOUD_KEYS=1` 可跳过。默认关闭；需保存密钥（存于钥匙串）、测试连接成功并同意发送数据摘要后才会启用。启用后提问会发送匿名的数据摘要、本机分析要点和问题；失败时自动回到本机分析，紧急情况始终由本机回答。
-- **下周计划**：「复盘 › 本周复盘」根据这周的完成情况、负荷与恢复信号以及复盘中提到的难点和重点生成下周计划，确认后写入「计划 › 下周」，只影响下周、不改动计划设置。
-- **某天适合训练吗**：「明天适合做大力量训练吗」这类问题由规则引擎直接给出结论（不建议 / 降低强度 / 早上再定 / 适合），依据现在的时间与平时起床时间之间还能睡多久、当天是否已有准备度、今晚饮酒与疲劳、训练负荷、生病、心血管与血压、低血糖风险。凌晨（5 点前）说的「明天」按即将到来的白天理解；尚未结束的夜晚不使用准备度分数。不建议时，可一键把那天的重点训练挪到之后的空闲日。语言模型只转述这个结论，不自行判断「适合」；数据摘要中包含当前时间。
-- **倒班作息**：「我的 › 作息与倒班」设置轮班周期（常见排班或逐天点选白班 / 夜班 / 休息，「今天是第几天」）和班次时间，下方预览两周的起床与入睡时间。开启后 Pulse 按主睡眠划分一天：连续夜班之间睡满一整段（如 09:00–16:30），最后一个夜班后补觉约 4 小时、晚上按时睡；第一个夜班前建议小睡 90 分钟；白班日提前起床并据此推算前一晚的上床时间。一天的分界改为醒来前 2 小时（常规作息仍是凌晨 5 点），「今日」页的时段与晨起评估、睡前提醒、Health Agent 的「现在 / 今晚 / 明天」以及「复盘」都跟随班次；运动计划不在夜班当天和夜班后的恢复日安排训练。示例用户林悦（白白夜休休的 5 天周期）已设置排班。
-- **按时间回答**：Agent 知道现在几点、离你平时入睡还有多久。凌晨 5 点前仍算「前一天」：全天总结、「这周」（包括「复盘」Tab 的本周复盘、每天数据和下周计划）都按还没睡完的那一天算，当天的准备度等睡醒后评估。「今日」页同样如此：5 点前显示的是还没睡完的那一天（时段为全天回顾，不会在 3 点切到晨起评估），晨起评估页注明这是哪天早上的评估、不提供「记录醒后感受」，过了入睡时间后「今日状态」显示「明天的身体准备度 · 睡醒后评估」；睡前记录与当天的饮酒、饮水等记录也记在这一天（规则见 `DayClock`，倒班见 `Engine/ShiftSchedule.swift`）。凌晨 3–5 点「全天回顾」卡片和晨起评估页会出现「已经起床了？开始今天」：确认时显示昨夜实际睡了多久，确认后新的一天提前开始（晨起评估、Health Agent、复盘一起切换），5 分钟内可撤销。没有睡眠、夜间心率或醒后感受时，身体准备度显示「待评估」，不再只凭训练负荷给出分数；示例数据在夜里打开时也不会预先生成当天早上的数据。「现在 / 今晚适合运动吗」按离入睡的时间分级（入睡前 1 小时以上的轻松运动可以，高强度不建议，过了入睡时间只建议拉伸后睡觉）；咖啡、饮酒、夜宵、睡不着、熬夜后恢复都会直接回答「现在」该怎么做。
-- **对话中调整训练计划**：直接说「周四加班」「膝盖有点疼，下周怎么练」「这周轻松一点」「想多练一次力量」。规则引擎（或开启时的云端模型）把要求变成具体修改，再经过本机安全检查——每周总时长最多 +10%、至少 1 天不训练、较高强度不相邻、准备度低的当天只安排低强度、未经医生确认不加较高强度、疼痛时只降强度或换低冲击方式——以「修改前 / 修改后」卡片展示，采纳后写入「计划」，可以撤销。入口：对话、「计划 › 运动计划」中的「和 Health Agent 调整计划」。
-- **穿戴设备指导**：针对训练内容（轻松有氧、间歇、长距离、力量、运动中的血糖管理），结合记录中的数据完整度（夜间佩戴、数据中断、训练无心率、轻松训练心率异常偏高、CGM 覆盖率与中断、夜间低值），给出手表、心率带、CGM 的使用清单和「运动时怎么看 CGM」步骤；数值来自用户的照护计划，不涉及药物或胰岛素调整，具体型号以说明书为准。入口：对话、「血糖管理」「专项运动」「我的 › 数据来源」。
-- **Generative UI**：复杂场景下，Agent 用交互组件回答：补充信息的表单（单选 / 多选、选择星期、数值、开关）、计划修改卡片、按指标绘制的图表（静息心率、睡眠、活动、CGM、血压、佩戴记录）、可勾选的清单、分步说明。组件来自固定目录（`Engine/AgentUI.swift`），App 校验后用原生 SwiftUI 渲染；图表数据由 App 从本机记录填充，模型只选择指标；含药物或剂量建议的内容会被丢弃；表单的回答作为下一条消息回到对话。
+Pulse 的规则先读懂问题、算出结论和依据，再由大模型把回答写成自然的话。
+
+- **先答你问的**：能不能吃、要不要紧、为什么、怎么办，都先直接回答。问题里的血压、血糖、体重、化验值、食物和症状都读得出来。
+- **结论由规则决定**：今天或明天适不适合训练这类结论，来自你的记录和当前时间，大模型不能改。模型丢掉结论时，改用规则写的回答。
+- **在对话里办事**：可以记下血压、血糖、体重、化验、饮水、饮食和运动，设置一次性或重复的提醒，调整运动计划。这些都先显示成卡片，确认后才生效，可以撤销。
+- **计划修改有安全检查**：每周总时长最多增加 10%，至少留 1 天不训练，较高强度不相邻，准备度低的当天只安排低强度，未经医生确认不加较高强度，疼痛时只降强度或换低冲击方式。
+- **复盘也由大模型撰写**：出现事实里没有的数字，或涉及调整用药时，那一段改用规则文字。卡片上注明是谁写的。
+- **其他**：支持语音提问和朗读，可以撤回问题，也可以给 Health Agent 取名字。
+
+回答方式在「我的 › 回答方式与云端模型」设置，默认是「仅本机」：
+
+| 回答方式 | 谁来回答 | 发送什么 |
+|---|---|---|
+| 仅本机 | Apple 智能和 Pulse 规则 | 什么都不发送 |
+| 端云结合 | Pulse 在本机分析，云端写回答；卡片、计划修改、结论和安全提示都留在本机 | 同意发送健康数据时，发送问题、分析要点和与问题有关的数据；不同意时只发通用问题 |
+| 全部云端 | 云端模型回答所有问题，并撰写复盘 | 问题和数据摘要，需要同意发送健康数据 |
+
+云端支持 OpenRouter、Anthropic 和 OpenAI 兼容接口，要自己提供 API 密钥，并通过连接测试。没有设置好时，Pulse 留在本机回答。每条回答下面都标出它在哪里回答。
+
+## 针对不同情况
+
+| 情况 | Pulse 做什么 |
+|---|---|
+| 慢性肾病与透析 | 限水、体重快速上涨提醒、化验结果（eGFR、血钾等）和复查提醒、肾病饮食、透析日安排 |
+| 心血管 | 7 天家庭血压监测、服药依从、运动处方，心衰时跟进每天的体重 |
+| 血糖 | CGM 达标时间、每日规律、餐后和运动反应、低血糖时段、血糖代谢画像 |
+| 睡眠呼吸 | STOP-BANG 筛查、就诊摘要、CPAP 跟进 |
+| 备赛 | 赛事可行性、训练负荷比、配速与心率区间、补给演练、乳酸阈值 |
+| 倒班 | 按轮班周期划分一天，今日、复盘和 Health Agent 都跟着班次走，夜班当天和夜班后的恢复日不安排训练 |
+| 其他慢性病 | 在对话中提到低血钾、高钾血症、痛风、骨质疏松、类风湿关节炎、癫痫、体位性心动过速或低血压时，按内置资料调整建议；点「记下」才写入档案 |
+
+另外，血压和血糖可以看未来约 4 周的趋势范围和未来 1 小时的走向，这些预测不能用来计算胰岛素或药物剂量。雷雨、高温或空气差时，Pulse 建议把户外训练改到室内，或挪到天气好的一天。
+
+## 隐私与安全
+
+- 不需要账号。默认所有数据只保存在这台设备上，不上传到服务器。
+- 只有选择了「端云结合」或「全部云端」，或者自己导出、分享时，数据才会离开设备。
+- 发到云端之前，Pulse 在本机去掉姓名、电话、证件号、邮箱、地址、医院和医生，回答回到手机后再填回去。姓名靠上下文识别，没有「我叫」「医生」这类线索的名字可能认不出来。年龄、日期、城市和健康数据不会去掉。
+- API 密钥保存在本机钥匙串，不会出现在导出的数据里。
+- 可以导出就诊摘要（文本）、完整数据（JSON）和每日数据（CSV），并选择包含哪些内容。
+- 「删除所有数据」会清除记录、对话、设置、云端密钥和发送健康数据的同意，不影响健康 App 里的数据。
+- 紧急情况（胸痛、呼吸困难、晕厥等）直接给出固定提示，始终在本机回答，不经过大模型。
+
+## 运行
+
+**直接演示**：双击 `Demo/启动演示.command`，脚本会启动 iOS 模拟器并打开 Pulse，第一次运行时自动构建，约需 1–2 分钟。详见 [Demo/README.md](Demo/README.md)。
+
+**开发**：用 Xcode 打开 `Pulse.xcodeproj`，选择 iPhone 或 iPad 模拟器运行。首次启动可以选「先用示例数据体验」。
+
+**真机**：项目里没有写入开发团队，请在 Xcode 的 Signing & Capabilities 选择自己的团队。免费的个人团队也可以，但应用 7 天后会过期，需要重新安装。
+
+**示例用户**（「我的 › 示例用户」或启动参数 `-PulsePersona`）：
+
+| 用户 | 记录 | 情况 |
+|---|---|---|
+| 晓林 `xiaolin` | 120 天 | 39 岁，坚持得不错，静息心率从 74 降到 66，正在验证饮酒的影响 |
+| 陈杰 `chenjie` | 120 天 | 45 岁，久坐超重，血压偏高，熬夜、饮酒多，计划常落空 |
+| 林悦 `linyue` | 120 天 | 34 岁，倒班护士，作息混乱，记录断断续续 |
+| 王建国 `wangjianguo` | 120 天 | 57 岁，2 型糖尿病和高血压，常漏服药，运动少 |
+| 孙浩 `sunhao` | 1 年 | 重度睡眠呼吸暂停，使用呼吸机后静息心率、血压和体重慢慢下来 |
+| 周敏 `zhoumin` | 1 年 | 血液透析（周一三五），限水，每月化验血钾、血磷 |
+| 赵立强 `zhaoliqiang` | 1 年 | 心梗放支架后心衰，每天称体重，坚持心脏康复 |
+| 何静 `hejing` | 1 年 | 1 型糖尿病，练半马，跑步后夜里偶有低血糖 |
+
+**启动参数**：
+
+| 参数 | 作用 |
+|---|---|
+| `-PulseDemo -PulseReset` | 载入示例数据，可加 `-PulsePersona chenjie` 指定用户 |
+| `-PulseInMemory` | 使用不落盘的临时数据 |
+| `-PulseTab heart\|plan\|review\|me` | 打开指定标签页 |
+| `-PulseTime 07:40` | 把演示时间设为当天的这个时刻 |
+| `-PulseSegment vitals\|events\|long\|day` | 打开指定分段（仅 Debug） |
+| `-PulseOpen glucose\|cardio\|marathon\|agent\|nutrition\|evening\|review\|readiness\|cloud\|nextweek\|labs\|events` | 直接打开页面（仅 Debug） |
+| `-PulseAsk "问题"` | 配合 `-PulseOpen agent` 自动提问（仅 Debug） |
+| `-PulseTrainingToday` | 让示例数据的今天成为训练日（仅 Debug） |
+
+**测试**：
+
+```bash
+xcodebuild -project Pulse.xcodeproj -scheme Pulse -destination 'platform=iOS Simulator,name=iPhone 17' test
+```
+
+连接真实云端模型和 Apple 智能的测试默认跳过，见 `PulseTests/CloudLiveTests.swift`。
+
+## 代码结构
+
+`Pulse/Engine/` 是不依赖存储的规则和分析，`Pulse/Data/` 负责数据读写和提醒，`Pulse/Features/` 是各个页面，`PulseTests/` 是单元测试。
+
+| 功能 | 主要代码 |
+|---|---|
+| 个人基础与目标 | `Features/Onboarding/`、`Features/Profile/ProfileEditors.swift`、`Engine/GoalJourney.swift` |
+| 静息心率趋势 | `Engine/RHRTrendAnalyzer.swift`、`Features/Heart/HeartView.swift` |
+| 晨起状态与身体准备度 | `Engine/ReadinessEngine.swift`、`Engine/DailyFlow.swift`、`Features/Today/TodayMorning.swift` |
+| 运动计划与当天调整 | `Engine/PlanGenerator.swift`、`Engine/PlanAdjuster.swift`、`Features/Plan/PlanView.swift`、`Features/Today/AdjustPlanView.swift` |
+| 睡眠与睡眠呼吸 | `Engine/CareAnalyzers.swift`、`Features/Plan/SleepCareView.swift` |
+| 日常习惯与恢复 | `Features/Plan/HabitsView.swift`、`Features/Today/EveningCheckInView.swift` |
+| 身体指标与异常事件 | `Engine/AlertEngine.swift`、`Engine/VitalForecast.swift`、`Features/Heart/VitalsView.swift`、`Features/Heart/HealthEventsView.swift` |
+| 复盘与习惯验证 | `Engine/ReviewEngine.swift`、`Engine/ReviewCoach.swift`、`Engine/ReviewCopy.swift`、`Features/Review/` |
+| 记录、同步与导出 | `Features/Logging/QuickLogView.swift`、`Data/HealthKitService.swift`、`Data/DataExporter.swift`、`Features/Profile/HistoryView.swift` |
+| 提醒 | `Data/CareReminders.swift`、`Data/BackgroundCheck.swift`、`Engine/CareRepeat.swift` |
+| 专业支持 | `Features/Modules/`、`Engine/ProAnalyzers.swift`、`Engine/GlucoseProfile.swift` |
+| 慢性病与化验 | `Engine/ConditionLibrary.swift`、`Engine/KidneyCare.swift`、`Engine/KidneyDiet.swift`、`Engine/LabResults.swift`、`Engine/LabRecheck.swift` |
+| 倒班与天气 | `Engine/ShiftSchedule.swift`、`Engine/WeatherPlan.swift`、`Features/Plan/WeatherPlanCard.swift` |
+| Health Agent：理解和回答问题 | `Engine/HealthAgent.swift`、`Engine/AgentQuestion.swift`、`Engine/AgentAnswers.swift`、`Engine/FoodGuide.swift`、`Engine/SymptomGuide.swift`、`Engine/TrainingCheck.swift` |
+| Health Agent：操作和界面 | `Engine/ChatRecord.swift`、`Engine/PlanChat.swift`、`Engine/AgentUI.swift`、`Features/Agent/` |
+| Health Agent：路由和隐私 | `Engine/AgentRouting.swift`、`Engine/IdentityMask.swift`、`Features/Agent/CloudModel.swift` |
+
+## 已知限制
+
+- **天气预报**：示例用户使用内置的示例天气。真实用户需要在 Xcode 中给 App 加上 WeatherKit 能力，并允许定位，否则 Pulse 会提示暂时拿不到预报。项目默认没有开启这项能力。
+- **后台异常提醒**：由 iOS 决定什么时候运行，通常每隔几小时一次，手机锁定时读不到新的健康数据。它不能代替急救。
+- **Apple 智能**：只在支持的设备上可用。不可用又没有设置云端模型时，回答标注「Pulse 规则分析（未经大模型）」并说明原因。
 
 ## 说明
 
-Pulse 用于记录与理解个人健康数据，不提供医疗诊断。异常提示只用于提醒复测或寻求专业帮助；睡眠呼吸暂停的诊断需要专业评估与睡眠检查。所有数据仅保存在本机，导出由用户选择内容与时机。
+Pulse 用于记录和理解个人健康数据，不做诊断，也不提供开始、停止或调整药物的建议。异常提示只用于提醒复测或寻求专业帮助，记录里看到的关联不等于原因。紧急情况请拨打 120。
