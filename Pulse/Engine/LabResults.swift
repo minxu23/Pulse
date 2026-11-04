@@ -166,9 +166,13 @@ enum LabAnalyzer {
             let s = uacrStage(v)
             return LabStatus(level: v < 30 ? .normal : .abnormal, text: "\(s.code) · \(s.text)")
         case .creatinine:
-            guard let e = ckdEPI(creatinine: v, age: p.age, sex: p.sex) else { return LabStatus(level: .normal, text: "填写性别后可以估算 eGFR") }
+            // Without a sex the estimate is a range and its better end sets the level: a value that
+            // is high either way still shows as high.
+            let estimates = (p.sex == .unspecified ? [Sex.female, .male] : [p.sex]).compactMap { ckdEPI(creatinine: v, age: p.age, sex: $0) }
+            guard let e = estimates.max(), let low = estimates.min() else { return LabStatus(level: .watch, text: "未满 18 岁不用这个公式估算 eGFR，以化验单为准") }
             let s = status(.egfr, e, profile: p)
-            return LabStatus(level: s.level, text: "估算 eGFR 约 \(Int(e.rounded()))（\(egfrStage(e).code)）")
+            return LabStatus(level: s.level, text: estimates.count > 1 ? "估算 eGFR 约 \(Int(low.rounded()))–\(Int(e.rounded()))，填写性别后更准"
+                                                                        : "估算 eGFR 约 \(Int(e.rounded()))（\(egfrStage(e).code)）")
         case .potassium:
             switch v {
             case ..<3.0: return LabStatus(level: .urgent, text: "明显偏低")

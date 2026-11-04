@@ -122,24 +122,46 @@ enum DataExporter {
         return url
     }
 
-    static func csv(_ ctx: ModelContext) throws -> URL {
-        let records = ((try? ctx.fetch(FetchDescriptor<DailyRecord>(sortBy: [SortDescriptor(\.day)]))) ?? [])
-        var lines = ["日期,静息心率,来源,HRV,睡眠小时,入睡时间,步数,运动分钟,精力,酸痛,压力,饮酒单位,咖啡杯数,饮水ml,标签"]
-        for r in records {
-            let cells: [String] = [
-                r.day.formatted(.iso8601.year().month().day()),
-                r.restingHR.map { $0.noDecimal } ?? "", r.rhrSource?.shortLabel ?? "", r.hrv.map { $0.noDecimal } ?? "",
-                r.sleepMinutes.map { ($0 / 60).oneDecimal } ?? "", r.sleepStart.map { Clock.text($0.minutesOfDay) } ?? "",
-                r.steps.map(String.init) ?? "", r.exerciseMinutes.map { $0.noDecimal } ?? "",
-                r.energy.map(String.init) ?? "", r.soreness.map(String.init) ?? "", r.stress.map(String.init) ?? "",
-                r.alcoholUnits > 0 ? r.alcoholUnits.oneDecimal : "", String(r.caffeineCups), String(r.waterMl),
-                r.tags.map(\.label).sorted().joined(separator: "/"),
-            ]
-            lines.append(cells.joined(separator: ","))
+    /// The daily columns, each under the category that lets it out (as in the JSON export).
+    private static let csvColumns: [(category: ExportCategory, title: String, cell: (DailyRecord) -> String)] = [
+        (.heart, "静息心率", { $0.restingHR.map { $0.noDecimal } ?? "" }),
+        (.heart, "来源", { $0.rhrSource?.shortLabel ?? "" }),
+        (.heart, "HRV", { $0.hrv.map { $0.noDecimal } ?? "" }),
+        (.sleep, "睡眠小时", { $0.sleepMinutes.map { ($0 / 60).oneDecimal } ?? "" }),
+        (.sleep, "入睡时间", { $0.sleepStart.map { Clock.text($0.minutesOfDay) } ?? "" }),
+        (.activity, "步数", { $0.steps.map(String.init) ?? "" }),
+        (.activity, "运动分钟", { $0.exerciseMinutes.map { $0.noDecimal } ?? "" }),
+        (.heart, "精力", { $0.energy.map(String.init) ?? "" }),
+        (.heart, "酸痛", { $0.soreness.map(String.init) ?? "" }),
+        (.behavior, "压力", { $0.stress.map(String.init) ?? "" }),
+        (.behavior, "饮酒单位", { $0.alcoholUnits > 0 ? $0.alcoholUnits.oneDecimal : "" }),
+        (.behavior, "咖啡杯数", { String($0.caffeineCups) }),
+        (.behavior, "饮水ml", { String($0.waterMl) }),
+        (.behavior, "标签", { $0.tags.map(\.label).sorted().joined(separator: "/") }),
+    ]
+
+    /// What the table can hold; the other categories are not daily numbers.
+    static var csvCategories: Set<ExportCategory> { Set(csvColumns.map(\.category)) }
+
+    /// The table: the date, and only the columns of the chosen categories.
+    static func csvLines(_ records: [DailyRecord], categories: Set<ExportCategory>) -> [String] {
+        let columns = csvColumns.filter { categories.contains($0.category) }
+        return [(["日期"] + columns.map(\.title)).joined(separator: ",")] + records.map { r in
+            ([r.day.formatted(.iso8601.year().month().day())] + columns.map { $0.cell(r) }).joined(separator: ",")
         }
+    }
+
+    static func csv(_ ctx: ModelContext, categories: Set<ExportCategory>) throws -> URL {
+        let records = ((try? ctx.fetch(FetchDescriptor<DailyRecord>(sortBy: [SortDescriptor(\.day)]))) ?? [])
         let url = fileURL("daily").appendingPathExtension("csv")
-        try ("\u{FEFF}" + lines.joined(separator: "\n")).write(to: url, atomically: true, encoding: .utf8)
+        try ("\u{FEFF}" + csvLines(records, categories: categories).joined(separator: "\n")).write(to: url, atomically: true, encoding: .utf8)
         return url
+    }
+
+    /// Takes away the files made for sharing (they stay in the app's temporary folder until iOS clears it).
+    static func removeExports(in folder: URL = FileManager.default.temporaryDirectory) {
+        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+        for f in files where f.lastPathComponent.hasPrefix("Pulse-") { try? FileManager.default.removeItem(at: f) }
     }
 
     /// A concise summary to bring to a doctor's visit; contains only the chosen categories.

@@ -234,7 +234,7 @@ enum ReadinessEngine {
             headline += "：\(positives.prefix(2).joined(separator: "、"))状态良好"
         }
         var recommendation = level.recommendation
-        if profile.cardiacLimited && level.maxIntensity == .hard {
+        if (profile.cardiacLimited || profile.intensityCapped) && level.maxIntensity == .hard {
             recommendation = "可以按计划进行中低强度活动（较高强度需先与医生确认）。"
         }
         return ReadinessResult(score: Int(score.rounded()), level: level, factors: factors, confidence: confidence,

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import UserNotifications
 
 // MARK: - Model → engine snapshots
 
@@ -453,16 +454,41 @@ enum DataHub {
         if !plan.complete.isEmpty || !plan.add.isEmpty { try? ctx.save() }
     }
 
+    /// Stores an alert once; nil when it adds nothing. The same alert turning more serious (血氧 91%
+    /// in the morning, 85% that afternoon) takes over the stored event and opens it again, so it is
+    /// not lost to the milder one.
     @discardableResult
     static func addEvent(_ c: AlertCandidate, in ctx: ModelContext) -> HealthEvent? {
         let key = c.dedupeKey
         let existing = (try? ctx.fetch(FetchDescriptor<HealthEvent>(predicate: #Predicate { $0.dedupeKey == key }))) ?? []
-        guard existing.isEmpty else { return nil }
+        func followUp() -> Date? { c.severity >= .consult ? c.relatedDate.adding(days: c.severity == .urgent ? 0 : 3) : nil }
+        if let e = existing.first {
+            guard c.severity > e.severity else { return nil }
+            e.severityRaw = c.severity.rawValue
+            e.title = c.title
+            e.detail = c.detail
+            e.guidance = c.guidance
+            e.relatedDate = c.relatedDate
+            e.valueText = c.valueText
+            e.followUpDue = followUp()
+            e.status = .open
+            return e
+        }
         let e = HealthEvent(kind: c.kind, severity: c.severity, title: c.title, detail: c.detail, guidance: c.guidance,
                             relatedDate: c.relatedDate, valueText: c.valueText, dedupeKey: c.dedupeKey)
-        e.followUpDue = c.severity >= .consult ? c.relatedDate.adding(days: c.severity == .urgent ? 0 : 3) : nil
+        e.followUpDue = followUp()
         ctx.insert(e)
         return e
+    }
+
+    /// The alert a reading raises. It is stored once, but always comes back: someone who measures
+    /// again, as the advice says, needs that advice again, not a plain 「已保存」.
+    @discardableResult
+    static func alert(forReading v: VitalPoint, weights: [VitalPoint], profile p: ProfileSnapshot, in ctx: ModelContext, now: Date = .app) -> AlertCandidate? {
+        guard let c = AlertEngine.evaluateVital(v, profile: p) ?? AlertEngine.weightAlert(weights, profile: p, now: now)
+                ?? Dialysis.alert(weights, profile: p, now: now) else { return nil }
+        addEvent(c, in: ctx)
+        return c
     }
 
     /// Sets the baseline automatically once enough comparable mornings exist.
@@ -476,10 +502,31 @@ enum DataHub {
         }
     }
 
+    /// The records only: a demo starting over goes through here and keeps the settings.
     static func deleteAll(in ctx: ModelContext) {
         for type in PulseSchema.models {
             try? ctx.delete(model: type)
         }
         try? ctx.save()
+    }
+
+    /// 删除所有数据: the records, the conversation, exported files and every setting, among them the
+    /// consent to send health data and the cloud keys. Someone who starts again decides those again.
+    static func eraseEverything(in ctx: ModelContext) {
+        deleteAll(in: ctx)
+        AgentConversation.shared.clear()
+        CloudModelSettings.shared.eraseAll()
+        AgentNameSettings.shared.set(nil)
+        DataExporter.removeExports()
+        if let domain = Bundle.main.bundleIdentifier { clearPreferences(UserDefaults.standard, domain: domain) }
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+        CareReminders.sync(in: ctx)
+    }
+
+    /// Everything kept in `defaults`, except the app's language.
+    static func clearPreferences(_ defaults: UserDefaults, domain: String) {
+        for key in (defaults.persistentDomain(forName: domain) ?? [:]).keys where key != "AppleLanguages" {
+            defaults.removeObject(forKey: key)
+        }
     }
 }

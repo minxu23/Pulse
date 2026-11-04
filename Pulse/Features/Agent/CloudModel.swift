@@ -138,7 +138,8 @@ enum KeySource: Equatable {
 @Observable
 final class CloudModelSettings {
     static let shared = CloudModelSettings()
-    private let d = UserDefaults.standard
+    private let d: UserDefaults
+    private let keychain: String
 
     var provider: CloudProvider {
         didSet { d.set(provider.rawValue, forKey: "cloud.provider") }
@@ -164,7 +165,9 @@ final class CloudModelSettings {
     /// Bumped when a key is saved or deleted so views re-read the Keychain.
     private var keyRevision = 0
 
-    init() {
+    init(defaults: UserDefaults = .standard, keychain: String = KeychainStore.service) {
+        d = defaults
+        self.keychain = keychain
         provider = CloudProvider(rawValue: d.string(forKey: "cloud.provider") ?? "") ?? .openRouter
         baseURL = d.string(forKey: "cloud.baseURL") ?? CloudProvider.openRouter.defaultBaseURL
         model = d.string(forKey: "cloud.model") ?? CloudProvider.openRouter.defaultModel
@@ -176,9 +179,9 @@ final class CloudModelSettings {
         d.removeObject(forKey: "cloud.enabled")
         lastTestOK = d.bool(forKey: "cloud.lastTestOK")
         // Earlier versions kept one key for all providers; it belonged to the provider saved then.
-        if let old = KeychainStore.read(account: "cloud.apiKey") {
-            KeychainStore.save(old, account: Self.account(provider))
-            KeychainStore.delete(account: "cloud.apiKey")
+        if let old = KeychainStore.read(account: "cloud.apiKey", service: keychain) {
+            KeychainStore.save(old, account: Self.account(provider), service: keychain)
+            KeychainStore.delete(account: "cloud.apiKey", service: keychain)
         }
     }
 
@@ -187,14 +190,14 @@ final class CloudModelSettings {
     /// Where the current provider's key comes from: the Keychain first, then the launch environment.
     var keySource: KeySource {
         _ = keyRevision
-        if KeychainStore.read(account: Self.account(provider)) != nil { return .keychain }
+        if KeychainStore.read(account: Self.account(provider), service: keychain) != nil { return .keychain }
         if LaunchKeys.key(for: provider) != nil { return .launch(LaunchKeys.source) }
         return .none
     }
     var hasKey: Bool { keySource != .none }
     /// The saved key's first and last characters, to tell which one it is.
     var keyHint: String? { _ = keyRevision; return apiKey.map(APIKeyText.hint) }
-    private var apiKey: String? { KeychainStore.read(account: Self.account(provider)) ?? LaunchKeys.key(for: provider) }
+    private var apiKey: String? { KeychainStore.read(account: Self.account(provider), service: keychain) ?? LaunchKeys.key(for: provider) }
 
     /// The service address and model are filled in (the key aside).
     var endpointReady: Bool { !model.trimmingCharacters(in: .whitespaces).isEmpty && URL(string: baseURL)?.scheme == "https" }
@@ -208,7 +211,7 @@ final class CloudModelSettings {
 
     @discardableResult
     func saveKey(_ key: String) -> Bool {
-        let ok = KeychainStore.save(key.trimmingCharacters(in: .whitespacesAndNewlines), account: Self.account(provider))
+        let ok = KeychainStore.save(key.trimmingCharacters(in: .whitespacesAndNewlines), account: Self.account(provider), service: keychain)
         keyRevision += 1
         lastTestOK = false
         return ok
@@ -220,10 +223,22 @@ final class CloudModelSettings {
     }
 
     func deleteKey() {
-        KeychainStore.delete(account: Self.account(provider))
+        KeychainStore.delete(account: Self.account(provider), service: keychain)
         keyRevision += 1
         lastTestOK = false
         mode = .onDevice
+    }
+
+    /// 删除所有数据: back to the first launch, every provider's key gone and nothing agreed to.
+    func eraseAll() {
+        for p in CloudProvider.allCases { KeychainStore.delete(account: Self.account(p), service: keychain) }
+        keyRevision += 1
+        lastTestOK = false
+        consented = false
+        mode = .onDevice
+        provider = .openRouter
+        baseURL = CloudProvider.openRouter.defaultBaseURL
+        model = CloudProvider.openRouter.defaultModel
     }
 
     func client() -> CloudModelClient? {
@@ -235,11 +250,11 @@ final class CloudModelSettings {
 // MARK: - Keychain
 
 enum KeychainStore {
-    private static let service = "com.pulse.restingheart.cloudmodel"
+    static let service = "com.pulse.restingheart.cloudmodel"
 
     @discardableResult
-    static func save(_ value: String, account: String) -> Bool {
-        delete(account: account)
+    static func save(_ value: String, account: String, service: String = service) -> Bool {
+        delete(account: account, service: service)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -250,7 +265,7 @@ enum KeychainStore {
         return SecItemAdd(query as CFDictionary, nil) == errSecSuccess
     }
 
-    static func read(account: String) -> String? {
+    static func read(account: String, service: String = service) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -263,7 +278,7 @@ enum KeychainStore {
         return String(data: data, encoding: .utf8)
     }
 
-    static func delete(account: String) {
+    static func delete(account: String, service: String = service) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -373,12 +388,17 @@ struct CloudModelClient {
             case .text(let t):
                 text += t
                 onPartial(text)
-            case .done: return text
+            case .done: return try Self.finished(text)
             case .error(let m): throw CloudModelError.service(m)
             case .ignore: continue
             }
         }
-        guard !text.isEmpty else { throw CloudModelError.empty }
+        return try Self.finished(text)
+    }
+
+    /// An answer without words is a failure however the stream ended: the rules answer takes over.
+    static func finished(_ text: String) throws -> String {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CloudModelError.empty }
         return text
     }
 

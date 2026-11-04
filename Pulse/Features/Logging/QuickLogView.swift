@@ -911,9 +911,7 @@ struct VitalLogForm: View {
         let weights = kind == .weight
             ? ((try? ctx.fetch(FetchDescriptor<VitalReading>())) ?? []).filter { $0.kind == .weight && $0.time > time.adding(days: -4) }.map(\.point) + [reading.point]
             : []
-        if let c = AlertEngine.evaluateVital(reading.point, profile: p) ?? AlertEngine.weightAlert(weights, profile: p, now: max(time, .app))
-            ?? Dialysis.alert(weights, profile: p, now: max(time, .app)),
-           DataHub.addEvent(c, in: ctx) != nil {
+        if let c = DataHub.alert(forReading: reading.point, weights: weights, profile: p, in: ctx, now: max(time, .app)) {
             withAnimation { result = c }
         } else {
             DataHub.refreshAlerts(in: ctx)

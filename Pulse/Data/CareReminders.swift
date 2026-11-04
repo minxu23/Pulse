@@ -119,16 +119,34 @@ enum CareReminders {
         (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
     }
 
-    /// Replaces Pulse's pending reminders with the ones the tasks call for now (none when turned off).
-    @MainActor static func sync(in ctx: ModelContext) {
-        guard schedulable else { return }
+    /// Pending reminders the schedule no longer has. Only these are taken away: adding a reminder
+    /// under an id that is pending replaces it, so one still due is never missing, even when iOS
+    /// suspends Pulse halfway through.
+    static func stale(pending: [String], planned: [Planned]) -> [String] {
+        let kept = Set(planned.map(\.id))
+        return pending.filter { $0.hasPrefix(prefix) && !kept.contains($0) }
+    }
+
+    /// The last schedule change: each waits for the one before, so the newest always ends up in place.
+    @MainActor private static var latest: _Concurrency.Task<Void, Never>?
+
+    /// Brings Pulse's pending reminders in line with what the tasks call for now (none when turned off).
+    @MainActor static func sync(in ctx: ModelContext) { _ = start(in: ctx) }
+
+    /// The same for a background run, which has to wait for it to finish.
+    @MainActor static func syncNow(in ctx: ModelContext) async { await start(in: ctx)?.value }
+
+    @MainActor @discardableResult private static func start(in ctx: ModelContext) -> _Concurrency.Task<Void, Never>? {
+        guard schedulable else { return nil }
         let tasks = ((try? ctx.fetch(FetchDescriptor<CareTask>())) ?? [])
             .map { Task(id: $0.id.uuidString, title: $0.title, note: $0.note, due: $0.due, done: $0.done, repeats: $0.repeats) }
         let planned = enabled ? plan(tasks, now: Date()) : []
-        _Concurrency.Task {
+        let previous = latest
+        let change = _Concurrency.Task { @MainActor in
+            await previous?.value
             let center = UNUserNotificationCenter.current()
-            let ours = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix(prefix) }
-            center.removePendingNotificationRequests(withIdentifiers: ours)
+            let pending = await center.pendingNotificationRequests().map(\.identifier)
+            center.removePendingNotificationRequests(withIdentifiers: stale(pending: pending, planned: planned))
             for p in planned {
                 let content = UNMutableNotificationContent()
                 content.title = p.title
@@ -139,5 +157,7 @@ enum CareReminders {
                                                             trigger: UNCalendarNotificationTrigger(dateMatching: when, repeats: false)))
             }
         }
+        latest = change
+        return change
     }
 }

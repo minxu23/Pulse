@@ -38,9 +38,10 @@ struct DataPrivacyView: View {
                 Button { run { try DataExporter.json(ctx, categories: categories) } } label: {
                     Label("导出完整数据（JSON）", systemImage: "curlybraces")
                 }
-                Button { run { try DataExporter.csv(ctx) } } label: {
+                Button { run { try DataExporter.csv(ctx, categories: categories) } } label: {
                     Label("导出每日数据（CSV 表格）", systemImage: "tablecells")
                 }
+                .disabled(categories.isDisjoint(with: DataExporter.csvCategories))
                 if let url = exported {
                     ShareLink(item: url) {
                         Label("分享 / 保存「\(url.lastPathComponent)」", systemImage: "square.and.arrow.up")
@@ -50,20 +51,23 @@ struct DataPrivacyView: View {
                 if let exportError { StatusLabel(.urgent(exportError)).font(.footnote) }
             } header: {
                 Text("导出")
+            } footer: {
+                Text("CSV 表格只有静息心率、睡眠、活动和饮食这几类每日数据，按上面的选择导出。")
             }
             .disabled(categories.isEmpty)
 
             Section {
                 Button("删除所有数据", role: .destructive) { confirmDelete = true }
             } footer: {
-                Text("将永久删除 Pulse 中的所有记录与设置，无法恢复。健康 App 中的数据不受影响。")
+                Text("将永久删除 Pulse 中的所有记录与设置，包括对话、云端模型的密钥和发送健康数据的同意，无法恢复。健康 App 中的数据不受影响。")
             }
         }
         .navigationTitle("隐私与数据").calmStyle()
+        // A file made for another selection is not offered for sharing.
+        .onChange(of: categories) { _, _ in exported = nil }
         .confirmationDialog("确定删除 Pulse 中的所有数据？此操作无法撤销。", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("永久删除", role: .destructive) {
-                DataHub.deleteAll(in: ctx)
-                AgentConversation.shared.clear()
+                DataHub.eraseEverything(in: ctx)
             }
         }
     }

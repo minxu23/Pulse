@@ -220,9 +220,11 @@ enum AgentUI {
         case "weekdays":
             return AgentFormField(id: id, label: label, kind: .weekdays)
         case "number":
-            let lo = max(0, int(f["min"]) ?? 0)
-            let hi = min(600, max(lo + 1, int(f["max"]) ?? 120))
-            let step = min(max(1, int(f["step"]) ?? 5), max(1, hi - lo))
+            // Any start a model gives (a water target from 1000 ml) stays below the end, within 120 taps of it.
+            let lo = min(100_000, max(0, int(f["min"]) ?? 0))
+            let wanted = min(10_000, max(1, int(f["step"]) ?? 5))
+            let hi = min(lo + 120 * wanted, max(lo + 1, int(f["max"]) ?? lo + 120))
+            let step = min(wanted, hi - lo)
             let v = min(max(int(f["value"]) ?? lo, lo), hi)
             return AgentFormField(id: id, label: label, kind: .number(min: lo, max: hi, step: step, unit: text(f["unit"], max: 6) ?? "", value: v))
         case "toggle":
@@ -236,9 +238,10 @@ enum AgentUI {
         guard let s = (v as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
         return String(s.prefix(max))
     }
-    private static func int(_ v: Any?) -> Int? {
+    /// A number from a model's JSON; one too large for an Int counts as none.
+    static func int(_ v: Any?) -> Int? {
         if let i = v as? Int { return i }
-        if let d = v as? Double { return Int(d) }
+        if let d = v as? Double { return Int(exactly: d.rounded(.towardZero)) }
         if let s = v as? String { return Int(s) }
         return nil
     }

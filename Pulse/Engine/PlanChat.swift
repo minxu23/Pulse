@@ -709,7 +709,7 @@ enum PlanChat {
         let edits = (d["edits"] as? [[String: Any]]) ?? []
         let ops: [PlanEditOp] = edits.prefix(10).compactMap { e in
             func wd(_ k: String) -> Int? { weekday(from: e[k]) }
-            func num(_ k: String) -> Int? { (e[k] as? Int) ?? (e[k] as? Double).map(Int.init) ?? (e[k] as? String).flatMap(Int.init) }
+            func num(_ k: String) -> Int? { AgentUI.int(e[k]).map { min(max($0, 0), 1440) } }
             let level = (e["intensity"] as? String).flatMap(Intensity.init(rawValue:))
             switch e["op"] as? String {
             case "move": guard let a = wd("from"), let b = wd("to") else { return nil }; return .move(from: a, to: b)
