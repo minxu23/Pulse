@@ -417,7 +417,7 @@ enum BaselineAssessment {
             guard out.last.map({ v.time.timeIntervalSince($0) > 2 * 3600 }) ?? true else { continue }
             let before = g[max(0, i - 6)..<i].map(\.value)
             guard before.allSatisfy({ $0 >= v.value - 0.05 }) else { continue }
-            if g[(i + 1)...].prefix { $0.time.timeIntervalSince(v.time) <= 45 * 60 }.contains(where: { $0.value >= v.value + 1.5 }) {
+            if g[(i + 1)...].prefix(while: { $0.time.timeIntervalSince(v.time) <= 45 * 60 }).contains(where: { $0.value >= v.value + 1.5 }) {
                 out.append(v.time)
             }
         }

@@ -84,7 +84,6 @@ struct EveningCheckInView: View {
 
     private func load() {
         let r = DataHub.record(for: DayClock.logicalToday(.app, DayClock.current), in: ctx)
-        let p = profiles.first
         fatigue = r.eveningFatigue
         soreness = r.eveningSoreness ?? r.soreness
         area = r.sorenessArea

@@ -1592,7 +1592,7 @@ struct ShiftWorkTests {
         let r = HealthAgent.reply(to: "下班后怎么睡比较好？", context: c)
         #expect(r.intent == .sleep)
         // Thursday is the last night of the run: sleep 09:00–13:00, then bed at the usual time.
-        let k = try? #require(r.conclusion)
+        let k = r.conclusion
         #expect(k?.contains("09:00") == true && k?.contains("13:00") == true)
         #expect(r.text.contains("最后一个夜班"))
         let coffee = HealthAgent.reply(to: "现在可以喝咖啡吗？", context: c)

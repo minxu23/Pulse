@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// Conversation with the Health Agent: text or voice in, answers grounded in the user's own
 /// records, with links to the page where the details live.

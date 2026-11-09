@@ -14,7 +14,7 @@ struct LabDietTests {
 
     @Test func estimatesEGFRAndReadsStages() {
         // CKD-EPI 2021: a 57-year-old man with creatinine 127 μmol/L is around 57.
-        let e = try? #require(LabAnalyzer.ckdEPI(creatinine: 127, age: 57, sex: .male))
+        let e = LabAnalyzer.ckdEPI(creatinine: 127, age: 57, sex: .male)
         #expect(abs((e ?? 0) - 57) < 1.5)
         #expect(LabAnalyzer.ckdEPI(creatinine: 127, age: 57, sex: .unspecified) == nil)
         // Women get a higher estimate for the same creatinine at the same age.

@@ -13,10 +13,11 @@ final class DataStores {
 
     static let shared = DataStores()
 
-    static let testKey = "data.testingEnabled"
-    static let modeKey = "data.mode"
-    static let ownKey = "data.ownStore"
-    static let sampleKey = "data.sampleStore"
+    // Plain keys: read from anywhere, not only the main actor.
+    nonisolated static let testKey = "data.testingEnabled"
+    nonisolated static let modeKey = "data.mode"
+    nonisolated static let ownKey = "data.ownStore"
+    nonisolated static let sampleKey = "data.sampleStore"
 
     private(set) var mode: Mode
     private(set) var container: ModelContainer

@@ -102,7 +102,7 @@ struct ReviewFindingsTests {
         #expect(TargetTracker.goal(.weeklyRunKm, baseline: 25, profile: p) == 90, "90% of the plan, whatever was run before")
         #expect(TargetTracker.reached(.weeklyRunKm, value: r.value, goal: 90))
         let input = ProgramPlanInput(pack: .event, target: .weeklyRunKm, round: 1, roundStart: monday)
-        let x = ProgramEvaluator.Input(program: input, profile: p, days: [], workouts: runs, vitals: [], plan: [], baseline: nil, goal: 90)
+        let x = ProgramEvaluator.Input(program: input, profile: p, days: [], workouts: runs, vitals: [], plan: [], targetGoal: TargetGoal(target: .weeklyRunKm, goal: 90))
         let week = ProgramEvaluator.week(x, weekStart: monday, now: monday.adding(days: 7))
         #expect(week.change == nil && !week.beyondNoise, "no baseline to compare a share of the plan with")
         #expect(week.targetLine.contains("完成计划的 100%"), "\(week.targetLine)")

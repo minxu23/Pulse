@@ -147,7 +147,7 @@ struct ProgramPlanTests {
         x.roundStart = monday
         return ProgramEvaluator.Input(program: x, profile: profile(),
                                       days: days(14 + 28, rhr: { i in i < 14 ? 76 : 76 - rhrDrop * Double(i - 14) / 28 }),
-                                      workouts: [], vitals: vitals, plan: plan(weeks: 4, done: done), baseline: 76, goal: 73)
+                                      workouts: [], vitals: vitals, plan: plan(weeks: 4, done: done), targetGoal: TargetGoal(target: target, baseline: 76, goal: 73))
     }
 
     @Test func weekChecksAndTheTargetAgainstItsNoise() {

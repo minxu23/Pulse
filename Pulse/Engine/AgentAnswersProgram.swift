@@ -103,7 +103,7 @@ extension HealthAgent {
                               conclusion: "这一轮今天才开始，还没有可以判断的记录。", verbatim: true)
         }
         let input = ProgramEvaluator.Input(program: program, profile: c.profile, days: c.days, workouts: c.workouts, vitals: c.vitals,
-                                           plan: c.plan, baseline: x.goal?.baseline, goal: x.goal?.goal)
+                                           plan: c.plan, targetGoal: x.goal)
         let w = ProgramEvaluator.week(input, weekStart: ws, now: lastWeek ? today : c.now)
         let which = lastWeek ? "上周" : "这周"
         var lines = [w.excused ? "\(which)有生病或出差的日子，不计入判定。" : w.met ? (lastWeek ? "上周的方案做到了。" : "这周的方案目前做到了。") : "\(which)的方案还差一些。"]

@@ -94,7 +94,7 @@ struct SpecFindingsTests {
                                            let d = i - 14
                                            return d >= 7 && d < 28 && d % 7 < 3
                                        },
-                                       workouts: [], vitals: [], plan: sessions(weeks: 7, done: true), baseline: 70, goal: 68)
+                                       workouts: [], vitals: [], plan: sessions(weeks: 7, done: true), targetGoal: TargetGoal(target: .restingHR, baseline: 70, goal: 68))
         #expect(ProgramEvaluator.roundWeeks(x, now: monday.adding(days: 7)) == 4, "nothing excused yet")
         #expect(ProgramEvaluator.roundWeeks(x, now: monday.adding(days: 14)) == 5)
         #expect(ProgramEvaluator.roundWeeks(x, now: monday.adding(days: 49)) == 6, "at most 2 more weeks")
@@ -106,7 +106,7 @@ struct SpecFindingsTests {
     @Test func theThirdRoundInARowWithoutTheGoalSuggestsANewBaseline() {
         var x = ProgramEvaluator.Input(program: input(.cardio, .restingHR), profile: profile(),
                                        days: days(from: monday.adding(days: -14), count: 42), workouts: [], vitals: [],
-                                       plan: sessions(weeks: 4, done: false), baseline: 70, goal: 68,
+                                       plan: sessions(weeks: 4, done: false), targetGoal: TargetGoal(target: .restingHR, baseline: 70, goal: 68),
                                        hardest: ["步数", "步数", "周二的训练"])
         let first = ProgramEvaluator.round(x, now: monday.adding(days: 28))
         #expect(first?.suggestsReassessment == nil)
@@ -124,7 +124,7 @@ struct SpecFindingsTests {
         let base = ProgramEvaluator.Input(program: input(.cardio, .clinicBP), profile: profile(),
                                           days: days(from: monday.adding(days: -14), count: 42), workouts: [],
                                           vitals: [bp(1, 150), bp(3, 148), bp(8, 147), bp(10, 146), bp(22, 139), bp(25, 135)],
-                                          plan: sessions(weeks: 4, done: true), baseline: 150, goal: 140)
+                                          plan: sessions(weeks: 4, done: true), targetGoal: TargetGoal(target: .clinicBP, baseline: 150, goal: 140))
         #expect(ProgramEvaluator.round(base, now: monday.adding(days: 28))?.outcome == .notEnoughReadings, "week 3 has no reading")
         var full = base
         full.vitals += [bp(15, 144), bp(17, 142)]
@@ -138,7 +138,7 @@ struct SpecFindingsTests {
         p.race = RaceInfo(name: "城市马拉松", date: monday.adding(days: 7 * 10), targetMinutes: nil, startDate: monday.adding(days: -14),
                           currentWeeklyKm: 30, longestRunKm: 16, fuelCarbsPerHour: 60)
         let x = ProgramEvaluator.Input(program: input(.event, .weeklyRunKm), profile: p, days: days(from: monday.adding(days: -14), count: 120),
-                                       workouts: [], vitals: [], plan: sessions(weeks: 4, done: true), baseline: nil, goal: 90)
+                                       workouts: [], vitals: [], plan: sessions(weeks: 4, done: true), targetGoal: TargetGoal(target: .weeklyRunKm, goal: 90))
         let check = ProgramEvaluator.round(x, now: monday.adding(days: 28))
         #expect(check?.outcome == .phaseCheck, "every 4 weeks a look at the training phase, never 总结期 before the race")
         #expect(check?.next.contains("接下来是") == true)

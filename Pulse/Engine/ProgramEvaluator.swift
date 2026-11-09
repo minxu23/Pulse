@@ -73,12 +73,15 @@ enum ProgramEvaluator {
         var workouts: [WorkoutPoint]
         var vitals: [VitalPoint]
         var plan: [SessionSnapshot]
-        var baseline: Double?
-        var goal: Double?
+        /// The main target's baseline and goal for the round (the program's own target decides which metric).
+        var targetGoal: TargetGoal?
         /// What each weekly review of this round said was hardest to keep up (一起复盘).
         var hardest: [String] = []
         /// Rounds in a row just before this one that missed their goal.
         var missedBefore = 0
+
+        var baseline: Double? { targetGoal?.baseline }
+        var goal: Double? { targetGoal?.goal }
     }
 
     /// The round's length: 4 weeks, a week more for each week of illness or travel that is over, at most 2 more

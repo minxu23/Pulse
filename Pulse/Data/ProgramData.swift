@@ -376,7 +376,7 @@ extension ProgramFlow {
                                       workouts: sessions.filter { $0.start >= back }.map(\.point),
                                       vitals: vitals.filter { $0.time >= back }.map(\.point),
                                       plan: items.filter { $0.day >= back }.map(\.snapshot),
-                                      baseline: p.programTargetBaseline, goal: p.programTargetGoal,
+                                      targetGoal: p.targetGoal,
                                       hardest: reviews.filter { $0.periodStart >= program.roundStart && !$0.change.isEmpty }.map(\.change),
                                       missedBefore: missedInARow(in: ctx))
     }
@@ -415,7 +415,7 @@ extension ProgramFlow {
         guard p.programPhase == .improve, let start = p.programRoundStart, weekStart >= start,
               weekStart < start.adding(days: 7 * p.programRoundWeeks), let program = c.profile.program else { return nil }
         let x = ProgramEvaluator.Input(program: program, profile: c.profile, days: c.days, workouts: c.workouts, vitals: c.vitals,
-                                       plan: c.plan, baseline: p.programTargetBaseline, goal: p.programTargetGoal)
+                                       plan: c.plan, targetGoal: p.targetGoal)
         return ProgramEvaluator.week(x, weekStart: weekStart, now: c.now)
     }
 

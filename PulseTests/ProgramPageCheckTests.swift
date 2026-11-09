@@ -52,7 +52,7 @@ struct ProgramPageCheckTests {
 
     @Test func aWeekWithNoFullDayYetJudgesNothing() {
         let x = ProgramEvaluator.Input(program: input(.homeBP), profile: profile(), days: days(from: monday.adding(days: -14), count: 15),
-                                       workouts: [], vitals: [], plan: sessions(weeks: 1), baseline: 140, goal: 135)
+                                       workouts: [], vitals: [], plan: sessions(weeks: 1), targetGoal: TargetGoal(target: .homeBP, baseline: 140, goal: 135))
         let w = ProgramEvaluator.week(x, weekStart: monday, now: monday.adding(minutes: 630))
         #expect(w.met, "no reading can be due on the week's first morning")
         #expect(w.next.contains("还没有到期的训练") && !w.next.contains("完成得好"), "\(w.next)")
@@ -63,7 +63,7 @@ struct ProgramPageCheckTests {
         #expect([3, 4, 7].map { ProgramEvaluator.due(2, elapsed: $0) } == [0, 1, 2])
         #expect(ProgramEvaluator.due(5, elapsed: 7) == 5, "the whole week still asks for all of it")
         let x = ProgramEvaluator.Input(program: input(.homeBP), profile: profile(), days: days(from: monday.adding(days: -14), count: 17),
-                                       workouts: [], vitals: [], plan: sessions(weeks: 1), baseline: 140, goal: 135)
+                                       workouts: [], vitals: [], plan: sessions(weeks: 1), targetGoal: TargetGoal(target: .homeBP, baseline: 140, goal: 135))
         let wednesday = ProgramEvaluator.week(x, weekStart: monday, now: monday.adding(days: 2).adding(minutes: 630))
         #expect(wednesday.checks.first { $0.title == "测血压" }?.met == true, "no reading is due before Thursday")
         let sunday = ProgramEvaluator.week(x, weekStart: monday, now: monday.adding(days: 7))
