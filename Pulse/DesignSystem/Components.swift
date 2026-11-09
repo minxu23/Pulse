@@ -44,8 +44,8 @@ struct CardTitle<Trailing: View>: View {
     var body: some View {
         // At accessibility sizes the detail and the button go under the title.
         AdaptiveStack(alignment: .firstTextBaseline, spacing: Theme.Space.item, stackedSpacing: Theme.Space.tight) {
-            Text(title).font(.headline).accessibilityAddTraits(.isHeader)
-            if let detail { Text(detail).font(.footnote).foregroundStyle(.secondary) }
+            Text(title).font(Theme.TypeScale.title).accessibilityAddTraits(.isHeader)
+            if let detail { Text(detail).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
             if !size.isAccessibilitySize { Spacer(minLength: Theme.Space.item) }
             trailing
         }
@@ -67,7 +67,7 @@ struct HealthMetricCard<Footer: View>: View {
     let value: String
     var unit: String = ""
     var status: MetricStatus? = nil
-    var valueFont: Font = .system(.title, design: .rounded).weight(.semibold)
+    var valueFont: Font = Theme.TypeScale.title.weight(.semibold)
     @ViewBuilder var footer: Footer
     @Environment(\.dynamicTypeSize) private var size
 
@@ -77,24 +77,24 @@ struct HealthMetricCard<Footer: View>: View {
             if size.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                     Label { Text(title) } icon: { Image(systemName: icon).foregroundStyle(color) }
-                        .font(.subheadline.weight(.semibold)).labelStyle(.inline)
-                    if let time { Text(time).font(.footnote).foregroundStyle(.secondary) }
+                        .font(Theme.TypeScale.body.weight(.semibold)).labelStyle(.inline)
+                    if let time { Text(time).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
                 }
             } else {
                 HStack(spacing: Theme.Space.iconGap) {
-                    Image(systemName: icon).font(.subheadline.weight(.semibold)).imageScale(.small).foregroundStyle(color)
-                    Text(title).font(.subheadline.weight(.semibold))
+                    Image(systemName: icon).font(Theme.TypeScale.body.weight(.semibold)).imageScale(.small).foregroundStyle(color)
+                    Text(title).font(Theme.TypeScale.body.weight(.semibold))
                     Spacer(minLength: Theme.Space.tight)
-                    if let time { Text(time).font(.footnote).foregroundStyle(.secondary) }
+                    if let time { Text(time).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
                 }
             }
             HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                 Text(value).font(valueFont).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.6)
-                if !unit.isEmpty { Text(unit).font(.subheadline).foregroundStyle(.secondary) }
+                if !unit.isEmpty { Text(unit).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
             }
             if let s = status {
-                StatusLabel(s).font(.footnote).lineLimit(2)
+                StatusLabel(s).font(Theme.TypeScale.body).lineLimit(2)
             }
             footer
         }
@@ -107,7 +107,7 @@ struct HealthMetricCard<Footer: View>: View {
 
 extension HealthMetricCard where Footer == EmptyView {
     init(title: String, icon: String, color: Color, time: String? = nil, value: String, unit: String = "",
-         status: MetricStatus? = nil, valueFont: Font = .system(.title, design: .rounded).weight(.semibold)) {
+         status: MetricStatus? = nil, valueFont: Font = Theme.TypeScale.title.weight(.semibold)) {
         self.init(title: title, icon: icon, color: color, time: time, value: value, unit: unit, status: status,
                   valueFont: valueFont) { EmptyView() }
     }
@@ -130,8 +130,8 @@ struct SectionTitle: View {
     var subtitle: String? = nil
     var body: some View {
         AdaptiveStack(alignment: .firstTextBaseline, spacing: Theme.Space.item, stackedSpacing: Theme.Space.hairline) {
-            Text(title).font(.title3.bold())
-            if let subtitle { Text(subtitle).font(.subheadline).foregroundStyle(.secondary) }
+            Text(title).font(Theme.TypeScale.title.bold())
+            if let subtitle { Text(subtitle).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Theme.Space.tight)
@@ -148,7 +148,7 @@ struct PageFootnote: View {
     init(_ text: String) { self.text = text }
     var body: some View {
         Text(text)
-            .font(.footnote).foregroundStyle(.secondary)
+            .font(Theme.TypeScale.body).foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, Theme.Space.tight)
     }
@@ -169,10 +169,10 @@ struct IconTextRow: View {
         HStack(alignment: .top, spacing: Theme.Space.block) {
             IconTile(icon: icon, color: color)
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                if !title.isEmpty { Text(title).font(.subheadline.weight(.semibold)) }
+                if !title.isEmpty { Text(title).font(Theme.TypeScale.body.weight(.semibold)) }
                 if !text.isEmpty {
                     // Without a title the text is the row itself, so it is body text too.
-                    Text(text).font(.subheadline).foregroundStyle(title.isEmpty || urgent ? .primary : .secondary)
+                    Text(text).font(Theme.TypeScale.body).foregroundStyle(title.isEmpty || urgent ? .primary : .secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -188,7 +188,7 @@ struct IconTile: View {
     var color: Color = .secondary
     var size: CGFloat = Theme.Size.iconTile
     var body: some View {
-        Image(systemName: icon).font(size > 34 ? .title3.weight(.semibold) : .body.weight(.semibold)).foregroundStyle(color)
+        Image(systemName: icon).font(size > 34 ? Theme.TypeScale.title : Theme.TypeScale.body.weight(.semibold)).foregroundStyle(color)
             .frame(width: size, height: size)
             .background(color == .secondary ? Theme.subtle : color.opacity(0.12), in: RoundedRectangle(cornerRadius: Theme.Radius.tile(size), style: .continuous))
             .accessibilityHidden(true)
@@ -201,7 +201,7 @@ struct HeroIcon: View {
     let color: Color
     var body: some View {
         Image(systemName: icon)
-            .font(.title2.weight(.semibold)).foregroundStyle(.white)
+            .font(Theme.TypeScale.title.weight(.semibold)).foregroundStyle(.white)
             .frame(width: Theme.Size.hero, height: Theme.Size.hero)
             .background(color.gradient, in: RoundedRectangle(cornerRadius: Theme.Radius.tile(Theme.Size.hero), style: .continuous))
             .accessibilityHidden(true)
@@ -220,12 +220,12 @@ struct NavRowLabel: View {
         HStack(spacing: Theme.Space.block) {
             IconTile(icon: icon, color: color)
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                Text(title).font(.body).foregroundStyle(.primary)
-                if let detail { Text(detail).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+                Text(title).font(Theme.TypeScale.body).foregroundStyle(.primary)
+                if let detail { Text(detail).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
             }
             Spacer(minLength: Theme.Space.item)
-            if let value { Text(value).font(.subheadline).foregroundStyle(.secondary).monospacedDigit() }
-            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+            if let value { Text(value).font(Theme.TypeScale.body).foregroundStyle(.secondary).monospacedDigit() }
+            Image(systemName: "chevron.right").font(Theme.TypeScale.body.weight(.semibold)).imageScale(.small).foregroundStyle(.tertiary)
         }
         .frame(minHeight: Theme.Size.tap)
         .contentShape(Rectangle())
@@ -239,9 +239,9 @@ struct FactRow: View {
     let value: String
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(label).font(.subheadline).foregroundStyle(.secondary)
+            Text(label).font(Theme.TypeScale.body).foregroundStyle(.secondary)
             Spacer(minLength: Theme.Space.block)
-            Text(value).font(.subheadline.weight(.medium)).monospacedDigit().multilineTextAlignment(.trailing)
+            Text(value).font(Theme.TypeScale.body.weight(.medium)).monospacedDigit().multilineTextAlignment(.trailing)
         }
         .accessibilityElement(children: .combine)
     }
@@ -262,11 +262,11 @@ struct ChecklistRow: View {
         Button(action: toggle) {
             HStack(alignment: .top, spacing: Theme.Space.block) {
                 Image(systemName: done ? "checkmark.circle.fill" : "circle")
-                    .font(.title3).foregroundStyle(done ? Color.green : Color.secondary)
+                    .font(Theme.TypeScale.title).foregroundStyle(done ? Color.green : Color.secondary)
                     .frame(width: Self.glyphColumn)
                 VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                    Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(done ? .secondary : .primary)
-                    Text(detail).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.leading)
+                    Text(title).font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(done ? .secondary : .primary)
+                    Text(detail).font(Theme.TypeScale.body).foregroundStyle(.secondary).multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
@@ -300,8 +300,8 @@ struct LogActionBar: View {
             ForEach(items) { item in
                 Button(action: item.action) {
                     VStack(spacing: Theme.Space.tight) {
-                        Image(systemName: item.icon).font(.body)
-                        Text(item.title).font(.caption).lineLimit(1).minimumScaleFactor(0.8)
+                        Image(systemName: item.icon).font(Theme.TypeScale.body)
+                        Text(item.title).font(Theme.TypeScale.body).lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, minHeight: Theme.Size.tap + Theme.Space.item)
                     .foregroundStyle(Theme.accent)
@@ -319,7 +319,7 @@ struct EmptyLine: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
-        Text(text).font(.subheadline).foregroundStyle(.secondary)
+        Text(text).font(Theme.TypeScale.body).foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, Theme.Space.item)
     }

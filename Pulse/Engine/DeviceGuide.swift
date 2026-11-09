@@ -63,7 +63,7 @@ enum DeviceGuide {
         n.glucoseExercise = p.hasDiabetes || c.glucose.isContinuous
         n.hrCap = p.hrCap
         n.rateLoweringMeds = p.onRateLoweringMeds(at: c.now)
-        if !n.rateLoweringMeds {
+        if !n.rateLoweringMeds && p.ageKnown {
             let mx = p.estimatedMaxHR
             var hi = Int(0.70 * mx)
             if let cap = p.hrCap { hi = min(hi, cap) }
@@ -99,7 +99,7 @@ enum DeviceGuide {
                                          detail: noHR == 0 ? "训练时佩戴正常。" : "开始训练时在手表上选择对应的体能训练类型，或检查训练时是否戴紧。",
                                          ok: noHR == 0))
             }
-            if !c.profile.onRateLoweringMeds(at: c.now) {
+            if !c.profile.onRateLoweringMeds(at: c.now) && c.profile.ageKnown {
                 let limit = 0.85 * c.profile.estimatedMaxHR
                 let suspicious = recent.filter { ($0.rpe ?? 10) <= 4 && ($0.avgHR ?? 0) >= limit }.count
                 if suspicious > 0 {

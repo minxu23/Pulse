@@ -29,7 +29,7 @@ struct HabitsView: View {
                         Spacer()
                         Image(systemName: "chevron.right").foregroundStyle(.tertiary)
                     }
-                    .font(.subheadline)
+                    .font(Theme.TypeScale.body)
                     .cardSurface()
                 }
                 .buttonStyle(.plain)
@@ -44,7 +44,7 @@ struct HabitsView: View {
     private func header(_ title: String, _ sub: String, _ icon: String, _ color: Color, log: QuickLogKind) -> some View {
         CardHeader(title: title, subtitle: sub, icon: icon, color: color) {
             Button { logKind = log } label: {
-                Image(systemName: "plus.circle.fill").font(.title3)
+                Image(systemName: "plus.circle.fill").font(Theme.TypeScale.title)
                     .frame(width: Theme.Size.tap, height: Theme.Size.tap).contentShape(Rectangle())
             }
             .tint(Theme.accent)
@@ -58,10 +58,10 @@ struct HabitsView: View {
             header("饮酒", "本周 \(units.oneDecimal) / \(p.weeklyAlcoholLimit.noDecimal) 单位", "wineglass", Theme.nutrition, log: .alcohol)
             ProgressBar(value: units / max(1, p.weeklyAlcoholLimit), color: units > p.weeklyAlcoholLimit ? .orange : Theme.nutrition)
             if units > p.weeklyAlcoholLimit {
-                StatusLabel(.attention("本周已超出上限 \((units - p.weeklyAlcoholLimit).oneDecimal) 单位")).font(.subheadline)
+                StatusLabel(.attention("本周已超出上限 \((units - p.weeklyAlcoholLimit).oneDecimal) 单位")).font(Theme.TypeScale.body)
             }
             Text("酒精会让夜间心率升高、HRV 降低、睡眠变浅，影响通常持续到第二天早晨。睡前 3 小时内不饮酒、饮酒时同步补水，可以减少影响。")
-                .font(.subheadline).foregroundStyle(.secondary)
+                .font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
     }
 
@@ -71,7 +71,7 @@ struct HabitsView: View {
         return Card {
             header("咖啡因", "近 7 天 \(late) 天晚于 \(p.caffeineCutoffHour):00", "cup.and.saucer", Theme.nutrition, log: .caffeine)
             Text("咖啡因的作用可持续 5–6 小时以上。下午改为低因咖啡或花草茶，有助于入睡和夜间恢复。")
-                .font(.subheadline).foregroundStyle(.secondary)
+                .font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
     }
 
@@ -85,7 +85,7 @@ struct HabitsView: View {
             Text(p.fluidLimited
                  ? "你开启了限水：每天饮水不超过医生定的 \(p.waterTargetMl) ml（汤、粥、水果里的水分也算）。口渴时小口慢喝，或含冰块润口。"
                  : "脱水会使心率升高。运动日和炎热天气多喝一些；有心力衰竭或肾脏疾病等需要限制饮水的情况，请在「我的 › 恢复目标」打开「限水」。")
-                .font(.subheadline).foregroundStyle(.secondary)
+                .font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
     }
 
@@ -125,7 +125,7 @@ struct HabitsView: View {
         return Card {
             header("压力", s.isEmpty ? "在晨起感受或快速记录中记录" : "近 7 天平均 \(Stats.mean(s)!.oneDecimal)/5 · 高压力 \(high) 天", "brain.head.profile", Theme.mind, log: .stress)
             Text("持续压力会让静息心率升高、睡眠变差。每天 5–10 分钟慢呼吸、散步或与人交流都有帮助；长期情绪困扰请寻求专业支持。")
-                .font(.subheadline).foregroundStyle(.secondary)
+                .font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
     }
 }

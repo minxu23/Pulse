@@ -193,6 +193,16 @@ struct DayData: Identifiable, Equatable {
     var breathingDisturbances: Double?
     var respiratoryRate: Double?
     var vo2Max: Double?
+    var bodyFatPct: Double?
+    var leanMassKg: Double?
+    var waistCm: Double?
+    var walkingHR: Double?
+    var hrRecovery: Double?
+    var afBurden: Double?
+    var ecgResult: ECGResult?
+    var standHours: Int?
+    /// Steps in each clock hour (24 values); empty when not read.
+    var stepsByHour: [Int] = []
     var steps: Int?
     var exerciseMinutes: Double?
     var energy: Int?
@@ -270,6 +280,7 @@ struct ProfileSnapshot: Equatable {
     var age: Int = 38
     var sex: Sex = .unspecified
     var bmi: Double = 23
+    var heightCm: Double = 170
     var neckCm: Double?
     var level: ActivityLevel = .light
     var conditions: Set<HealthCondition> = []
@@ -279,6 +290,17 @@ struct ProfileSnapshot: Equatable {
     /// The furthest stage reached on each goal's path.
     var journeyReached: [String: Int] = [:]
     var availableWeekdays: [Int] = [3, 5, 7]
+    var preferredTime: PreferredTime = .flexible
+    var favoriteSports: [SportPreference] = []
+    var smoker: Bool?
+    var familyHistoryCVD: Bool?
+    var parqAnswers: [Bool] = []
+    var hasBPMonitor: Bool?
+    /// 改善期 of the 三阶段计划: the pack and what its plan needs from the baseline.
+    var program: ProgramPlanInput?
+    var programPhase: ProgramPhase = .none
+    /// The optional strength self-test from 基线期.
+    var strengthTest: StrengthTest?
     var sessionMinutes: Int = 40
     var weeklyTimeBudget: Int = 180
     var weeklyTargetMinutes: Int = 90
@@ -330,7 +352,10 @@ struct ProfileSnapshot: Equatable {
 
     var hasCardiac: Bool { conditions.contains { $0.isCardiovascular } || modules.contains(.cardioCare) }
     var hasDiabetes: Bool { conditions.contains { $0.isDiabetes } || modules.contains(.diabetesCare) }
-    var cardiacLimited: Bool { hasCardiac && !clinicianCleared }
+    /// A heart condition (recorded, or said in the safety questions) without a doctor-confirmed intensity: moderate at most.
+    var cardiacLimited: Bool { (hasCardiac || said(.heartOrBP)) && !clinicianCleared }
+    /// Joints that hard landings would make worse: low-impact sessions in place of running and jumping.
+    var jointIssues: Bool { conditions.contains(.jointPain) || said(.bonesJoints) }
     /// Kidney disease without a doctor-confirmed intensity range: moderate at most.
     var kidneyLimited: Bool { conditions.contains(.ckd) && !clinicianCleared }
     /// A quick rise in weight is worth an alert (fluid retention).
@@ -357,6 +382,13 @@ struct ProfileSnapshot: Equatable {
     func hypoRiskMeds(at date: Date = .app) -> Bool {
         medications.contains { $0.category.hypoglycemiaRisk && $0.isActive(on: date) }
     }
+    /// Birth year can be left out: without it no heart-rate number is worked out from age. The snapshot's age is
+    /// 0 exactly when `UserProfile.hasAge` (a valid birth year) is false, so the two always agree.
+    var ageKnown: Bool { age > 0 }
+    /// 「45 岁」 or 「年龄未填写」, for summaries and exports.
+    var ageText: String { ageKnown ? "\(age) 岁" : "年龄未填写" }
+    /// 「BMI 23.4」 or 「身高体重未填写」.
+    var bodySizeText: String { bmi > 0 ? "BMI \(bmi.oneDecimal)" : "身高体重未填写" }
     var estimatedMaxHR: Double { 208 - 0.7 * Double(age) }
 }
 
@@ -384,6 +416,11 @@ struct WorkoutPoint: Equatable {
     var avgHR: Double?
     var rpe: Int?
     var distanceKm: Double?
+    var maxHR: Double? = nil
+    /// Mean heart rate each minute; empty when not read.
+    var hrSeries: [Int] = []
+    /// Drop in heart rate in the minute after the session.
+    var hrRecovery: Double? = nil
 }
 
 struct VitalPoint: Equatable {

@@ -54,19 +54,19 @@ struct DayRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                Text(r.day.formatted(.dateTime.month().day().weekday())).font(.subheadline.weight(.medium))
+                Text(r.day.formatted(.dateTime.month().day().weekday())).font(Theme.TypeScale.body.weight(.medium))
                 // Inline glyphs inside the row's own content (the row label itself keeps the List style).
                 HStack(spacing: Theme.Space.item) {
                     if let h = r.restingHR { Label("\(h.noDecimal)", systemImage: "heart.fill") }
                     if let s = r.sleepMinutes { Label((s / 60).oneDecimal, systemImage: "bed.double.fill") }
                     if let st = r.steps { Label("\(st)", systemImage: "figure.walk") }
                 }
-                .font(.caption).labelStyle(.inline)
+                .font(Theme.TypeScale.body).labelStyle(.inline)
             }
             Spacer()
             HStack(spacing: Theme.Space.tight) {
-                ForEach(Array(r.tags).prefix(4)) { Image(systemName: $0.icon).font(.caption2).foregroundStyle(.secondary) }
-                if !r.manualFields.isEmpty { Image(systemName: "pencil").font(.caption2).foregroundStyle(.secondary) }
+                ForEach(Array(r.tags).prefix(4)) { Image(systemName: $0.icon).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
+                if !r.manualFields.isEmpty { Image(systemName: "pencil").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
             }
         }
     }
@@ -122,7 +122,7 @@ struct DayEditorView: View {
                     HStack {
                         Label("\(s.type.label) \(Int(s.minutes)) 分钟", systemImage: s.type.icon)
                         Spacer()
-                        Text("RPE \(s.rpe ?? s.type.defaultRPE) · \(s.source.label)").font(.caption).foregroundStyle(.secondary)
+                        Text("RPE \(s.rpe ?? s.type.defaultRPE) · \(s.source.label)").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                 }
                 .onDelete { idx in for i in idx { ctx.delete(daySessions[i]) } }

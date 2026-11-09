@@ -15,10 +15,12 @@ struct ReviewView: View {
         let id = UUID()
         let question: String?
         let voice: Bool
+        let scope: ReviewChatScope?
     }
     @State private var segment: Segment = DebugLaunch.value("-PulseSegment") == "long" ? .longTerm
         : (DebugLaunch.value("-PulseSegment") == "day" ? .day : .week)
     @State private var agent: AgentRequest?
+    @State private var reviewWeek: Date = Date.app.weekStart
 
     var body: some View {
         NavigationStack {
@@ -26,7 +28,7 @@ struct ReviewView: View {
                 ScreenScroll {
                     switch segment {
                     case .day: DailyReviewSection(context: ctx, onAsk: ask)
-                    case .week: WeeklyReviewSection(context: ctx, onAsk: ask)
+                    case .week: WeeklyReviewSection(context: ctx, onAsk: ask, shownWeek: $reviewWeek)
                     case .longTerm: LongTermReviewSection(context: ctx, onAsk: ask)
                     }
                     Disclaimer(text: AgentNameSettings.shared.phrase("复盘中的关联来自你的记录，可能受其他因素影响；只有经过个人验证或专业确认的才标记为「已确认」。", "不做诊断。"))
@@ -42,16 +44,17 @@ struct ReviewView: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 // The whole Health Agent, not a question box for this page: it explains, answers and changes plans.
-                AskAgentBar(placeholder: "有什么想问、想调整的？", onAsk: ask)
+                AskAgentBar(placeholder: AgentNameSettings.shared.phrase("问问 "), onAsk: ask)
             }
             .navigationTitle("复盘")
             .navigationBarTitleDisplayMode(.inline)
-            .sheet(item: $agent) { r in HealthAgentChatView(initialQuestion: r.question, startListening: r.voice) }
+            .sheet(item: $agent) { r in HealthAgentChatView(initialQuestion: r.question, startListening: r.voice, reviewScope: r.scope) }
         }
     }
 
     private func ask(_ question: String?, _ voice: Bool) {
-        agent = AgentRequest(question: question, voice: voice)
+        let scope = segment == .week ? ReviewChatScope(weekStart: reviewWeek) : nil
+        agent = AgentRequest(question: question, voice: voice, scope: scope)
     }
 }
 
@@ -69,7 +72,7 @@ struct AskAgentBar: View {
             Button { onAsk(nil, false) } label: {
                 HStack(spacing: Theme.Space.block) {
                     AgentAvatar(size: Theme.Size.iconTile)
-                    Text(placeholder).font(.body).foregroundStyle(.secondary).lineLimit(1)
+                    Text(placeholder).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1)
                     Spacer(minLength: 0)
                 }
                 .padding(.leading, Theme.Space.item).padding(.trailing, Theme.Space.block)
@@ -80,7 +83,7 @@ struct AskAgentBar: View {
             .buttonStyle(.plain)
             .accessibilityLabel(AgentNameSettings.shared.phrase("问问"))
             Button { onAsk(nil, true) } label: {
-                Image(systemName: "mic.fill").font(.body.weight(.semibold)).foregroundStyle(Theme.accent)
+                Image(systemName: "mic.fill").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(Theme.accent)
                     .frame(width: barHeight, height: barHeight)
                     .background(Theme.card, in: Circle())
                     .contentShape(Circle())
@@ -121,7 +124,7 @@ struct ReviewByline: View {
                 Spacer(minLength: 0)
             }
         }
-        .font(.footnote)
+        .font(Theme.TypeScale.body)
         // As tall as the retry button in every state, so the card does not jump when the text is written.
         .frame(minHeight: Theme.Size.tap)
     }
@@ -129,7 +132,7 @@ struct ReviewByline: View {
     private func retry(_ title: String) -> some View {
         Button(action: onRetry) { textLink(title, minWidth: Theme.Size.tap) }
             .buttonStyle(.borderless)
-            .font(.footnote.weight(.semibold))
+            .font(Theme.TypeScale.body.weight(.semibold))
     }
 }
 
@@ -146,17 +149,17 @@ struct ReviewSummaryCard: View {
     var body: some View {
         let writing = byline == nil || byline == .writing
         VStack(alignment: .leading, spacing: Theme.Space.item) {
-            Text(eyebrow).font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+            Text(eyebrow).font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: Theme.Space.item) {
                 HStack(alignment: .firstTextBaseline, spacing: Theme.Space.iconGap) {
                     if let glyph {
-                        Image(systemName: glyph.icon).font(.title3.weight(.semibold)).imageScale(.small)
+                        Image(systemName: glyph.icon).font(Theme.TypeScale.title.weight(.semibold)).imageScale(.small)
                             .foregroundStyle(glyph.color).accessibilityHidden(true)
                     }
-                    Text(headline).font(.title3.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+                    Text(headline).font(Theme.TypeScale.title.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
                 }
                 if !summary.isEmpty {
-                    Text(summary).font(.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(summary).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
             .opacity(writing ? 0.4 : 1)
@@ -211,6 +214,7 @@ struct WeeklyReviewSection: View {
     @Query private var insights: [InsightRecord]
     @Query(sort: \CareTask.createdAt, order: .reverse) private var tasks: [CareTask]
     @State private var weekOffset = 0
+    @Binding var shownWeek: Date
     @State private var adopted: [CoachProposal] = []
     @State private var ledgerTick = 0
 
@@ -221,99 +225,158 @@ struct WeeklyReviewSection: View {
         let current = weekOffset == 0
         let span = current ? today.daysSince(ws) + 1 : 7
         let src = context.trend.dominantSource
-        let cur = ReviewCoach.week(days: context.days, plan: context.plan, weekStart: ws, span: span, source: src, now: today)
-        let prev = ReviewCoach.week(days: context.days, plan: context.plan, weekStart: ws.adding(days: -7), span: span, source: src, now: today)
+        let recording = profiles.first?.usageIntent == .recording
+        let reviewContext = WeeklyAgentReview.scoped(context, weekStart: ws, recording: recording)
+        let cur = ReviewCoach.week(days: reviewContext.days, plan: reviewContext.plan, weekStart: ws, span: span, source: src, now: reviewContext.logicalToday)
+        let prev = ReviewCoach.week(days: reviewContext.days, plan: reviewContext.plan, weekStart: ws.adding(days: -7), span: span, source: src, now: reviewContext.logicalToday)
         let next = PlanGenerator.nextWeeklyTarget(current: context.profile.weeklyTargetMinutes, lastWeekCompletion: cur.completion, profile: context.profile)
         // What the user cares about most leads: numbers, suggestions, the story and the reflection.
-        let priorities = ReviewPriorities.ranked(context, mine: profiles.first?.reviewPriorities ?? [])
-        let brief = ReviewCoach.brief(current: cur, previous: prev, context: context, isCurrentWeek: current, nextTarget: next, priorities: priorities)
+        let targetReport = profiles.first.flatMap { ProgramFlow.weekReport($0, weekStart: ws, context: context) }
+        let priorities = WeeklyAgentReview.priorities(ReviewPriorities.ranked(reviewContext, mine: profiles.first?.reviewPriorities ?? []),
+                                                      target: recording ? nil : targetReport?.target.target)
+        let brief = ReviewCoach.brief(current: cur, previous: prev, context: reviewContext, isCurrentWeek: current, nextTarget: next, priorities: priorities)
         let _ = ledgerTick
-        let proposals = current ? ReviewCoach.proposals(context: context,
+        let candidates = current ? ReviewCoach.proposals(context: reviewContext,
                                                         handledInsights: Set(insights.filter { $0.status != .observed }.map(\.key)),
                                                         taskTitles: tasks.filter { !$0.done }.map(\.title), priorities: priorities)
             .filter { CoachLedger.state($0.id, week: ws) == nil } : []
 
+        let proposals = WeeklyAgentReview.proposals(candidates, recording: recording)
+        let activity = WeekActivity(days: context.days, weekStart: ws, span: span)
+        let metrics = ReviewPresentation.metrics(brief.metrics, target: targetReport?.target, recording: recording,
+                                                 activityKnown: activity.known, steps: activity.steps, previousSteps: activity.previousSteps)
         let saved = entries.first { $0.periodStart == ws }
-        let plan = current ? ReviewCoach.nextWeekPlan(context: context, week: cur,
+        let plan = current && profiles.first?.usageIntent != .recording ? ReviewCoach.nextWeekPlan(context: reviewContext, week: cur,
                                                       notes: saved.map { ReviewNotes(keep: $0.keep, change: $0.change, focus: $0.nextFocus) }) : nil
-        // The rules decide; the language model writes the cards from those facts.
-        let facts = ReviewCoach.weeklyFacts(brief: brief, weekLabel: weekLabel(ws, current: current, span: span),
-                                            isCurrentWeek: current, proposals: proposals, plan: plan, priorities: priorities)
+        let facts = WeeklyAgentReview.facts(context: reviewContext, brief: brief, week: cur,
+                                            weekLabel: weekLabel(ws, current: current, span: span), current: current,
+                                            recording: recording, sample: profiles.first?.usesDemoData == true,
+                                            target: targetReport, goal: profiles.first?.targetGoal, proposals: proposals, plan: plan,
+                                            priorities: priorities, notes: saved.map { ReviewNotes(keep: $0.keep, change: $0.change, focus: $0.nextFocus) })
         let writer = ReviewWriter.shared
         let copy = writer.copy(for: facts)
-        let state = writer.state(for: facts)
-        let writing = state == nil || state == .writing
-
-        WeekSwitcher(title: weekRange(ws), subtitle: current ? "本周 · 第 \(span) 天" : (weekOffset == 1 ? "上周" : "\(weekOffset) 周前"),
+        let writing = writer.state(for: facts)
+        WeekSwitcher(title: weekRange(ws), subtitle: current ? "本周 · 第 \(span) 天" : "过往记录",
                      canGoForward: weekOffset > 0,
-                     onPrev: { weekOffset += 1 }, onNext: { weekOffset = max(0, weekOffset - 1) })
-
-        ReviewSummaryCard(eyebrow: current ? "本周总结" : "这周总结", headline: copy.headline, summary: copy.summary,
-                          byline: state, onRetry: { Task { await writer.rewrite(facts) } })
+                     onPrev: { weekOffset += 1; shownWeek = context.weekStart.adding(days: -7 * weekOffset) },
+                     onNext: { weekOffset = max(0, weekOffset - 1); shownWeek = context.weekStart.adding(days: -7 * weekOffset) })
+            .onAppear { shownWeek = ws }
             .task(id: facts.key) { await writer.write(facts) }
 
-        WeekNumbersCard(metrics: brief.metrics)
-        if current { PrioritiesCard(context: context) }
-        WeekDaysCard(context: context, weekStart: ws)
-        if !brief.watch.isEmpty { WatchCard(points: brief.watch) }
-
-        if current {
-            SectionTitle(title: "建议调整", subtitle: "采纳后立即生效")
-            VStack(spacing: 0) {
-                ForEach(adopted) { p in
-                    if p.id != adopted.first?.id { Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block) }
-                    StatusLabel(.good("已采纳：\(p.title)")).font(.subheadline)
-                        .frame(maxWidth: .infinity, minHeight: Theme.Size.tap, alignment: .leading)
-                }
-                if proposals.isEmpty && adopted.isEmpty {
-                    StatusLabel(.good("这周没有需要调整的地方，按现在的节奏继续。")).font(.subheadline)
-                        .frame(maxWidth: .infinity, minHeight: Theme.Size.tap, alignment: .leading)
-                }
-                ForEach(Array(proposals.enumerated()), id: \.element.id) { i, p in
-                    if i > 0 || !adopted.isEmpty { Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block) }
-                    ProposalRow(proposal: p, rationale: copy.items[safe: i], writing: writing,
-                                onAdopt: { apply(p, week: ws) },
-                                onDismiss: { CoachLedger.set(p.id, week: ws, "dismissed"); ledgerTick += 1 })
+        Card {
+            CardTitle("本周变化")
+            Text(copy.summary).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
+            WeeklyAgentAttribution(state: writing, onRetry: { Task { await writer.rewrite(facts) } },
+                                   onDiscuss: { onAsk(nil, false) })
+            Divider()
+            if metrics.isEmpty { Text("这一周还没有足够记录。").foregroundStyle(.secondary) }
+            ForEach(Array(metrics.prefix(3).enumerated()), id: \.element.id) { i, m in
+                if i > 0 { Divider() }
+                VStack(alignment: .leading, spacing: Theme.Space.tight) {
+                    AdaptiveRow {
+                        Text(m.name)
+                    } trailing: {
+                        Text(m.value + " " + m.unit).monospacedDigit()
+                    }
+                    if let delta = m.delta { Text(m.name == targetReport?.target.label ? delta : "较上周同期 " + delta).foregroundStyle(.secondary) }
                 }
             }
-            // The rows' own padding takes the place of the card's, so a row's text sits a card padding in.
-            .padding(.vertical, -Theme.Space.item)
-            .cardSurface()
-        }
-
-        SectionTitle(title: "一起复盘", subtitle: saved == nil ? "3 个问题，约 1 分钟" : nil)
-        if let saved {
-            SavedReviewCard(entry: saved, onRedo: { ctx.delete(saved) })
-        } else {
-            GuidedReflectionCard(steps: ReviewCoach.reflection(context: context, week: cur, priorities: priorities), brief: brief) { draft in
-                let e = ReviewEntry(periodStart: ws, periodEnd: ws.adding(days: 6))
-                e.summary = draft.summary; e.keep = draft.keep; e.change = draft.change; e.nextFocus = draft.focus
-                e.rhrAverage = cur.rhr; e.planCompletion = cur.completion
-                ctx.insert(e)
+            NavigationLink("查看详细记录") {
+                ScreenScroll {
+                    ProgramWeekCard(weekStart: ws)
+                    WeekNumbersCard(metrics: metrics)
+                    WeekDaysCard(context: context, weekStart: ws)
+                    if current { PrioritiesCard(context: context) }
+                    PastReviewsCard(entries: Array(entries.filter { $0.periodStart < ws }.prefix(3)))
+                }
+                .navigationTitle("本周记录").navigationBarTitleDisplayMode(.inline)
             }
+            .frame(minHeight: Theme.Size.tap)
         }
 
-        if let plan {
-            let told = NextWeekPlan(weekStart: plan.weekStart, targetMinutes: plan.targetMinutes, targetReason: plan.targetReason,
-                                    changes: plan.changes.enumerated().map { j, c in
-                                        AgentPoint(icon: c.icon, title: c.title, detail: copy.items[safe: proposals.count + j] ?? c.detail,
-                                                   destination: c.destination)
-                                    },
-                                    sessions: plan.sessions, basis: plan.basis)
-            SectionTitle(title: "下周计划", subtitle: "\(plan.weekStart.formatted(.dateTime.month().day())) 起")
-            NextWeekPlanCard(plan: told, currentTarget: context.profile.weeklyTargetMinutes,
-                             applied: profiles.first?.nextWeekPlannedFor == plan.weekStart,
-                             reviewed: saved != nil, onApply: {
-                                 DataHub.applyNextWeekPlan(plan, in: ctx)
-                                 ledgerTick += 1
-                             })
+        Card {
+            CardTitle("改进方向")
+            if let first = proposals.first {
+                ProposalRow(proposal: first, rationale: copy.items.first ?? first.rationale, writing: false,
+                            onAdopt: { apply(first, week: ws) },
+                            onDismiss: { CoachLedger.set(first.id, week: ws, "dismissed"); ledgerTick += 1 })
+            } else if let plan {
+                let sessions = plan.sessions.filter { $0.kind.isTraining }
+                let days = Set(sessions.map(\.weekday)).count
+                let minutes = sessions.map(\.minutes).reduce(0, +)
+                Text("下周安排 \(days) 天训练").fontWeight(.semibold)
+                Text(cur.total > 0 ? "本周完成 \(cur.done)/\(cur.total) 次。下周安排约 \(minutes) 分钟，具体安排见下方。" : "下周安排约 \(minutes) 分钟，具体安排见下方。")
+                    .foregroundStyle(.secondary)
+            } else if let point = brief.watch.first {
+                Text(point.title).fontWeight(.semibold)
+                Text(point.detail).foregroundStyle(.secondary)
+            } else {
+                Text("目前没有需要调整的安排。").foregroundStyle(.secondary)
+            }
+            if current {
+                ForEach(adopted) { p in Text("已采用：" + p.title).foregroundStyle(.secondary) }
+                if !proposals.isEmpty || !brief.watch.isEmpty {
+                    DisclosureGroup("其他关注与建议") {
+                        ForEach(brief.watch) { point in
+                            Text(point.title).fontWeight(.semibold)
+                            Text(point.detail).foregroundStyle(.secondary)
+                        }
+                        ForEach(Array(proposals.dropFirst().enumerated()), id: \.element.id) { offset, p in
+                            ProposalRow(proposal: p, rationale: WeeklyAgentReview.rationale(copy.items, proposal: p, index: offset + 1), writing: false, onAdopt: { apply(p, week: ws) },
+                                        onDismiss: { CoachLedger.set(p.id, week: ws, "dismissed"); ledgerTick += 1 })
+                        }
+                    }
+                }
+            }
+            NavigationLink("记录本周反馈") {
+                ScreenScroll {
+                    if let saved {
+                        SavedReviewCard(entry: saved, onRedo: { ctx.delete(saved) })
+                    } else {
+                        GuidedReflectionCard(steps: ReviewCoach.reflection(context: reviewContext, week: cur, priorities: priorities, program: targetReport), brief: brief) { draft in
+                            let e = ReviewEntry(periodStart: ws, periodEnd: ws.adding(days: 6))
+                            e.summary = draft.summary; e.keep = draft.keep; e.change = draft.change; e.nextFocus = draft.focus
+                            e.rhrAverage = cur.rhr; e.planCompletion = cur.completion
+                            ctx.insert(e)
+                            try? ctx.save()
+                        }
+                    }
+                }
+                .navigationTitle("本周反馈").navigationBarTitleDisplayMode(.inline)
+            }
+            .frame(minHeight: Theme.Size.tap)
         }
 
-        let past = entries.filter { $0.periodStart < ws }
-        if !past.isEmpty {
-            // Past weeks are a group of their own, after this week's.
-            PastReviewsCard(entries: Array(past.prefix(3)))
-                .padding(.top, Theme.Space.section - Theme.Space.cardGap)
+        Card {
+            CardTitle("下周计划", detail: plan.map { $0.weekStart.formatted(.dateTime.month().day()) + " 起" })
+            if let plan {
+                let trainings = plan.sessions.filter { $0.kind.isTraining }
+                ForEach(Array(trainings.enumerated()), id: \.offset) { i, session in
+                    if i > 0 { Divider() }
+                    AdaptiveRow {
+                        Text(Weekday.name(session.weekday))
+                    } trailing: {
+                        Text("\(session.title) · \(session.minutes) 分钟")
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+                if !plan.changes.isEmpty {
+                    DisclosureGroup("调整依据") {
+                        ForEach(Array(plan.changes.enumerated()), id: \.element.id) { offset, change in
+                            Text(change.title).fontWeight(.semibold)
+                            Text(copy.items.indices.contains(min(WeeklyAgentReview.writtenProposals, proposals.count) + offset) ? copy.items[min(WeeklyAgentReview.writtenProposals, proposals.count) + offset] : change.detail).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                if profiles.first?.nextWeekPlannedFor == plan.weekStart { Text("已确认下周计划").foregroundStyle(.secondary) }
+                Button(profiles.first?.nextWeekPlannedFor == plan.weekStart ? "更新下周计划" : "确认下周计划") {
+                    DataHub.applyNextWeekPlan(plan, in: ctx)
+                    ledgerTick += 1
+                }
+                .buttonStyle(.borderedProminent).frame(minHeight: Theme.Size.tap)
+            } else {
+                Text(profiles.first?.usageIntent == .recording ? "继续记录身体指标和日常情况，不设置训练完成率。" : "查看的是过往周次，下周安排请返回本周查看。").foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -374,8 +437,8 @@ struct WeekSwitcher: View {
             .accessibilityLabel("上一周")
             Spacer(minLength: Theme.Space.item)
             VStack(spacing: Theme.Space.hairline) {
-                Text(title).font(.headline)
-                Text(subtitle).font(.footnote).foregroundStyle(.secondary)
+                Text(title).font(Theme.TypeScale.title)
+                Text(subtitle).font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
             .accessibilityElement(children: .combine)
             Spacer(minLength: Theme.Space.item)
@@ -385,7 +448,7 @@ struct WeekSwitcher: View {
             .disabled(!canGoForward)
             .accessibilityLabel("下一周")
         }
-        .font(.body.weight(.semibold))
+        .font(Theme.TypeScale.body.weight(.semibold))
     }
 }
 
@@ -427,13 +490,13 @@ struct WeekMetricCell: View {
             } icon: {
                 Image(systemName: m.icon).foregroundStyle(dataColor(m.icon))
             }
-            .font(.caption).lineLimit(1)
+            .font(Theme.TypeScale.body).lineLimit(1)
             HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
-                Text(m.value).font(.system(.title2, design: .rounded).weight(.semibold)).monospacedDigit()
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                Text(m.unit).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(m.value).font(Theme.TypeScale.title.weight(.semibold)).monospacedDigit()
+                    .lineLimit(1)
+                Text(m.unit).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1)
             }
-            change.font(.footnote).lineLimit(1).minimumScaleFactor(0.85)
+            change.font(Theme.TypeScale.body).lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
@@ -499,9 +562,9 @@ struct WeekDaysCard: View {
                     }
                     lane(days) { d in
                         Text(name(d, today: today))
-                            .font(.caption.weight(d == shown ? .semibold : .regular))
+                            .font(Theme.TypeScale.body.weight(d == shown ? .semibold : .regular))
                             .foregroundStyle(d == shown ? Color.primary : Color.secondary)
-                            .lineLimit(1).minimumScaleFactor(0.8)
+                            .lineLimit(1)
                     }
                 }
                 .padding(.vertical, Theme.Space.item)
@@ -550,7 +613,7 @@ struct WeekDaysCard: View {
                 Image(systemName: icon).imageScale(.small).foregroundStyle(color)
                 Text(title).foregroundStyle(.secondary).lineLimit(1).fixedSize()
             }
-            .font(.footnote)
+            .font(Theme.TypeScale.body)
             .frame(width: labelWidth, alignment: .leading)
         }
         .frame(height: rowHeight)
@@ -559,7 +622,7 @@ struct WeekDaysCard: View {
     /// The day's training status; an empty cell (not no cell) on a day without training keeps the columns aligned.
     @ViewBuilder private func training(_ d: Date, today: Date) -> some View {
         if let s = session(d, today: today) {
-            Image(systemName: s.icon).font(.body).foregroundStyle(Theme.planStatus(s))
+            Image(systemName: s.icon).font(Theme.TypeScale.body).foregroundStyle(Theme.planStatus(s))
         } else {
             Color.clear.frame(height: 1)
         }
@@ -594,7 +657,7 @@ struct WeekDaysCard: View {
     @ViewBuilder private func values(_ d: Date, today: Date, day: DayData?) -> some View {
         let items = facts(d, today: today, day: day)
         if d > today {
-            Text(items.map { $0.0 + $0.1 }.joined(separator: "；")).font(.subheadline).foregroundStyle(.secondary)
+            Text(items.map { $0.0 + $0.1 }.joined(separator: "；")).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 .frame(minHeight: 40, alignment: .topLeading)
         } else {
             // Four in a row; two by two at accessibility sizes, where a quarter of the row fits two characters.
@@ -603,8 +666,8 @@ struct WeekDaysCard: View {
                       alignment: .leading, spacing: Theme.Space.item) {
                 ForEach(items, id: \.0) { label, value in
                     VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                        Text(label).font(.caption).foregroundStyle(.secondary)
-                        Text(value).font(.subheadline.weight(.semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
+                        Text(label).font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                        Text(value).font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit().lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -657,11 +720,11 @@ struct WatchCard: View {
         HStack(alignment: .top, spacing: Theme.Space.block) {
             Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange).frame(width: Theme.Size.iconTile).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                Text(w.title).font(.subheadline.weight(.semibold))
-                Text(w.detail).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text(w.title).font(Theme.TypeScale.body.weight(.semibold))
+                Text(w.detail).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: Theme.Space.tight)
-            if chevron { Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary).padding(.top, 3) }
+            if chevron { Image(systemName: "chevron.right").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.tertiary).padding(.top, 3) }
         }
         .padding(.vertical, Theme.Space.item)
         .contentShape(Rectangle())
@@ -680,11 +743,11 @@ struct ProposalRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: Theme.Space.block) {
-            Image(systemName: proposal.icon).font(.body.weight(.semibold)).foregroundStyle(.secondary)
+            Image(systemName: proposal.icon).font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.secondary)
                 .frame(width: Theme.Size.iconTile).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: Theme.Space.tight) {
-                Text(proposal.title).font(.subheadline.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
-                Text(rationale ?? proposal.rationale).font(.subheadline).foregroundStyle(.secondary)
+                Text(proposal.title).font(Theme.TypeScale.body.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+                Text(rationale ?? proposal.rationale).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .opacity(writing ? 0.5 : 1)
                 HStack(spacing: Theme.Space.item) {
@@ -692,7 +755,7 @@ struct ProposalRow: View {
                     Button(action: onDismiss) { textLink("暂不", minWidth: 56) }
                         .buttonStyle(.borderless).foregroundStyle(.secondary)
                 }
-                .font(.subheadline.weight(.semibold))
+                .font(Theme.TypeScale.body.weight(.semibold))
             }
         }
         .padding(.vertical, Theme.Space.item)
@@ -740,13 +803,13 @@ struct GuidedReflectionCard: View {
     @ViewBuilder private func question(_ step: ReflectionStep) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.tight) {
             HStack(alignment: .firstTextBaseline) {
-                Text(step.question).font(.headline)
+                Text(step.question).font(Theme.TypeScale.title)
                 Spacer(minLength: Theme.Space.item)
-                Text("\(index + 1)/\(steps.count)").font(.footnote).foregroundStyle(.secondary).monospacedDigit()
+                Text("\(index + 1)/\(steps.count)").font(Theme.TypeScale.body).foregroundStyle(.secondary).monospacedDigit()
                     .accessibilityLabel("第 \(index + 1) 题，共 \(steps.count) 题")
             }
             if !step.why.isEmpty {
-                Text(step.why).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text(step.why).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
         VStack(spacing: 0) {
@@ -757,9 +820,9 @@ struct GuidedReflectionCard: View {
                 } label: {
                     HStack(spacing: Theme.Space.block) {
                         Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                            .font(.title3).foregroundStyle(on ? Theme.accent : Color.secondary.opacity(0.5))
+                            .font(Theme.TypeScale.title).foregroundStyle(on ? Theme.accent : Color.secondary.opacity(0.5))
                             .frame(width: Theme.Size.iconTile)
-                        Text(o).font(.body).foregroundStyle(.primary)
+                        Text(o).font(Theme.TypeScale.body).foregroundStyle(.primary)
                         Spacer(minLength: 0)
                     }
                     .frame(minHeight: Theme.Size.tap)
@@ -770,7 +833,7 @@ struct GuidedReflectionCard: View {
                 Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block)
             }
             HStack(spacing: Theme.Space.block) {
-                Image(systemName: "pencil").font(.body).foregroundStyle(.secondary).frame(width: Theme.Size.iconTile)
+                Image(systemName: "pencil").font(Theme.TypeScale.body).foregroundStyle(.secondary).frame(width: Theme.Size.iconTile)
                 TextField(step.id == "change" ? "其他，或说说原因（可选）" : "其他（可选）",
                           text: Binding(get: { own[step.id] ?? (step.id == "change" ? note : "") },
                                         set: { if step.id == "change" { note = $0 } else { own[step.id] = $0 } }),
@@ -791,15 +854,15 @@ struct GuidedReflectionCard: View {
                 Button { index += 1 } label: { textLink("跳过") }.buttonStyle(.borderless).foregroundStyle(.secondary)
             }
         }
-        .font(.subheadline.weight(.semibold))
+        .font(Theme.TypeScale.body.weight(.semibold))
         .frame(minHeight: Theme.Size.tap)
     }
 
     @ViewBuilder private var summary: some View {
         let draft = ReviewCoach.draft(brief: brief, answers: collected, note: note)
         VStack(alignment: .leading, spacing: Theme.Space.tight) {
-            Text("这周的复盘").font(.headline)
-            Text("保存后，下周计划会参考你的回答。").font(.footnote).foregroundStyle(.secondary)
+            Text("这周的复盘").font(Theme.TypeScale.title)
+            Text("保存后，下周计划会参考你的回答。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
         ReviewNotesView(summary: draft.summary, keep: draft.keep, change: draft.change, focus: draft.focus)
         HStack(spacing: Theme.Space.item) {
@@ -808,7 +871,7 @@ struct GuidedReflectionCard: View {
             Button { onSave(draft) } label: { Label("保存复盘", systemImage: "checkmark") }
                 .buttonStyle(.borderedProminent)
         }
-        .font(.subheadline.weight(.semibold))
+        .font(Theme.TypeScale.body.weight(.semibold))
         .frame(minHeight: Theme.Size.tap)
     }
 }
@@ -824,8 +887,8 @@ private struct ReviewNotesView: View {
         VStack(alignment: .leading, spacing: Theme.Space.item) {
             ForEach([("总结", summary), ("想保留", keep), ("想改变", change), ("下周重点", focus)].filter { !$0.1.isEmpty }, id: \.0) { item in
                 VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                    Text(item.0).font(.footnote).foregroundStyle(.secondary)
-                    Text(item.1).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                    Text(item.0).font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                    Text(item.1).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .combine)
@@ -841,7 +904,7 @@ struct SavedReviewCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle(title: "这周的复盘", detail: "已保存") {
-                Button(action: onRedo) { textLink("重新复盘") }.buttonStyle(.borderless).font(.subheadline)
+                Button(action: onRedo) { textLink("重新复盘") }.buttonStyle(.borderless).font(Theme.TypeScale.body)
             }
             ReviewNotesView(summary: entry.summary, keep: entry.keep, change: entry.change, focus: entry.nextFocus)
         }
@@ -880,14 +943,14 @@ struct NextWeekPlanCard: View {
             }
             if !plan.changes.isEmpty {
                 VStack(alignment: .leading, spacing: Theme.Space.item) {
-                    Text("有哪些变化").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                    Text("有哪些变化").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.secondary)
                     ForEach(plan.changes) { c in
                         HStack(alignment: .top, spacing: Theme.Space.item) {
-                            Image(systemName: c.icon).font(.footnote).foregroundStyle(.secondary).frame(width: 20).padding(.top, 2)
+                            Image(systemName: c.icon).font(Theme.TypeScale.body).foregroundStyle(.secondary).frame(width: 20).padding(.top, 2)
                                 .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                                Text(c.title).font(.subheadline.weight(.semibold))
-                                Text(c.detail).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                                Text(c.title).font(Theme.TypeScale.body.weight(.semibold))
+                                Text(c.detail).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                             }
                         }
                         .accessibilityElement(children: .combine)
@@ -896,9 +959,9 @@ struct NextWeekPlanCard: View {
             }
             if applied {
                 HStack(spacing: Theme.Space.item) {
-                    StatusLabel(.good("已应用到下周计划")).font(.subheadline)
+                    StatusLabel(.good("已应用到下周计划")).font(Theme.TypeScale.body)
                     Spacer()
-                    Button(action: onApply) { textLink("重新生成") }.buttonStyle(.borderless).font(.subheadline)
+                    Button(action: onApply) { textLink("重新生成") }.buttonStyle(.borderless).font(Theme.TypeScale.body)
                 }
                 NavigationLink { WeeklyPlanView(startOnNextWeek: true).navigationTitle("运动计划").navigationBarTitleDisplayMode(.inline).calmStyle() } label: {
                     NavRowLabel(icon: "calendar", title: "在计划中查看下周")
@@ -908,9 +971,9 @@ struct NextWeekPlanCard: View {
                 VStack(alignment: .leading, spacing: Theme.Space.item) {
                     Button("应用到下周计划", action: onApply)
                         .buttonStyle(.borderedProminent)
-                        .font(.subheadline.weight(.semibold))
+                        .font(Theme.TypeScale.body.weight(.semibold))
                     Text(reviewed ? "只影响下周的安排，不会改动你的计划设置。" : "先做完上面的复盘，计划会参考你的回答；也可以直接应用。")
-                        .font(.footnote).foregroundStyle(.secondary)
+                        .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             }
         }
@@ -925,20 +988,20 @@ struct NextWeekPlanCard: View {
     /// One session: the day, what it is, and how long and hard on the right where the eye can run down them.
     private func session(_ s: PlannedSession) -> some View {
         HStack(spacing: Theme.Space.item) {
-            Text(Weekday.name(s.weekday)).font(.subheadline.weight(.semibold)).frame(width: dayColumn, alignment: .leading)
-            Image(systemName: s.kind.icon).font(.subheadline).imageScale(.small).foregroundStyle(Theme.activity)
+            Text(Weekday.name(s.weekday)).font(Theme.TypeScale.body.weight(.semibold)).frame(width: dayColumn, alignment: .leading)
+            Image(systemName: s.kind.icon).font(Theme.TypeScale.body).imageScale(.small).foregroundStyle(Theme.activity)
                 .frame(width: iconColumn).accessibilityHidden(true)
             AdaptiveRow(spacing: Theme.Space.item, stackedSpacing: Theme.Space.hairline) {
                 HStack(spacing: Theme.Space.iconGap) {
-                    Text(s.title).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                    Text(s.title).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
                     if s.isKey {
-                        Image(systemName: "star.fill").font(.caption).foregroundStyle(.yellow).accessibilityLabel("重点")
+                        Image(systemName: "star.fill").font(Theme.TypeScale.body).foregroundStyle(.yellow).accessibilityLabel("重点")
                     }
                 }
             } trailing: {
                 VStack(alignment: size.isAccessibilitySize ? .leading : .trailing, spacing: Theme.Space.hairline) {
-                    Text("\(s.minutes) 分钟").font(.subheadline).monospacedDigit()
-                    Text(s.intensity.label).font(.caption).foregroundStyle(.secondary)
+                    Text("\(s.minutes) 分钟").font(Theme.TypeScale.body).monospacedDigit()
+                    Text(s.intensity.label).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             }
         }
@@ -948,8 +1011,8 @@ struct NextWeekPlanCard: View {
 
     private func stat(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-            Text(label).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.subheadline.weight(.semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
+            Text(label).font(Theme.TypeScale.body).foregroundStyle(.secondary)
+            Text(value).font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit().lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
@@ -963,9 +1026,9 @@ struct PastReviewsCard: View {
             CardTitle("过往复盘")
             ForEach(entries) { e in
                 VStack(alignment: .leading, spacing: Theme.Space.tight) {
-                    Text("\(e.periodStart.formatted(.dateTime.month().day())) 那周").font(.subheadline.weight(.semibold))
-                    if !e.summary.isEmpty { Text(e.summary).font(.subheadline).foregroundStyle(.secondary) }
-                    if !e.nextFocus.isEmpty { Text("重点：\(e.nextFocus)").font(.footnote).foregroundStyle(.secondary) }
+                    Text("\(e.periodStart.formatted(.dateTime.month().day())) 那周").font(Theme.TypeScale.body.weight(.semibold))
+                    if !e.summary.isEmpty { Text(e.summary).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
+                    if !e.nextFocus.isEmpty { Text("重点：\(e.nextFocus)").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
                 }
                 .accessibilityElement(children: .combine)
                 if e.id != entries.last?.id { Divider() }
@@ -997,8 +1060,9 @@ struct LongTermReviewSection: View {
                           byline: state, onRetry: { Task { await writer.rewrite(facts) } })
             .task(id: facts.key) { await writer.write(facts) }
 
+        // 所处阶段 follows the 三阶段计划 (基线期 → 改善期 → 总结期); the per-goal paths still record what was reached.
         let journeys = GoalJourneys.paths(c)
-        JourneyCard(paths: journeys)
+        ProgramStageCard()
             .task(id: journeys.map { "\($0.id):\($0.current)" }) { DataHub.recordJourneys(journeys, in: ctx) }
         DimensionsCard(dimensions: c.progress.dimensions, onAsk: onAsk)
         WeeklyRHRCard(context: c)
@@ -1041,13 +1105,13 @@ struct JourneyCard: View {
                 // Finished stages fold into one step; what matters is the stage you are in.
                 if !done.isEmpty {
                     step(glyph: "checkmark.circle.fill", color: .green, line: .green, bottom: Theme.Space.block) {
-                        Text("已完成 \(done.count) 个阶段").font(.subheadline).foregroundStyle(.secondary)
-                        Text(done.map(\.title).joined(separator: " · ")).font(.footnote).foregroundStyle(.secondary)
+                        Text("已完成 \(done.count) 个阶段").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                        Text(done.map(\.title).joined(separator: " · ")).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                 }
                 if path.isComplete {
                     step(glyph: "flag.checkered.circle.fill", color: .green, line: nil, bottom: 0) {
-                        Text("已达成").font(.subheadline.weight(.semibold))
+                        Text("已达成").font(Theme.TypeScale.body.weight(.semibold))
                         opened(path.standing, focus: nil)
                     }
                 } else {
@@ -1056,12 +1120,12 @@ struct JourneyCard: View {
                         if i == path.current {
                             // The open stage is a block of its own; the stages after it are one-line items.
                             step(glyph: "\(i + 1).circle.fill", color: .green, line: last ? nil : Theme.subtle, bottom: last ? 0 : Theme.Space.block) {
-                                Text(s.title).font(.subheadline.weight(.semibold))
+                                Text(s.title).font(Theme.TypeScale.body.weight(.semibold))
                                 opened(path.standing, focus: s.focus)
                             }
                         } else {
                             step(glyph: "\(i + 1).circle", color: .secondary, line: last ? nil : Theme.subtle, bottom: last ? 0 : Theme.Space.item) {
-                                Text(s.title).font(.subheadline).foregroundStyle(.secondary)
+                                Text(s.title).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -1078,7 +1142,7 @@ struct JourneyCard: View {
                                      @ViewBuilder content: () -> Content) -> some View {
         HStack(alignment: .top, spacing: Theme.Space.block) {
             VStack(spacing: Theme.Space.tight) {
-                Image(systemName: glyph).font(.title3).foregroundStyle(color)
+                Image(systemName: glyph).font(Theme.TypeScale.title).foregroundStyle(color)
                 if let line { Capsule().fill(line).frame(width: 2).frame(maxHeight: .infinity) }
             }
             .frame(width: Theme.Size.iconTile)
@@ -1092,11 +1156,11 @@ struct JourneyCard: View {
 
     /// The current stage: how far along, what it is for, and what moves you on.
     @ViewBuilder private func opened(_ st: GoalJourney.Standing, focus: String?) -> some View {
-        Text(st.met ? st.status : "进行中 · \(st.status)").font(.footnote).foregroundStyle(.secondary)
+        Text(st.met ? st.status : "进行中 · \(st.status)").font(Theme.TypeScale.body).foregroundStyle(.secondary)
         if let p = st.progress, !st.met {
             ProgressBar(value: p, color: .green, height: 6).padding(.vertical, Theme.Space.tight)
         }
-        if let focus { Text(focus).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+        if let focus { Text(focus).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
         if let pass = st.toPass, !st.met {
             labelled("进入下一阶段", pass).padding(.top, Theme.Space.tight)
         }
@@ -1105,7 +1169,7 @@ struct JourneyCard: View {
     /// "进入下一阶段：……" on one line, the label in the same size as the text so the line reads as one.
     private func labelled(_ label: String, _ text: String) -> some View {
         Text("\(Text(label + "：").fontWeight(.semibold).foregroundStyle(.secondary))\(text)")
-            .font(.subheadline).fixedSize(horizontal: false, vertical: true)
+            .font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
     }
 
     private func spoken(_ p: GoalJourney) -> String {
@@ -1128,7 +1192,7 @@ private struct GoalChip: View {
         Button(action: action) {
             // Text only, so three goals fit on one line; the timeline below says which goal it is.
             Text(path.short)
-                .font(.subheadline.weight(selected ? .semibold : .regular))
+                .font(Theme.TypeScale.body.weight(selected ? .semibold : .regular))
                 .foregroundStyle(selected ? Theme.accent : Color.primary)
                 .padding(.horizontal, Theme.Space.block).padding(.vertical, Theme.Space.item)
                 .background(selected ? Theme.accent.opacity(0.14) : Theme.subtle, in: Capsule())
@@ -1169,25 +1233,25 @@ struct DimensionRow: View {
     var body: some View {
         let d = dimension
         HStack(alignment: .top, spacing: Theme.Space.block) {
-            Image(systemName: d.icon).font(.body.weight(.semibold)).foregroundStyle(dataColor(d.icon))
+            Image(systemName: d.icon).font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(dataColor(d.icon))
                 .frame(width: Theme.Size.iconTile).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: Theme.Space.tight) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(d.name).font(.subheadline.weight(.semibold))
+                    Text(d.name).font(Theme.TypeScale.body.weight(.semibold))
                     Spacer(minLength: Theme.Space.item)
-                    StatusLabel(text: d.status.label, icon: icon, color: Theme.progress(d.status), secondaryText: true).font(.subheadline)
+                    StatusLabel(text: d.status.label, icon: icon, color: Theme.progress(d.status), secondaryText: true).font(Theme.TypeScale.body)
                 }
                 if let f = d.from, let t = d.to {
                     HStack(alignment: .firstTextBaseline, spacing: Theme.Space.iconGap) {
                         Text(f).foregroundStyle(.secondary)
-                        Image(systemName: "arrow.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                        Image(systemName: "arrow.right").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.tertiary)
                         Text(t).fontWeight(.semibold)
                     }
-                    .font(.subheadline).monospacedDigit()
+                    .font(Theme.TypeScale.body).monospacedDigit()
                 } else if let t = d.to {
-                    Text("目前 \(t)").font(.subheadline).monospacedDigit()
+                    Text("目前 \(t)").font(Theme.TypeScale.body).monospacedDigit()
                 }
-                Text(d.detail).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text(d.detail).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.vertical, Theme.Space.item)
@@ -1227,12 +1291,12 @@ struct WeeklyRHRCard: View {
                             .interpolationMethod(.catmullRom).foregroundStyle(Theme.heartData)
                         PointMark(x: .value("周", w.0, unit: .weekOfYear), y: .value("bpm", w.1)).foregroundStyle(Theme.heartData).symbolSize(18)
                     }
-                }
+                }.pulseChartAxes()
                 .chartYScale(domain: ((weeks.map(\.1).min() ?? 60) - 3)...((weeks.map(\.1).max() ?? 75) + 3))
-                .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) }
+                .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
                 .frame(height: 150)
                 .accessibilityLabel("近 20 周静息心率周均值")
-                Text("虚线为个人基线").font(.caption).foregroundStyle(.secondary)
+                Text("虚线为个人基线").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
     }
@@ -1247,17 +1311,17 @@ struct HabitsAdherenceCard: View {
                 if h.id != adherence.first?.id { Divider() }
                 VStack(alignment: .leading, spacing: Theme.Space.tight) {
                     HStack(alignment: .firstTextBaseline) {
-                        Text(h.name).font(.subheadline.weight(.semibold))
+                        Text(h.name).font(Theme.TypeScale.body.weight(.semibold))
                         Spacer()
                         if let r = h.rate {
-                            Text("\(Int((r * 100).rounded()))%").font(.subheadline.weight(.semibold)).monospacedDigit()
+                            Text("\(Int((r * 100).rounded()))%").font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit()
                         }
                     }
                     ProgressBar(value: h.rate ?? 0, color: Theme.habit(h.verdict), height: 6).accessibilityHidden(true)
                     StatusLabel(text: "\(h.verdict.label) · \(h.detail)", icon: verdictIcon(h.verdict), color: Theme.habit(h.verdict), secondaryText: true)
-                        .font(.footnote)
+                        .font(Theme.TypeScale.body)
                     if h.verdict == .struggling || h.verdict == .partial {
-                        Text(h.suggestion).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Text(h.suggestion).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .padding(.vertical, Theme.Space.item)
@@ -1297,7 +1361,7 @@ struct AssociationsCard: View {
             CardTitle("发现的关联", detail: "关联 ≠ 已确认的原因").padding(.bottom, Theme.Space.tight)
             if associations.isEmpty {
                 Text("还没有足够数据发现稳定的关联。持续记录饮酒、睡眠、压力等背景后会逐步出现。")
-                    .font(.subheadline).foregroundStyle(.secondary).padding(.vertical, Theme.Space.item)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary).padding(.vertical, Theme.Space.item)
             }
             ForEach(associations) { a in
                 if a.id != associations.first?.id { Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block) }
@@ -1307,7 +1371,7 @@ struct AssociationsCard: View {
                 Divider()
                 VStack(alignment: .leading, spacing: Theme.Space.item) {
                     if testing {
-                        Text("一次验证一条：这条有结果后，再选下一条。").font(.subheadline).foregroundStyle(.secondary)
+                        Text("一次验证一条：这条有结果后，再选下一条。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     } else {
                         Menu {
                             ForEach(open) { a in
@@ -1319,8 +1383,8 @@ struct AssociationsCard: View {
                             Label("选一条开始 2 周验证", systemImage: "flask").frame(minHeight: Theme.Size.borderedLabel)
                         }
                         .buttonStyle(.bordered)
-                        .font(.subheadline.weight(.semibold))
-                        Text("两周里少做这件事，看指标有没有跟着变。").font(.subheadline).foregroundStyle(.secondary)
+                        .font(Theme.TypeScale.body.weight(.semibold))
+                        Text("两周里少做这件事，看指标有没有跟着变。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                 }
                 .padding(.vertical, Theme.Space.block)
@@ -1344,11 +1408,11 @@ struct AssociationRow: View {
         let status = record?.status ?? .observed
         VStack(alignment: .leading, spacing: Theme.Space.item) {
             HStack(alignment: .top, spacing: Theme.Space.block) {
-                Image(systemName: a.icon).font(.body.weight(.semibold)).foregroundStyle(.secondary).frame(width: Theme.Size.iconTile).accessibilityHidden(true)
+                Image(systemName: a.icon).font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.secondary).frame(width: Theme.Size.iconTile).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: Theme.Space.tight) {
-                    Text(a.sentence).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                    Text(a.sentence).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
                     StatusLabel(text: "\(status.label) · 关联\(a.strength.label)", icon: statusIcon(status), color: statusColor(status), secondaryText: true)
-                        .font(.footnote)
+                        .font(Theme.TypeScale.body)
                 }
             }
             .accessibilityElement(children: .combine)
@@ -1365,7 +1429,7 @@ struct AssociationRow: View {
                             Button { set(.observed) } label: { textLink("重新观察") }.buttonStyle(.borderless)
                         }
                     }
-                    .font(.subheadline.weight(.semibold))
+                    .font(Theme.TypeScale.body.weight(.semibold))
                 }
                 // Under the sentence, past the glyph column.
                 .padding(.leading, Theme.Size.iconTile + Theme.Space.block)
@@ -1415,14 +1479,14 @@ struct AssociationRow: View {
         let m1 = Stats.mean(during.compactMap(metric)), m0 = Stats.mean(before.compactMap(metric))
         VStack(alignment: .leading, spacing: Theme.Space.tight) {
             HStack(alignment: .firstTextBaseline) {
-                Text(r.note.isEmpty ? "验证中" : r.note).font(.footnote.weight(.medium)).fixedSize(horizontal: false, vertical: true)
+                Text(r.note.isEmpty ? "验证中" : r.note).font(Theme.TypeScale.body.weight(.medium)).fixedSize(horizontal: false, vertical: true)
                 Spacer()
-                Text("第 \(elapsed)/\(total) 天").font(.footnote).foregroundStyle(.secondary).monospacedDigit()
+                Text("第 \(elapsed)/\(total) 天").font(Theme.TypeScale.body).foregroundStyle(.secondary).monospacedDigit()
             }
             ProgressBar(value: Double(elapsed) / Double(total), color: .orange, height: 6).accessibilityHidden(true)
             if let m1, let m0 {
                 Text("验证期间\(association.metric)平均 \(m1.oneDecimal) \(association.unit)，此前 4 周 \(m0.oneDecimal)（\((m1 - m0).signedText)）。")
-                    .font(.footnote).foregroundStyle(.secondary)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
     }
@@ -1483,14 +1547,14 @@ struct StrategyCard: View {
 
     private func row(_ p: AgentPoint, detail: String, chevron: Bool) -> some View {
         HStack(alignment: .top, spacing: Theme.Space.block) {
-            Image(systemName: p.icon).font(.body.weight(.semibold)).foregroundStyle(.secondary).frame(width: Theme.Size.iconTile).accessibilityHidden(true)
+            Image(systemName: p.icon).font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.secondary).frame(width: Theme.Size.iconTile).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                Text(p.title).font(.subheadline.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
-                Text(detail).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text(p.title).font(Theme.TypeScale.body.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+                Text(detail).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     .opacity(writing ? 0.5 : 1)
             }
             Spacer(minLength: Theme.Space.tight)
-            if chevron { Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary).padding(.top, 3) }
+            if chevron { Image(systemName: "chevron.right").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.tertiary).padding(.top, 3) }
         }
         .padding(.vertical, Theme.Space.item)
         .contentShape(Rectangle())

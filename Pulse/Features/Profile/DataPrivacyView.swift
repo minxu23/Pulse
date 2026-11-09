@@ -17,7 +17,7 @@ struct DataPrivacyView: View {
                 Label("健康 App 数据只读取、不写入，可随时撤销权限。", systemImage: "heart.text.square")
                 Label("只有你主动导出或分享时，数据才会离开设备。", systemImage: "hand.raised")
             } header: { Text("你的数据由你掌握") }
-            .font(.subheadline)
+            .font(Theme.TypeScale.body)
 
             Section {
                 ForEach(ExportCategory.allCases) { c in
@@ -48,7 +48,7 @@ struct DataPrivacyView: View {
                     }
                     .fontWeight(.semibold)
                 }
-                if let exportError { StatusLabel(.urgent(exportError)).font(.footnote) }
+                if let exportError { StatusLabel(.urgent(exportError)).font(Theme.TypeScale.body) }
             } header: {
                 Text("导出")
             } footer: {
@@ -59,7 +59,7 @@ struct DataPrivacyView: View {
             Section {
                 Button("删除所有数据", role: .destructive) { confirmDelete = true }
             } footer: {
-                Text("将永久删除 Pulse 中的所有记录与设置，包括对话、云端模型的密钥和发送健康数据的同意，无法恢复。健康 App 中的数据不受影响。")
+                Text("将永久删除 Pulse 中的所有记录与设置（你自己的记录和示例数据都会删除），包括对话、云端模型的密钥和发送健康数据的同意，无法恢复。健康 App 中的数据不受影响。")
             }
         }
         .navigationTitle("隐私与数据").calmStyle()
@@ -68,6 +68,8 @@ struct DataPrivacyView: View {
         .confirmationDialog("确定删除 Pulse 中的所有数据？此操作无法撤销。", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("永久删除", role: .destructive) {
                 DataHub.eraseEverything(in: ctx)
+                // Your own records and the sample data both go; Pulse starts again on an empty store.
+                DataStores.shared.eraseOtherStore()
             }
         }
     }

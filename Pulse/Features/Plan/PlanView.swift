@@ -7,13 +7,22 @@ struct PlanView: View {
         case exercise = "运动", sleep = "睡眠", habits = "恢复"
         var id: String { rawValue }
     }
+    @Query private var profiles: [UserProfile]
     @State private var segment: Segment = .exercise
 
     var body: some View {
         NavigationStack {
             Group {
                 switch segment {
-                case .exercise: WeeklyPlanView()
+                case .exercise:
+                    // Recording only: no training plan, just where the program stands. Everyone else gets their
+                    // week: the 摸底周 in 基线期, the pack's weeks in a round, the general plan otherwise (Docs 8).
+                    if let p = profiles.first, !p.makesPlans {
+                        ScreenScroll {
+                            ProgramCard()
+                            NavigationLink("方案与历史报告") { ProgramHistoryView() }
+                        }
+                    } else { WeeklyPlanView() }
                 case .sleep: SleepCareView()
                 case .habits: HabitsView()
                 }
@@ -56,6 +65,7 @@ struct WeeklyPlanView: View {
         let week = items.filter { $0.weekStart == ws }
         let generated = PlanGenerator.generate(profile: snap, weekStart: ws)
         ScreenScroll {
+            ProgramCard()
             if hasNext {
                 Picker("查看", selection: $showNext) {
                     Text("本周").tag(false)
@@ -94,7 +104,7 @@ struct WeeklyPlanView: View {
         return Card {
             CardHeader(title: isNext ? "下周" : "本周", subtitle: "\(ws.formatted(.dateTime.month().day())) – \(ws.adding(days: 6).formatted(.dateTime.month().day()))",
                        icon: "calendar", color: Theme.activity) {
-                Text(isNext ? "\(trainings.count) 次训练" : "\(done)/\(trainings.count) 次").font(.subheadline.weight(.semibold)).monospacedDigit()
+                Text(isNext ? "\(trainings.count) 次训练" : "\(done)/\(trainings.count) 次").font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit()
             }
             MetricRow {
                 if isNext {
@@ -106,10 +116,10 @@ struct WeeklyPlanView: View {
             }
             if !isNext { ProgressBar(value: minutesDone / Double(max(1, target)), color: Theme.activity) }
             if let reason = reasonText, !reason.isEmpty {
-                Label(reason, systemImage: "arrow.up.forward.circle").font(.footnote).foregroundStyle(.secondary)
+                Label(reason, systemImage: "arrow.up.forward.circle").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
             Text("参考：成年人每周 150–300 分钟中等强度有氧，并进行 2 次以上力量训练。计划会从你的现状出发，按完成情况逐步进阶。")
-                .font(.footnote).foregroundStyle(.secondary)
+                .font(Theme.TypeScale.body).foregroundStyle(.secondary)
             AgentAskButton(title: AgentNameSettings.shared.phrase("和", "调整\(isNext ? "下周" : "本周")计划"),
                            question: isNext ? "帮我调整下周计划" : "帮我调整这周的训练计划")
         }
@@ -124,11 +134,11 @@ struct WeeklyPlanView: View {
                 let selected = day == selectedDay
                 Button { selectedDay = day } label: {
                     VStack(spacing: Theme.Space.tight) {
-                        Text(Weekday.short(day.weekday)).font(.caption).foregroundStyle(.secondary)
+                        Text(Weekday.short(day.weekday)).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                         Text("\(Calendar.pulse.component(.day, from: day))")
-                            .font(.subheadline.weight(day.isSameDay(.app) ? .bold : .regular))
+                            .font(Theme.TypeScale.body.weight(day.isSameDay(.app) ? .bold : .regular))
                         Image(systemName: main.map { $0.status == .planned ? $0.kind.icon : $0.status.icon } ?? "minus")
-                            .font(.caption)
+                            .font(Theme.TypeScale.body)
                             .foregroundStyle(main.map { $0.status == .planned ? Theme.intensity($0.intensity) : Theme.planStatus($0.status) } ?? .secondary)
                             .frame(height: 16)
                     }
@@ -154,11 +164,11 @@ struct WeeklyPlanView: View {
                         Image(systemName: item.kind.icon).foregroundStyle(Theme.intensity(item.intensity)).frame(width: Theme.Size.iconTile)
                         VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                             HStack(spacing: Theme.Space.item) {
-                                Text(item.title).font(.headline)
+                                Text(item.title).font(Theme.TypeScale.title)
                                 if item.isKey { Chip(text: "重点", icon: "star.fill", color: .yellow) }
                             }
                             Text("\(item.minutes > 0 ? "\(item.minutes) 分钟 · " : "")\(item.intensity.label) · \(item.status.label)")
-                                .font(.footnote).foregroundStyle(.secondary)
+                                .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                         }
                         Spacer()
                         Menu {
@@ -167,16 +177,16 @@ struct WeeklyPlanView: View {
                             }
                             if item.kind.isTraining { Button { logItem = item } label: { Label("记录运动详情", systemImage: "square.and.pencil") } }
                         } label: {
-                            Image(systemName: item.status.icon).font(.title3).foregroundStyle(Theme.planStatus(item.status))
+                            Image(systemName: item.status.icon).font(Theme.TypeScale.title).foregroundStyle(Theme.planStatus(item.status))
                                 .frame(width: Theme.Size.tap, height: Theme.Size.tap)
                                 .contentShape(Rectangle())
                         }
                         .accessibilityLabel("\(item.title)，\(item.status.label)，更改状态")
                     }
-                    Text(item.detail).font(.subheadline)
-                    Label(item.guidance, systemImage: "speedometer").font(.footnote).foregroundStyle(.secondary)
+                    Text(item.detail).font(Theme.TypeScale.body)
+                    Label(item.guidance, systemImage: "speedometer").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     if item.minimumMinutes > 0 && !item.minimumDetail.isEmpty {
-                        Label("忙碌时的精简版：\(item.minimumDetail)", systemImage: "timer").font(.footnote).foregroundStyle(.secondary)
+                        Label("忙碌时的精简版：\(item.minimumDetail)", systemImage: "timer").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                     if let note = item.adjustmentNote, item.wasAdjusted {
                         Callout(kind: .info, title: "已根据当天状态调整", text: note)
@@ -217,12 +227,12 @@ struct WeeklyPlanView: View {
                         }
                         RuleMark(y: .value("良好", 85))
                             .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray)
-                    }
+                    }.pulseChartAxes()
                     .chartYScale(domain: 0...100)
-                    .chartYAxis { AxisMarks(values: [0, 50, 100]) { v in AxisGridLine(); AxisValueLabel { Text("\(v.as(Int.self) ?? 0)%") } } }
+                    .chartYAxis { AxisMarks(values: [0, 50, 100]) { v in AxisGridLine(); AxisValueLabel { Text("\(v.as(Int.self) ?? 0)%") }.font(Theme.TypeScale.body) } }
                     .frame(height: 120)
                     // Below the chart, not on it: bars reach the line and would cover the label.
-                    Text("虚线为 85%，达到即为完成良好").font(.footnote).foregroundStyle(.secondary)
+                    Text("虚线为 85%，达到即为完成良好").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             }
         }
@@ -234,7 +244,7 @@ struct WeeklyPlanView: View {
             Spacer()
             Image(systemName: "chevron.right").foregroundStyle(.tertiary)
         }
-        .font(.subheadline)
+        .font(Theme.TypeScale.body)
         .cardSurface()
     }
 }
@@ -249,7 +259,7 @@ struct MarathonPhaseCard: View {
                 MetricTile(label: "长距离", value: "\(Int(week.longRunKm))", unit: "km", icon: "arrow.right", color: Theme.activity)
                 MetricTile(label: "马拉松配速", value: MarathonPlanner.paceText(week.marathonPace), icon: "speedometer", color: Theme.activity)
             }
-            Text(week.phase.focus).font(.subheadline).foregroundStyle(.secondary)
+            Text(week.phase.focus).font(Theme.TypeScale.body).foregroundStyle(.secondary)
             ForEach(week.warnings, id: \.self) { Callout(kind: .caution, text: $0) }
         }
     }

@@ -65,7 +65,7 @@ struct MorningAssessmentView: View {
                 Button { onLog(.sleep) } label: {
                     Text("补记睡眠").frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
                 }
-                .font(.subheadline)
+                .font(Theme.TypeScale.body)
             }
         }
     }
@@ -106,7 +106,7 @@ struct MorningAssessmentView: View {
         return HealthMetricCard(title: "最低血氧", icon: "lungs.fill", color: Theme.respiratory,
                                 value: d?.spo2Min.map { "\(Int($0))" } ?? "—", unit: "%", status: status) {
             if let rr = d?.respiratoryRate {
-                Text("呼吸 \(rr.oneDecimal) 次/分").font(.footnote).foregroundStyle(.secondary)
+                Text("呼吸 \(rr.oneDecimal) 次/分").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
     }
@@ -139,7 +139,7 @@ struct SleepStagesBar: View {
                     legend("深睡", deepM, .indigo)
                     if rem != nil { legend("快速眼动", remM, .cyan) }
                 }
-                .font(.footnote).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7)
+                .font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1)
             }
         }
         .accessibilityElement(children: .ignore)
@@ -167,26 +167,26 @@ struct ReadinessHeroCard: View {
         let color = Theme.readiness(result.score == nil ? nil : result.level)
         VStack(alignment: .leading, spacing: Theme.Space.block) {
             HStack {
-                Text("身体准备度").font(.headline)
+                Text("身体准备度").font(Theme.TypeScale.title)
                 Spacer()
-                Text(result.confidence.label).font(.footnote).foregroundStyle(.secondary)
+                Text(result.confidence.label).font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
             HStack(spacing: Theme.Space.block) {
                 ScoreRing(progress: Double(result.score ?? 0) / 100, color: color, lineWidth: 10) {
                     Text(result.score.map(String.init) ?? "—")
-                        .font(.system(.title, design: .rounded).weight(.bold)).monospacedDigit()
-                        .lineLimit(1).minimumScaleFactor(0.5).padding(.horizontal, 10)
+                        .font(Theme.TypeScale.title.weight(.bold)).monospacedDigit()
+                        .lineLimit(1).padding(.horizontal, 10)
                 }
                 .frame(width: 88, height: 88)
                 .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: Theme.Space.tight) {
                     if result.score != nil {
                         StatusLabel(text: result.level.label, icon: "circle.fill", color: color)
-                            .font(.title3.weight(.semibold)).imageScale(.small)
+                            .font(Theme.TypeScale.title.weight(.semibold)).imageScale(.small)
                     } else {
-                        Text("待评估").font(.title3.weight(.semibold))
+                        Text("待评估").font(Theme.TypeScale.title.weight(.semibold))
                     }
-                    Text(reason).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(reason).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("身体准备度 \(result.score.map(String.init) ?? "待评估")，\(result.score == nil ? "" : result.level.label)，\(reason)")
@@ -198,13 +198,13 @@ struct ReadinessHeroCard: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
             }
-            ForEach(result.overrides, id: \.self) { StatusLabel(text: $0, icon: "exclamationmark.triangle.fill", color: .orange).font(.subheadline) }
+            ForEach(result.overrides, id: \.self) { StatusLabel(text: $0, icon: "exclamationmark.triangle.fill", color: .orange).font(Theme.TypeScale.body) }
             Divider()
             NavigationLink { ReadinessDetailView(result: result, analytics: analytics) } label: {
                 HStack {
-                    Text("查看准备度依据").font(.body)
+                    Text("查看准备度依据").font(Theme.TypeScale.body)
                     Spacer()
-                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                    Image(systemName: "chevron.right").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.tertiary)
                 }
                 .frame(minHeight: Theme.Size.tap)
                 .contentShape(Rectangle())
@@ -226,7 +226,7 @@ struct ArrangementCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("今日安排").font(.headline).padding(.bottom, Theme.Space.tight)
+            Text("今日安排").font(Theme.TypeScale.title).padding(.bottom, Theme.Space.tight)
             row("运动", "figure.run", Theme.activity, guidance.exercise)
             Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block)
             row("负荷", "gauge.with.dots.needle.50percent", Theme.heartData, guidance.load)
@@ -262,11 +262,11 @@ struct BloodPressureNightCard: View {
             if let b = bp.bedtime, let m = bp.morning, let rise = bp.riseSys {
                 HStack(spacing: Theme.Space.item) {
                     reading("昨晚睡前", b)
-                    Image(systemName: "arrow.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                    Image(systemName: "arrow.right").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.tertiary)
                     reading("今晨", m)
                     Spacer()
                     Text("\(rise > 0 ? "+" : "")\(Int(rise))")
-                        .font(.subheadline.weight(.semibold)).monospacedDigit()
+                        .font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit()
                         .padding(.horizontal, Theme.Space.item).padding(.vertical, Theme.Space.tight)
                         .background(Theme.subtle, in: Capsule())
                         .accessibilityLabel("晨起收缩压变化 \(Int(rise)) 毫米汞柱")
@@ -277,15 +277,15 @@ struct BloodPressureNightCard: View {
             if bp.morning == nil {
                 Button(action: onLog) { Label("测量晨起血压", systemImage: "plus") }
                     .buttonStyle(.bordered).controlSize(.regular)
-                Text("起床后 1 小时内、排尿后、早餐和服药前，静坐 5 分钟测量。").font(.footnote).foregroundStyle(.secondary)
+                Text("起床后 1 小时内、排尿后、早餐和服药前，静坐 5 分钟测量。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
     }
 
     private func reading(_ label: String, _ v: VitalPoint) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.tight) {
-            Text(label).font(.caption).foregroundStyle(.secondary)
-            Text("\(Int(v.value))/\(Int(v.value2 ?? 0))").font(.subheadline.weight(.semibold)).monospacedDigit()
+            Text(label).font(Theme.TypeScale.body).foregroundStyle(.secondary)
+            Text("\(Int(v.value))/\(Int(v.value2 ?? 0))").font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit()
         }
     }
 
@@ -295,7 +295,7 @@ struct BloodPressureNightCard: View {
             Chart {
                 RuleMark(y: .value("参考", 135))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray.opacity(0.7))
-                    .annotation(position: .top, alignment: .leading) { Text("135").font(.caption2).foregroundStyle(.secondary) }
+                    .annotation(position: .top, alignment: .leading) { Text("135").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
                 ForEach(Array(bp.series.enumerated()), id: \.offset) { _, v in
                     LineMark(x: .value("日期", v.time, unit: .day), y: .value("晨起收缩压", v.value))
                         .foregroundStyle(Theme.heartData).interpolationMethod(.catmullRom)
@@ -306,15 +306,15 @@ struct BloodPressureNightCard: View {
                     PointMark(x: .value("日期", b.time.startOfDay.adding(days: 1), unit: .day), y: .value("睡前", b.value))
                         .symbol(.diamond).foregroundStyle(Color.gray).symbolSize(36)
                 }
-            }
+            }.pulseChartAxes()
             .chartYScale(domain: ((values.min() ?? 110) - 6)...((values.max() ?? 140) + 6))
-            .chartXAxis { AxisMarks(values: .stride(by: .day, count: 7)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy) } }
-            .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) }
+            .chartXAxis { AxisMarks(values: .stride(by: .day, count: 7)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy).font(Theme.TypeScale.body) } }
+            .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
             .frame(height: 120)
             .accessibilityLabel("近 14 天晨起收缩压")
             .accessibilityValue("范围 \(Int(bp.series.map(\.value).min() ?? 0)) 到 \(Int(bp.series.map(\.value).max() ?? 0))")
             Text("近 14 天晨起收缩压\(bp.bedtime != nil ? " · ◆ 昨晚睡前" : "") · 虚线 135 为家庭血压参考值")
-                .font(.footnote).foregroundStyle(.secondary)
+                .font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
         .padding(.top, Theme.Space.tight)
     }
@@ -338,15 +338,15 @@ struct GlucoseNightCard: View {
                         LineMark(x: .value("时间", v.time), y: .value("mmol/L", v.value))
                             .foregroundStyle(Theme.glucose).interpolationMethod(.monotone)
                     }
-                }
+                }.pulseChartAxes()
                 .chartYScale(domain: 2.5...max(11, hi + 1))
-                .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 2)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()) } }
-                .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) }
+                .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 2)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()).font(Theme.TypeScale.body) } }
+                .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
                 .frame(height: 110)
                 .accessibilityLabel("夜间血糖曲线")
                 .accessibilityValue("范围 \(lo.oneDecimal) 到 \(hi.oneDecimal) 毫摩尔每升")
                 Text("虚线之间为目标范围 \(profile.glucoseLow.oneDecimal)–\(profile.glucoseHigh.oneDecimal) mmol/L")
-                    .font(.footnote).foregroundStyle(.secondary)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         } else if let f = glucose.fasting {
             HealthMetricCard(title: "空腹血糖", icon: "drop.fill", color: Theme.glucose,
@@ -356,7 +356,7 @@ struct GlucoseNightCard: View {
             HealthMetricCard(title: "夜间血糖", icon: "drop.fill", color: Theme.glucose, value: "—", unit: "mmol/L",
                              status: .neutral("今晨尚未记录")) {
                 Button(action: onLog) { Label("记录空腹血糖", systemImage: "plus") }.buttonStyle(.bordered)
-                Text("佩戴 CGM 可以看到夜间完整的波动趋势。").font(.footnote).foregroundStyle(.secondary)
+                Text("佩戴 CGM 可以看到夜间完整的波动趋势。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
     }
@@ -386,7 +386,7 @@ struct BreathingNightCard: View {
                 ForEach(cues, id: \.0) { cue in
                     StatusLabel(text: cue.0, icon: cue.1 ? "exclamationmark.circle.fill" : "checkmark.circle", color: cue.1 ? .orange : .gray,
                                 secondaryText: !cue.1)
-                        .font(.footnote).lineLimit(1).minimumScaleFactor(0.8)
+                        .font(Theme.TypeScale.body).lineLimit(1)
                         .padding(Theme.Space.item)
                         .frame(maxWidth: .infinity)
                         .background(Theme.subtle.opacity(0.7), in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
@@ -394,11 +394,11 @@ struct BreathingNightCard: View {
             }
             if let dist = breathing.disturbances {
                 Text("呼吸紊乱 \(dist.oneDecimal)\(breathing.disturbancesNorm.map { " · 近 30 天平均 \($0.oneDecimal)" } ?? "")")
-                    .font(.footnote).foregroundStyle(.secondary)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
             if let h = breathing.cpapHours, let t = breathing.cpapTarget {
                 StatusLabel(text: "CPAP 使用 \(h.oneDecimal) 小时（目标 \(Int(t))）", icon: h >= t ? "checkmark.circle.fill" : "exclamationmark.circle.fill",
-                            color: h >= t ? .green : .orange, secondaryText: true).font(.footnote)
+                            color: h >= t ? .green : .orange, secondaryText: true).font(Theme.TypeScale.body)
             }
         }
     }
@@ -416,13 +416,13 @@ struct NightNoticeCard: View {
         let next = data.day.adding(days: 1)
         VStack(alignment: .leading, spacing: Theme.Space.block) {
             Label("现在\(data.now.hour < 5 ? "是凌晨" : "") \(Clock.text(data.now.minutesOfDay))", systemImage: "moon.stars.fill")
-                .font(.headline)
+                .font(Theme.TypeScale.title)
             Text("下面是 \(data.day.formatted(.dateTime.month().day())) \(p.shift == nil ? "早上" : "起床时")的评估。\(next.formatted(.dateTime.month().day())) 的晨起评估在你睡醒后进行，到 \(Clock.text(data.window.nextWake.minutesOfDay)) 起床还能睡约 \((Double(left) / 60).oneDecimal) 小时。")
-                .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if DayClock.canStartEarly(data.now, data.p) {
                 Divider()
                 HStack {
-                    Text("已经起床了？").font(.subheadline).foregroundStyle(.secondary)
+                    Text("已经起床了？").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     Spacer()
                     Button("开始今天", action: onStartEarly).buttonStyle(.bordered).tint(Theme.accent)
                 }
@@ -447,8 +447,8 @@ struct WakeFeelingCard: View {
                 } icon: {
                     Image(systemName: "face.smiling").foregroundStyle(Theme.mind)
                 }
-                .font(.headline)
-                if let t = record?.checkInAt { Text(Clock.text(t.minutesOfDay)).font(.footnote).foregroundStyle(.secondary) }
+                .font(Theme.TypeScale.title)
+                if let t = record?.checkInAt { Text(Clock.text(t.minutesOfDay)).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
                 Spacer()
                 if record?.hasCheckIn == true {
                     Button("修改", action: onCheckIn).buttonStyle(.bordered)
@@ -462,16 +462,16 @@ struct WakeFeelingCard: View {
                     item("压力", r.stress.map { "\($0)/5" })
                 }
                 if r.illnessSymptoms {
-                    StatusLabel(text: "记录了不适症状，今天以休息为主", icon: "thermometer.medium", color: .red).font(.footnote)
+                    StatusLabel(text: "记录了不适症状，今天以休息为主", icon: "thermometer.medium", color: .red).font(Theme.TypeScale.body)
                 }
             } else if canCheckIn {
-                Text("精力、酸痛和压力会影响今天适合的运动强度。").font(.subheadline).foregroundStyle(.secondary)
+                Text("精力、酸痛和压力会影响今天适合的运动强度。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 Button(action: onCheckIn) {
                     Label("记录醒后感受", systemImage: "sun.horizon.fill").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent).controlSize(.large)
             } else {
-                Text("这一天早上没有记录。下一次醒后感受在你睡醒后记录。").font(.subheadline).foregroundStyle(.secondary)
+                Text("这一天早上没有记录。下一次醒后感受在你睡醒后记录。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
         .cardSurface()
@@ -479,8 +479,8 @@ struct WakeFeelingCard: View {
 
     private func item(_ label: String, _ value: String?) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.tight) {
-            Text(label).font(.caption).foregroundStyle(.secondary)
-            Text(value ?? "—").font(.headline).monospacedDigit()
+            Text(label).font(Theme.TypeScale.body).foregroundStyle(.secondary)
+            Text(value ?? "—").font(Theme.TypeScale.title).monospacedDigit()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)

@@ -65,9 +65,9 @@ struct MarathonView: View {
             HStack(spacing: Theme.Space.block) {
                 HeroIcon(icon: "flag.checkered", color: Theme.activity)
                 VStack(alignment: .leading, spacing: Theme.Space.tight) {
-                    Text("设定一个赛事目标").font(.title3.weight(.semibold))
+                    Text("设定一个赛事目标").font(Theme.TypeScale.title.weight(.semibold))
                     Text("填写比赛日期、目标成绩和当前跑量，Pulse 会评估可行性并分阶段安排训练。")
-                        .font(.subheadline).foregroundStyle(.secondary)
+                        .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             }
             Button {
@@ -90,33 +90,33 @@ struct MarathonView: View {
             CardTitle(title: enabled ? "本周 · \(week.phase.label)" : "开启后的本周安排 · \(week.phase.label)") {
                 if enabled {
                     Text("\(planned.filter { $0.status == .done || $0.status == .partial }.count)/\(planned.count) 次")
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).monospacedDigit()
+                        .font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.secondary).monospacedDigit()
                 }
             }
             AdaptiveRow(alignment: .firstTextBaseline) {
                 HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
-                    Text(km.oneDecimal).font(.system(.title, design: .rounded).weight(.semibold)).monospacedDigit()
-                    Text("/ \(Int(week.weeklyKm)) km").font(.subheadline).foregroundStyle(.secondary)
+                    Text(km.oneDecimal).font(Theme.TypeScale.title.weight(.semibold)).monospacedDigit()
+                    Text("/ \(Int(week.weeklyKm)) km").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             } trailing: {
-                Text("长距离 \(Int(week.longRunKm)) km").font(.subheadline).foregroundStyle(.secondary)
+                Text("长距离 \(Int(week.longRunKm)) km").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
             ProgressBar(value: km / max(1, week.weeklyKm), color: Theme.activity, height: 6).accessibilityHidden(true)
-            Text(week.phase.focus).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            ForEach(week.warnings, id: \.self) { StatusLabel(.attention($0)).font(.subheadline) }
+            Text(week.phase.focus).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            ForEach(week.warnings, id: \.self) { StatusLabel(.attention($0)).font(Theme.TypeScale.body) }
             if !planned.isEmpty {
                 Divider()
                 ForEach(planned) { item in
                     HStack(spacing: Theme.Space.block) {
                         IconTile(icon: item.kind.icon, color: Theme.activity)
                         VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                            Text(item.title).font(.body)
+                            Text(item.title).font(Theme.TypeScale.body)
                             Text("\(Weekday.name(item.day.weekday)) · \(item.minutes) 分钟 · \(item.intensity.label)")
-                                .font(.footnote).foregroundStyle(.secondary)
+                                .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                         }
                         Spacer(minLength: Theme.Space.tight)
                         StatusLabel(text: item.status.label, icon: item.status.icon, color: Theme.planStatus(item.status), secondaryText: true)
-                            .labelStyle(.iconOnly).font(.title3)
+                            .labelStyle(.iconOnly).font(Theme.TypeScale.title)
                             .accessibilityLabel(item.status.label)
                     }
                     .frame(minHeight: Theme.Size.tap)
@@ -129,8 +129,8 @@ struct MarathonView: View {
                     HStack(spacing: Theme.Space.block) {
                         IconTile(icon: s.kind.icon, color: Theme.activity)
                         VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                            Text(s.title).font(.body)
-                            Text("\(Weekday.name(s.weekday)) · \(s.minutes) 分钟 · \(s.intensity.label)").font(.footnote).foregroundStyle(.secondary)
+                            Text(s.title).font(Theme.TypeScale.body)
+                            Text("\(Weekday.name(s.weekday)) · \(s.minutes) 分钟 · \(s.intensity.label)").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                         }
                         Spacer(minLength: 0)
                     }
@@ -139,7 +139,7 @@ struct MarathonView: View {
                 }
             }
             if snap.cardiacLimited {
-                StatusLabel(.attention("你记录了心血管相关情况：较高强度内容需医生确认后再进行。")).font(.subheadline)
+                StatusLabel(.attention("你记录了心血管相关情况：较高强度内容需医生确认后再进行。")).font(Theme.TypeScale.body)
             }
         }
         .cardSurface()
@@ -163,7 +163,7 @@ struct MarathonView: View {
             rhrCard
         }
         // Said once under the grid, so the first card is not taller than its neighbours.
-        Text("负荷比 = 近 7 天 ÷ 近 4 周平均，适宜 0.8–1.3。").font(.footnote).foregroundStyle(.secondary)
+        Text("负荷比 = 近 7 天 ÷ 近 4 周平均，适宜 0.8–1.3。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
         VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("近 8 周跑量")
             Chart {
@@ -173,13 +173,13 @@ struct MarathonView: View {
                 }
                 RuleMark(y: .value("本周目标", week.weeklyKm))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray)
-                    .annotation(position: .top, alignment: .leading) { Text("本周目标 \(Int(week.weeklyKm))").font(.caption2).foregroundStyle(.secondary) }
-            }
-            .chartXAxis { AxisMarks(values: .stride(by: .weekOfYear, count: 2)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy) } }
+                    .annotation(position: .top, alignment: .leading) { Text("本周目标 \(Int(week.weeklyKm))").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
+            }.pulseChartAxes()
+            .chartXAxis { AxisMarks(values: .stride(by: .weekOfYear, count: 2)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy).font(Theme.TypeScale.body) } }
             .frame(height: 140)
             .accessibilityLabel("近 8 周每周跑量")
-            StatusLabel(load.zone == .high || load.zone == .caution ? .attention(load.message) : .neutral(load.message)).font(.subheadline)
-            Text("每周跑量增长控制在约 10% 以内，每 3–4 周安排一次减量周。").font(.footnote).foregroundStyle(.secondary)
+            StatusLabel(load.zone == .high || load.zone == .caution ? .attention(load.message) : .neutral(load.message)).font(Theme.TypeScale.body)
+            Text("每周跑量增长控制在约 10% 以内，每 3–4 周安排一次减量周。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
         .cardSurface()
     }
@@ -209,7 +209,7 @@ struct MarathonView: View {
         return HealthMetricCard(title: "有氧效率", icon: "waveform.path.ecg", color: Theme.heartData, time: "轻松跑",
                                 value: hr1.map { $0.noDecimal } ?? "—", unit: "bpm", status: status) {
             if let pa = pace0, let pb = pace1, easy.count >= 6 {
-                Text("配速 \(MarathonPlanner.paceText(pa)) → \(MarathonPlanner.paceText(pb))").font(.footnote).foregroundStyle(.secondary)
+                Text("配速 \(MarathonPlanner.paceText(pa)) → \(MarathonPlanner.paceText(pb))").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
     }
@@ -228,34 +228,34 @@ struct MarathonView: View {
             CardTitle("补给计算")
             VStack(alignment: .leading, spacing: Theme.Space.tight) {
                 HStack {
-                    Text("运动时长").font(.subheadline)
+                    Text("运动时长").font(Theme.TypeScale.body)
                     Spacer()
-                    Text("\(Int(fuelMinutes)) 分钟").font(.subheadline.weight(.semibold)).monospacedDigit()
+                    Text("\(Int(fuelMinutes)) 分钟").font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit()
                 }
                 Slider(value: $fuelMinutes, in: 45...330, step: 15) { Text("运动时长") }
                     .accessibilityValue("\(Int(fuelMinutes)) 分钟")
             }
             Stepper("每小时碳水 \(p.fuelCarbsPerHour) g", value: Bindable(p).fuelCarbsPerHour, in: 20...100, step: 5)
-                .font(.subheadline)
+                .font(Theme.TypeScale.body)
             MetricRow {
                 fuelFact("碳水", "\(plan.carbs)", "g", "bolt.fill")
                 fuelFact("能胶约", plan.carbs > 0 ? "\(gels)" : "0", "支", "takeoutbag.and.cup.and.straw.fill")
                 fuelFact("饮水", plan.fluidHigh > 0 ? fluid.0 : "按口渴", plan.fluidHigh > 0 ? fluid.1 : "", "drop.fill")
             }
-            Text(plan.note).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text(plan.note).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if !longRuns.isEmpty {
                 Divider()
-                Text("最近的长距离演练").font(.subheadline.weight(.semibold))
+                Text("最近的长距离演练").font(Theme.TypeScale.body.weight(.semibold))
                 ForEach(Array(longRuns)) { s in
                     HStack {
-                        Text(s.start.formatted(.dateTime.month().day())).font(.subheadline).foregroundStyle(.secondary).frame(width: 64, alignment: .leading)
-                        Text("\((s.distanceKm ?? 0).oneDecimal) km · \(Int(s.minutes)) 分钟").font(.subheadline).monospacedDigit()
+                        Text(s.start.formatted(.dateTime.month().day())).font(Theme.TypeScale.body).foregroundStyle(.secondary).frame(width: 64, alignment: .leading)
+                        Text("\((s.distanceKm ?? 0).oneDecimal) km · \(Int(s.minutes)) 分钟").font(Theme.TypeScale.body).monospacedDigit()
                         Spacer()
-                        StatusLabel(s.carbsG.map { .good("补给 \(Int($0)) g") } ?? .attention("未记录补给")).font(.footnote)
+                        StatusLabel(s.carbsG.map { .good("补给 \(Int($0)) g") } ?? .attention("未记录补给")).font(Theme.TypeScale.body)
                     }
                     .frame(minHeight: 32)
                 }
-                Text("在「记录运动」中填写补给量，比赛日只使用训练中试过的补给。").font(.footnote).foregroundStyle(.secondary)
+                Text("在「记录运动」中填写补给量，比赛日只使用训练中试过的补给。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
         .cardSurface()
@@ -283,12 +283,12 @@ struct MarathonView: View {
                 Chart {
                     RuleMark(y: .value("4 mmol/L", 4.0))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray)
-                        .annotation(position: .top, alignment: .leading) { Text("4 mmol/L").font(.caption2).foregroundStyle(.secondary) }
+                        .annotation(position: .top, alignment: .leading) { Text("4 mmol/L").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
                     ForEach(Array(stages.enumerated()), id: \.offset) { _, s in
                         LineMark(x: .value("心率", s.hr ?? 0), y: .value("乳酸", s.lactate)).foregroundStyle(Theme.activity)
                         PointMark(x: .value("心率", s.hr ?? 0), y: .value("乳酸", s.lactate)).foregroundStyle(Theme.activity)
                     }
-                }
+                }.pulseChartAxes()
                 .chartXScale(domain: ((stages.compactMap(\.hr).min() ?? 120) - 5)...((stages.compactMap(\.hr).max() ?? 170) + 8))
                 .chartYScale(domain: 0...max(5, (stages.map(\.lactate).max() ?? 4) + 0.5))
                 .chartXAxisLabel("心率 bpm")
@@ -302,22 +302,22 @@ struct MarathonView: View {
                     fuelFact("有氧阈 LT1", r.lt1HR.map { "\(Int($0))" } ?? "—", "bpm", "1.circle")
                     fuelFact("乳酸阈 LT2", r.lt2HR.map { "\(Int($0))" } ?? "—", "bpm", "2.circle")
                 }
-                ForEach(r.notes, id: \.self) { Text($0).font(.footnote).foregroundStyle(.secondary) }
+                ForEach(r.notes, id: \.self) { Text($0).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
                 if let lt2 = r.lt2HR, p.thresholdHR != Int(lt2.rounded()) {
                     Button {
                         p.thresholdHR = Int(lt2.rounded())
                         DataHub.regenerateWeekPlan(in: ctx)
                     } label: { Label("采用 \(Int(lt2.rounded())) bpm 作为阈值心率", systemImage: "checkmark.circle") }
                         .buttonStyle(.bordered)
-                    Text("请先与测试人员确认。采用后，心率区间与计划强度以测得的阈值为参照。").font(.footnote).foregroundStyle(.secondary)
+                    Text("请先与测试人员确认。采用后，心率区间与计划强度以测得的阈值为参照。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             }
             Stepper("阈值心率 \(p.thresholdHR.map { "\($0) bpm" } ?? "未设定")",
                     onIncrement: { p.thresholdHR = (p.thresholdHR ?? 155) + 1 },
                     onDecrement: { p.thresholdHR = max(100, (p.thresholdHR ?? 155) - 1) })
-                .font(.subheadline)
+                .font(Theme.TypeScale.body)
             Text("测试条件尽量一致：相同时段、饮食与热身，前一天避免高强度训练。单次数值受测试方案影响，请与专业人员一起解读。")
-                .font(.footnote).foregroundStyle(.secondary)
+                .font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
         .cardSurface()
     }
@@ -342,9 +342,9 @@ struct RaceHeroCard: View {
             HStack(alignment: .center, spacing: Theme.Space.block) {
                 HeroIcon(icon: "figure.run", color: Theme.activity)
                 VStack(alignment: .leading, spacing: Theme.Space.tight) {
-                    Text(race.name.isEmpty ? "全程马拉松" : race.name).font(.title3.weight(.semibold))
+                    Text(race.name.isEmpty ? "全程马拉松" : race.name).font(Theme.TypeScale.title.weight(.semibold))
                     Text("\(race.date.formatted(.dateTime.year().month().day())) · 还有 \(days) 天")
-                        .font(.subheadline).foregroundStyle(.secondary)
+                        .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             }
             .accessibilityElement(children: .combine)
@@ -353,11 +353,11 @@ struct RaceHeroCard: View {
                 fact("目标配速", MarathonPlanner.paceText(week.marathonPace))
                 fact("当前估计", prediction.map { RacePredictor.timeText($0.minutes) } ?? "—")
             }
-            StatusLabel(feasibility).font(.subheadline)
+            StatusLabel(feasibility).font(Theme.TypeScale.body)
             if !profile.hasModule(.marathon) {
                 Button(action: onEnable) { Label("开启专项计划", systemImage: "flag.checkered").frame(maxWidth: .infinity) }
                     .buttonStyle(.borderedProminent).controlSize(.large)
-                Text("开启后，每周计划将按阶段安排长距离、强度课与力量训练。").font(.footnote).foregroundStyle(.secondary)
+                Text("开启后，每周计划将按阶段安排长距离、强度课与力量训练。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
         .cardSurface()
@@ -376,8 +376,8 @@ struct RaceHeroCard: View {
 
     private func fact(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.tight) {
-            Text(label).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.headline).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+            Text(label).font(Theme.TypeScale.body).foregroundStyle(.secondary)
+            Text(value).font(Theme.TypeScale.title).monospacedDigit().lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
@@ -409,7 +409,7 @@ struct PaceCard: View {
                     }
                     .padding(.top, Theme.Space.item)
                 }
-                .font(.subheadline)
+                .font(Theme.TypeScale.body)
                 .padding(.top, Theme.Space.tight)
             }
         }
@@ -421,11 +421,11 @@ struct PaceCard: View {
             IconTile(icon: "speedometer", color: Theme.intensity(i))
             AdaptiveRow {
                 VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                    Text(title).font(.subheadline.weight(.semibold))
-                    Text(text).font(.footnote).foregroundStyle(.secondary)
+                    Text(title).font(Theme.TypeScale.body.weight(.semibold))
+                    Text(text).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             } trailing: {
-                Text(MarathonPlanner.paceText(pace)).font(.body.weight(.semibold)).monospacedDigit()
+                Text(MarathonPlanner.paceText(pace)).font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit()
             }
         }
         .frame(minHeight: Theme.Size.tap)
@@ -443,29 +443,29 @@ struct HRZonesCard: View {
             CardTitle("心率区间")
             ForEach(zones) { z in
                 HStack(spacing: Theme.Space.block) {
-                    Text("\(z.index)").font(.footnote.weight(.bold)).foregroundStyle(.primary)
+                    Text("\(z.index)").font(Theme.TypeScale.body.weight(.bold)).foregroundStyle(.primary)
                         .frame(width: Theme.Size.iconTile, height: Theme.Size.iconTile)
                         .background(Theme.subtle, in: Circle())
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: Theme.Space.tight) {
                         HStack {
-                            Text(z.name).font(.subheadline.weight(.semibold))
-                            if z.aboveCap { StatusLabel(.attention("超出医生给出的上限")).font(.caption) }
+                            Text(z.name).font(Theme.TypeScale.body.weight(.semibold))
+                            if z.aboveCap { StatusLabel(.attention("超出医生给出的上限")).font(Theme.TypeScale.body) }
                             Spacer()
-                            Text("\(z.low)–\(z.high) bpm").font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
+                            Text("\(z.low)–\(z.high) bpm").font(Theme.TypeScale.body).monospacedDigit().foregroundStyle(.secondary)
                         }
                         GeometryReader { geo in
                             Capsule().fill(Theme.heartData.opacity(z.aboveCap ? 0.15 : 0.35 + 0.13 * Double(z.index)))
                                 .frame(width: geo.size.width * Double(z.high) / maxHigh)
                         }
                         .frame(height: 6)
-                        Text(z.purpose).font(.footnote).foregroundStyle(.secondary)
+                        Text(z.purpose).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("区间 \(z.index) \(z.name)，\(z.low) 到 \(z.high) 次每分，\(z.purpose)")
             }
-            Text(basis).font(.footnote).foregroundStyle(.secondary)
+            Text(basis).font(Theme.TypeScale.body).foregroundStyle(.secondary)
             AgentAskButton(title: "训练时手表和心率带怎么用", question: "马拉松训练时手表和心率带怎么用更准？")
         }
         .cardSurface()

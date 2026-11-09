@@ -60,6 +60,11 @@ struct AgentContext {
     var healthDataConsented = false
     /// What the user calls the agent (「Health Agent」 until they name it).
     var agentName = AgentName.standard
+    /// The real time when the conversation looks back at a past week (复盘): `now` is that week's end, so
+    /// the answers read that week, while records are made at this time and plans aren't changed from there.
+    var liveNow: Date? = nil
+    /// The 三阶段计划, for questions about it.
+    var program: AgentProgram? = nil
     var medications: [MedicationInfo] { profile.medications.filter { $0.isActive(on: now) } }
     func weather(on day: Date) -> DayWeather? { weather.first { $0.day == day.startOfDay } }
 
@@ -264,7 +269,7 @@ struct AgentReply: Equatable {
 }
 
 enum AgentIntent: String, CaseIterable {
-    case emergency, daySummary, meds, device, planChange, trainingCheck, labs, weather, glucose, bp, breathing, marathon, alcohol, caffeine, stress, diet, hrv, rhr
+    case emergency, daySummary, meds, device, planChange, trainingCheck, program, labs, weather, glucose, bp, breathing, marathon, alcohol, caffeine, stress, diet, hrv, rhr
     case readiness, sleep, exercise, events, doctor, next, overall, greeting, condition
     /// Answers chosen from what the question names rather than by keyword (see `AgentQuestion`).
     case food, reading, symptom
@@ -283,6 +288,9 @@ enum AgentIntent: String, CaseIterable {
         case .meds: ["药", "剂量", "胰岛素", "停药", "减药", "加药", "二甲双胍", "格列", "地平", "沙坦", "普利", "洛尔", "他汀", "阿司匹林",
                      "利尿剂", "呋塞米", "华法林", "司美格鲁肽", "利拉鲁肽"] + KidneyMeds.nsaids
         case .device, .planChange, .trainingCheck, .condition, .food, .reading, .symptom, .about, .knowledge: []
+        // 三阶段计划: where the user is, this week of the round, and their ranks (Docs 8).
+        case .program: ["第几周", "第几轮", "第几天", "方案进度", "方案完成", "方案做得", "这周方案", "本周方案", "这周的方案", "我的方案",
+                        "改善方案", "三阶段", "基线期", "改善期", "总结期", "基线报告", "主靶点", "排名", "靠后", "落后于同龄", "比同龄"]
         case .labs: ["化验", "检验", "验血", "抽血", "肌酐", "eGFR", "egfr", "肾小球滤过率", "肾功能", "血钾", "尿蛋白", "尿白蛋白", "UACR", "血磷", "血红蛋白", "尿酸", "糖化血红蛋白", "HbA1c"]
         case .weather: ["天气", "下雨", "雨天", "雷阵雨", "雷雨", "高温", "太热", "天热", "下雪", "雾霾", "空气质量", "空气污染", "AQI", "台风", "降温"]
         case .glucose: ["血糖", "CGM", "cgm", "低血糖", "高血糖", "糖尿病", "糖化", "TIR", "餐后"]
@@ -591,6 +599,11 @@ enum HealthAgent {
         var c = base
         if let t = told { c.profile.include(t.info) }
         if i == .emergency { return emergencyReply(for: asked) }
+        // Looking back at a past week: what to do now, or a change to the plan, belongs to today's data.
+        if c.liveNow != nil, [.planChange, .trainingCheck].contains(i) {
+            let text = "这里看的是过去一周的复盘，回答按那一周的记录来。调整计划、问现在能不能练，请回到「今日」或「计划」里问我，那里按现在的数据回答。"
+            return AgentReply(text: text, intent: i, conclusion: text, verbatim: true)
+        }
         // Someone else's health: general knowledge, never the user's own numbers.
         if aboutSomeoneElse(asked), told == nil {
             var r = unknown(c)
@@ -605,7 +618,7 @@ enum HealthAgent {
         }
         // 「这周跑量是不是太多了」「这周还要练多久」 are asked, not ordered, though they read like plan changes.
         let parsed = AgentQuestion(asked)
-        if ![.planChange, .device].contains(i) || parsed.symptom != nil || runVolumeAsk(parsed) != nil || asksActivityLeft(parsed),
+        if ![.planChange, .device, .program].contains(i) || parsed.symptom != nil || runVolumeAsk(parsed) != nil || asksActivityLeft(parsed),
            var r = specific(parsed, context: c) {
             if let t = told { r = withCondition(r, t, question: question, context: c, before: base) }
             return r
@@ -618,6 +631,7 @@ enum HealthAgent {
         case .device: r = DeviceGuide.reply(question, context: c)
         case .planChange: r = PlanChat.reply(question, context: c)
         case .trainingCheck: r = TrainingCheck.reply(question, context: c)
+        case .program: r = program(c, question: asked)
         case .labs: r = labs(c, question: question)
         case .weather: r = weather(c)
         case .glucose: r = glucose(c, question: question)
@@ -1638,7 +1652,7 @@ enum HealthAgent {
             line += "；今天 \(Clock.text(w.wake.minutesOfDay)) 起床，主睡眠 \(Clock.text(w.bed.minutesOfDay)) 开始\(w.afterNightShift ? "（夜班后白天补觉）" : "")；\(next)。"
             d.append(line)
         }
-        var who = "用户：\(anonymous ? "" : "\(c.name)，")\(p.age) 岁，BMI \(p.bmi.oneDecimal)，活动水平\(p.level.label)"
+        var who = "用户：\(anonymous ? "" : "\(c.name)，")\(p.ageText)，\(p.bodySizeText)，活动水平\(p.level.label)"
         if !p.conditionNames.isEmpty { who += "；健康状况：\(p.conditionNames.joined(separator: "、"))" }
         if !c.medications.isEmpty { who += "；用药：\(c.medications.map { "\($0.name)（\($0.category.hrEffect.label)）" }.joined(separator: "、"))" }
         d.append(who + "。目标：\(p.goals.map(\.label).joined(separator: "、"))。")

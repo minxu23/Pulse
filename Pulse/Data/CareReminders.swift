@@ -145,7 +145,8 @@ enum CareReminders {
     @MainActor static func syncNow(in ctx: ModelContext) async { await start(in: ctx)?.value }
 
     @MainActor @discardableResult private static func start(in ctx: ModelContext) -> _Concurrency.Task<Void, Never>? {
-        guard schedulable else { return nil }
+        // A sample user's care tasks never replace the reminders set from your own records.
+        guard schedulable, DataHub.profile(in: ctx)?.usesDemoData != true else { return nil }
         let tasks = ((try? ctx.fetch(FetchDescriptor<CareTask>())) ?? [])
             .map { Task(id: $0.id.uuidString, title: $0.title, note: $0.note, due: $0.due, done: $0.done, repeats: $0.repeats) }
         let planned = enabled ? plan(tasks, now: Date()) : []

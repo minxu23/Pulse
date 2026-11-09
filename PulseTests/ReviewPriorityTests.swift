@@ -135,7 +135,10 @@ struct ReviewPriorityTests {
         // most half are 需留意 — days worse than usual, far off target, or a week-long run's one reminder.
         let levels = month.compactMap(\.level)
         #expect(levels.filter { $0 == .watch }.count * 2 <= levels.count, "\(levels)")
-        #expect(month.contains { $0.lines.contains { $0.text.contains("值得带着记录和医生谈谈") } }, "his glucose has been under 70% for a week")
+        // His sensor has shown under 70% in range since it began (8 weeks of CGM): the reminder came once, on the 7th day.
+        let sensor = (0..<DemoEnrichment.cgmDays).map { c.logicalToday.adding(days: -$0) }.map { ReviewPriorities.verdict(on: $0, context: c, priorities: pr) }
+        #expect(sensor.filter { $0.lines.contains { $0.area == .glucose && $0.text.contains("值得带着记录和医生谈谈") } }.count == 1,
+                "his glucose has been under 70% for weeks: said once")
         #expect(month.contains { $0.lines.contains { $0.usual == .same && $0.text.contains("和你平时差不多") } })
         // The page names what made a day need attention.
         if let w = month.first(where: { $0.level == .watch && $0.readiness?.level != .rest }) { #expect(w.flagged.count >= 2) }

@@ -17,7 +17,7 @@ struct LabResultsView: View {
         ScreenScroll {
             Button { adding = true } label: {
                 Label("记录化验结果", systemImage: "plus")
-                    .font(.subheadline.weight(.medium))
+                    .font(Theme.TypeScale.body.weight(.medium))
                     .padding(.vertical, Theme.Space.item)
                     .frame(maxWidth: .infinity, minHeight: Theme.Size.tap)
                     .contentShape(Rectangle())
@@ -37,7 +37,7 @@ struct LabResultsView: View {
                     LabKindCard(kind: k, labs: points, profile: p)
                 }
                 NavigationLink { LabHistoryView() } label: {
-                    Label("全部化验记录", systemImage: "list.bullet").font(.subheadline)
+                    Label("全部化验记录", systemImage: "list.bullet").font(Theme.TypeScale.body)
                         .frame(maxWidth: .infinity, minHeight: Theme.Size.tap).contentShape(Rectangle())
                 }
             }
@@ -68,7 +68,7 @@ private struct KidneyFunctionCard: View {
             if let e = egfr.last {
                 LabValueRow(point: e, status: LabAnalyzer.status(.egfr, e.value, profile: profile))
                 if let t = LabAnalyzer.egfrTrend(labs) {
-                    StatusLabel(t.fast ? .attention(t.text) : .neutral(t.text)).font(.subheadline)
+                    StatusLabel(t.fast ? .attention(t.text) : .neutral(t.text)).font(Theme.TypeScale.body)
                 }
                 if egfr.count >= 2 {
                     Chart {
@@ -78,12 +78,12 @@ private struct KidneyFunctionCard: View {
                             PointMark(x: .value("日期", l.date, unit: .day), y: .value("eGFR", l.value))
                                 .foregroundStyle(Theme.labs).symbol(l.estimated ? .circle : .square).symbolSize(30)
                         }
-                    }
+                    }.pulseChartAxes()
                     .chartYScale(domain: 0...max(100, (egfr.map(\.value).max() ?? 90) + 10))
                     .frame(height: 140)
                     .accessibilityLabel("eGFR 变化：" + egfr.map { "\($0.date.formatted(.dateTime.month().day())) \($0.valueText)" }.joined(separator: "，"))
                     Text("虚线为 60：低于 60 持续 3 个月以上，属于慢性肾病的范围。\(egfr.contains(where: \.estimated) ? "圆点为按肌酐估算的值。" : "")")
-                        .font(.footnote).foregroundStyle(.secondary)
+                        .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             }
             if let u = uacr.last {
@@ -96,7 +96,7 @@ private struct KidneyFunctionCard: View {
             }
             if egfr.last != nil && uacr.last != nil {
                 Text("肾功能分期要看相隔 3 个月以上的结果，由医生确认；eGFR 和尿白蛋白一起看，比单看一项更准确。")
-                    .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -117,7 +117,7 @@ private struct LabKindCard: View {
                     Chart(series, id: \.date) { l in
                         LineMark(x: .value("日期", l.date, unit: .day), y: .value(kind.label, l.value)).foregroundStyle(Theme.labs)
                         PointMark(x: .value("日期", l.date, unit: .day), y: .value(kind.label, l.value)).foregroundStyle(Theme.labs).symbolSize(30)
-                    }
+                    }.pulseChartAxes()
                     .chartYScale(domain: .automatic(includesZero: false))
                     .frame(height: 110)
                     .accessibilityLabel("\(kind.label)变化：" + series.map { "\($0.date.formatted(.dateTime.month().day())) \($0.valueText)" }.joined(separator: "，"))
@@ -135,16 +135,16 @@ private struct LabValueRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.item) {
             HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
-                Text(point.kind.label).font(.subheadline.weight(.semibold))
+                Text(point.kind.label).font(Theme.TypeScale.body.weight(.semibold))
                 Spacer()
-                Text(point.valueText).font(.system(.title2, design: .rounded).weight(.semibold)).monospacedDigit()
-                Text(point.kind.unit).font(.footnote).foregroundStyle(.secondary)
+                Text(point.valueText).font(Theme.TypeScale.title.weight(.semibold)).monospacedDigit()
+                Text(point.kind.unit).font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
             HStack {
-                StatusLabel(status.metric).font(.subheadline)
+                StatusLabel(status.metric).font(Theme.TypeScale.body)
                 Spacer()
                 Text(point.date.formatted(.dateTime.year().month().day()) + (point.estimated ? " · 估算" : ""))
-                    .font(.footnote).foregroundStyle(.secondary)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
         .accessibilityElement(children: .combine)
@@ -172,13 +172,13 @@ struct LabHistoryView: View {
             ForEach(labs) { l in
                 HStack {
                     VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                        Text(l.kind.label).font(.subheadline)
+                        Text(l.kind.label).font(Theme.TypeScale.body)
                         Text(l.date.formatted(.dateTime.year().month().day()) + (l.estimated ? " · 按肌酐估算" : "") + (l.note.isEmpty ? "" : " · \(l.note)"))
-                            .font(.footnote).foregroundStyle(.secondary)
+                            .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Text(l.kind.format(l.value)).font(.subheadline.weight(.semibold)).monospacedDigit()
-                    Text(l.kind.unit).font(.footnote).foregroundStyle(.secondary)
+                    Text(l.kind.format(l.value)).font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit()
+                    Text(l.kind.unit).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             }
             .onDelete { idx in for i in idx { ctx.delete(labs[i]) } }
@@ -200,17 +200,17 @@ struct LabSummaryCard: View {
         NavigationLink { LabResultsView() } label: {
             Card {
                 CardHeader(title: "化验结果", subtitle: points.isEmpty ? nil : "最近 \(points.map(\.date).max()!.formatted(.dateTime.month().day()))", icon: "testtube.2", color: Theme.labs, keepsTrailingBeside: true) {
-                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                    Image(systemName: "chevron.right").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.tertiary)
                 }
                 if shown.isEmpty {
-                    Text("记录 eGFR、血肌酐、血钾、尿白蛋白等化验结果，Pulse 帮你解读并跟踪趋势。").font(.subheadline).foregroundStyle(.secondary)
+                    Text("记录 eGFR、血肌酐、血钾、尿白蛋白等化验结果，Pulse 帮你解读并跟踪趋势。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 } else {
                     ForEach(Array(shown), id: \.kind) { l in
                         HStack(alignment: .firstTextBaseline) {
-                            Text(l.kind.label).font(.subheadline)
-                            Text(l.valueText).font(.subheadline.weight(.semibold)).monospacedDigit()
+                            Text(l.kind.label).font(Theme.TypeScale.body)
+                            Text(l.valueText).font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit()
                             Spacer()
-                            StatusLabel(LabAnalyzer.status(l.kind, l.value, profile: profile).metric).font(.subheadline)
+                            StatusLabel(LabAnalyzer.status(l.kind, l.value, profile: profile).metric).font(Theme.TypeScale.body)
                         }
                     }
                 }

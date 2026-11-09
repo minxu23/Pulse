@@ -16,6 +16,21 @@ final class DailyRecord {
     var spo2Min: Double? = nil
     var breathingDisturbances: Double? = nil
     var vo2Max: Double? = nil
+    /// Smart scale (or typed in): body fat %, lean mass, waist.
+    var bodyFatPct: Double? = nil
+    var leanMassKg: Double? = nil
+    var waistCm: Double? = nil
+    /// Apple Watch: average heart rate while walking, and the 1-minute drop after a workout.
+    var walkingHR: Double? = nil
+    var hrRecovery: Double? = nil
+    /// AFib History: share of the week in atrial fibrillation (%), on the day it was reported.
+    var afBurden: Double? = nil
+    /// The day's ECG recording, if any (`ECGResult`).
+    var ecgResultRaw: String? = nil
+    /// Hours with standing and moving for at least a minute.
+    var standHours: Int? = nil
+    /// Steps in each clock hour (24 values); empty when not read.
+    var stepsByHour: [Int] = []
 
     // The night ending this morning
     var sleepStart: Date? = nil

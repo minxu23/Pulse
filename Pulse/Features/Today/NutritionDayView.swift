@@ -84,7 +84,7 @@ struct NutritionDayView: View {
                                 value: last.map { $0.value.oneDecimal } ?? "—", unit: "mmol/L", status: status) {
             if cgm {
                 let inRange = Double(g.filter { $0.value >= p.glucoseLow && $0.value <= p.glucoseHigh }.count) / Double(g.count)
-                Text("今日范围内 \(Int(inRange * 100))%").font(.footnote).foregroundStyle(.secondary)
+                Text("今日范围内 \(Int(inRange * 100))%").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             } else if last == nil {
                 Button { sheet = .log(.glucose) } label: { Label("记录", systemImage: "plus") }
                     .buttonStyle(.bordered)
@@ -144,17 +144,17 @@ struct KidneyDietCard: View {
             CardTitle("盐、蛋白质、钾和磷")
             if lines.isEmpty {
                 Text("记下今天吃了几个鸡蛋、几两肉、几碗饭，和吃过的高盐、高钾、高磷食物，Pulse 估算蛋白质和钾、磷，按医生给的量帮你对照。")
-                    .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             } else {
                 VStack(alignment: .leading, spacing: Theme.Space.item) {
                     ForEach(Array(lines.enumerated()), id: \.offset) { _, l in
-                        StatusLabel(l.metric).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                        StatusLabel(l.metric).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
             if let w = KidneyDiet.week(data.analytics.days, profile: p, now: data.now), w.days >= 2 {
                 Text("近 7 天记录了 \(w.days) 天：偏咸 \(w.saltyDays) 天\(w.proteinAvgG.map { "，蛋白质平均约 \(Int($0)) g" } ?? "")，高钾食物平均每天 \(w.potassiumPerDay.oneDecimal) 份（约 \(Int(w.potassiumMgPerDay)) mg 钾）。")
-                    .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Button { onLog(.diet) } label: {
                 Label(lines.isEmpty ? "记录今天的饮食" : "修改今天的记录", systemImage: "square.and.pencil").frame(maxWidth: .infinity)
@@ -181,7 +181,7 @@ struct KidneySignsCard: View {
             CardTitle("水肿与尿量", detail: p.onHemodialysis ? "血液透析 · \(Dialysis.schedule(p))" : (p.onPeritoneal ? "腹膜透析" : nil))
             if p.onPeritoneal {
                 Text("每天称体重、留意尿量；透出液浑浊、肚子疼或发烧，立即联系腹透中心。")
-                    .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             if p.onHemodialysis {
                 VStack(alignment: .leading, spacing: Theme.Space.item) {
@@ -193,24 +193,24 @@ struct KidneySignsCard: View {
                         StatusLabel(Dialysis.tooMuch(g) ? .attention(text) : .neutral(text))
                     } else if p.dryWeightKg == nil {
                         Text("在「我的 › 健康状况与用药」填上医生定的干体重，Pulse 帮你看两次透析之间体重涨了多少。")
-                            .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                            .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                .font(.subheadline)
+                .font(Theme.TypeScale.body)
             }
             if lines.isEmpty {
                 Text("按一按脚踝、留意尿量和泡沫，记下来能看出变化；连续两天明显水肿或尿变少，Pulse 会提醒你联系医生。")
-                    .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             } else {
                 VStack(alignment: .leading, spacing: Theme.Space.item) {
                     ForEach(Array(lines.enumerated()), id: \.offset) { _, l in
-                        StatusLabel(l.metric).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                        StatusLabel(l.metric).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
             if let s = KidneySigns.summary(data.analytics.days, now: data.now), s.days >= 2 {
                 Text(s.text + "。" + (s.foamyDays >= 3 ? "泡沫尿常有的话，复查时查一下尿白蛋白/肌酐比。" : ""))
-                    .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Button { onLog(.kidneySigns) } label: {
                 Label(lines.isEmpty ? "记录今天的水肿与尿量" : "修改今天的记录", systemImage: "square.and.pencil").frame(maxWidth: .infinity)
@@ -246,9 +246,9 @@ struct IntakeHeroCard: View {
                 ScoreRing(progress: Double(water) / Double(max(1, p.waterTargetMl)),
                           color: p.fluidLimited && water > p.waterTargetMl ? .orange : Theme.nutrition, lineWidth: 10) {
                     VStack(spacing: 0) {
-                        Text("\(water)").font(.system(.title3, design: .rounded).weight(.bold)).monospacedDigit()
-                            .lineLimit(1).minimumScaleFactor(0.7)
-                        Text("ml").font(.caption).foregroundStyle(.secondary)
+                        Text("\(water)").font(Theme.TypeScale.title.weight(.bold)).monospacedDigit()
+                            .lineLimit(1)
+                        Text("ml").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                     .padding(.horizontal, 10)
                 }
@@ -257,7 +257,7 @@ struct IntakeHeroCard: View {
                 .accessibilityLabel("饮水 \(water) 毫升，\(p.fluidLimited ? "上限" : "目标") \(p.waterTargetMl) 毫升")
                 VStack(alignment: .leading, spacing: Theme.Space.item) {
                     ForEach(Array(statuses.enumerated()), id: \.offset) { _, s in
-                        StatusLabel(s).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                        StatusLabel(s).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
@@ -334,13 +334,13 @@ struct MealsCard: View {
                 HStack(spacing: Theme.Space.block) {
                     IconTile(icon: m.kind.icon, color: Theme.nutrition)
                     VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                        Text(m.kind.label).font(.body)
+                        Text(m.kind.label).font(Theme.TypeScale.body)
                         Text([Clock.text(m.time.minutesOfDay), m.note].filter { !$0.isEmpty }.joined(separator: " · "))
-                            .font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                            .font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(2)
                     }
                     Spacer(minLength: Theme.Space.tight)
                     if let c = m.carbsG {
-                        Text("\(Int(c)) g 碳水").font(.subheadline).foregroundStyle(.secondary).monospacedDigit()
+                        Text("\(Int(c)) g 碳水").font(Theme.TypeScale.body).foregroundStyle(.secondary).monospacedDigit()
                     }
                 }
                 .frame(minHeight: Theme.Size.tap)
@@ -385,7 +385,7 @@ struct GlucoseDayCard: View {
                 ForEach(sessions) { s in
                     RectangleMark(xStart: .value("开始", s.start), xEnd: .value("结束", s.start.addingTimeInterval(s.minutes * 60)))
                         .foregroundStyle(Theme.activity.opacity(0.18))
-                        .annotation(position: .top) { Image(systemName: "figure.run").font(.caption2).foregroundStyle(Theme.activity) }
+                        .annotation(position: .top) { Image(systemName: "figure.run").font(Theme.TypeScale.body).foregroundStyle(Theme.activity) }
                 }
                 ForEach(Array(points.enumerated()), id: \.offset) { _, v in
                     LineMark(x: .value("时间", v.time), y: .value("mmol/L", v.value))
@@ -393,17 +393,17 @@ struct GlucoseDayCard: View {
                 }
                 ForEach(meals) { m in
                     RuleMark(x: .value("进餐", m.time)).foregroundStyle(Color.gray.opacity(0.6))
-                        .annotation(position: .top) { Image(systemName: "fork.knife").font(.caption2).foregroundStyle(Color.gray) }
+                        .annotation(position: .top) { Image(systemName: "fork.knife").font(Theme.TypeScale.body).foregroundStyle(Color.gray) }
                 }
-            }
+            }.pulseChartAxes()
             .chartYScale(domain: 2.5...max(11, (points.map(\.value).max() ?? 8) + 1))
-            .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 3)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()) } }
-            .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) }
+            .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 3)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()).font(Theme.TypeScale.body) } }
+            .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
             .padding(.top, Theme.Space.block)
             .frame(height: 140)
             .accessibilityLabel("今天的血糖曲线")
             .accessibilityValue("目标范围内 \(Int(inRange * 100))%")
-            Text("虚线之间为目标范围 · 灰色竖线为进餐 · 跑步图标为运动").font(.footnote).foregroundStyle(.secondary)
+            Text("虚线之间为目标范围 · 灰色竖线为进餐 · 跑步图标为运动").font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
     }
 }
@@ -421,7 +421,7 @@ struct ReadingsCard: View {
         VStack(alignment: .leading, spacing: Theme.Space.item) {
             CardTitle(title: "测量记录") {
                 NavigationLink { VitalsHistoryView() } label: {
-                    Text("全部").font(.subheadline)
+                    Text("全部").font(Theme.TypeScale.body)
                         .frame(minWidth: Theme.Size.tap, minHeight: Theme.Size.tap, alignment: .trailing).contentShape(Rectangle())
                 }
             }
@@ -431,11 +431,11 @@ struct ReadingsCard: View {
                     IconTile(icon: v.kind.icon, color: v.kind == .glucose ? Theme.glucose : (v.kind == .weight ? Theme.body : Theme.heartData))
                     VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
-                            Text(v.kind.label).font(.body)
-                            Text(valueText(v)).font(.body.weight(.semibold)).monospacedDigit()
-                            Text(v.kind.unit).font(.footnote).foregroundStyle(.secondary)
+                            Text(v.kind.label).font(Theme.TypeScale.body)
+                            Text(valueText(v)).font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit()
+                            Text(v.kind.unit).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                         }
-                        Text("\(Clock.text(v.time.minutesOfDay)) · \(context(for: v))").font(.footnote).foregroundStyle(.secondary)
+                        Text("\(Clock.text(v.time.minutesOfDay)) · \(context(for: v))").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 0)
                 }

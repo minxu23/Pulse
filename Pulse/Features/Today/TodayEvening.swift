@@ -74,16 +74,16 @@ struct TonightHeroCard: View {
             HStack(alignment: .center, spacing: Theme.Space.block) {
                 HeroIcon(icon: "moon.zzz.fill", color: Theme.sleep)
                 VStack(alignment: .leading, spacing: Theme.Space.tight) {
-                    Text("\(Clock.text(bed)) 前上床").font(.title3.weight(.semibold))
+                    Text("\(Clock.text(bed)) 前上床").font(Theme.TypeScale.title.weight(.semibold))
                     Text(left < 600 ? "还有 \(left / 60) 小时 \(left % 60) 分钟 · 计划 \(Clock.text(wake)) 起床" : "计划 \(Clock.text(wake)) 起床")
-                        .font(.subheadline).foregroundStyle(.secondary)
+                        .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             }
             .accessibilityElement(children: .combine)
-            StatusLabel(status(window: window)).font(.subheadline)
+            StatusLabel(status(window: window)).font(Theme.TypeScale.body)
             if let r, r.hasEveningCheckIn {
                 HStack {
-                    StatusLabel(text: "已完成睡前记录", icon: "checkmark.circle.fill", color: .green).font(.subheadline.weight(.semibold))
+                    StatusLabel(text: "已完成睡前记录", icon: "checkmark.circle.fill", color: .green).font(Theme.TypeScale.body.weight(.semibold))
                     Spacer()
                     Button("修改", action: onRecord).buttonStyle(.bordered)
                 }
@@ -95,7 +95,7 @@ struct TonightHeroCard: View {
                     Label("睡前记录", systemImage: "moon.stars.fill").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent).controlSize(.large)
-                Text("约 1 分钟：疲劳、酸痛、压力和睡眠安排").font(.footnote).foregroundStyle(.secondary)
+                Text("约 1 分钟：疲劳、酸痛、压力和睡眠安排").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
         .cardSurface()
@@ -126,7 +126,7 @@ struct RecoveryChecklistCard: View {
         let done = record.bedtimeDone.filter { id in items.contains { $0.id == id } }.count
         VStack(alignment: .leading, spacing: Theme.Space.item) {
             CardTitle(title: "今晚恢复重点") {
-                Text("\(done)/\(items.count)").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).monospacedDigit()
+                Text("\(done)/\(items.count)").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.secondary).monospacedDigit()
                     .accessibilityLabel("已完成 \(done) 项，共 \(items.count) 项")
             }
             // The checklist is its own block below the bar.
@@ -180,7 +180,7 @@ struct DayReviewView: View {
         VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle(title: "今天的总结") {
                 if record.reviewedAt != nil {
-                    StatusLabel(text: "已回顾", icon: "checkmark.seal.fill", color: .green).font(.subheadline.weight(.semibold))
+                    StatusLabel(text: "已回顾", icon: "checkmark.seal.fill", color: .green).font(Theme.TypeScale.body.weight(.semibold))
                 }
             }
             IconTextRow(icon: "sunrise.fill", color: Theme.sleep, title: "晨起状态", text: summary.morning)
@@ -194,10 +194,10 @@ struct DayReviewView: View {
             CardTitle("今晚与明天的恢复安排")
             ForEach(Array(summary.arrangements.enumerated()), id: \.offset) { i, line in
                 HStack(alignment: .top, spacing: Theme.Space.block) {
-                    Text("\(i + 1)").font(.footnote.weight(.bold)).monospacedDigit()
+                    Text("\(i + 1)").font(Theme.TypeScale.body.weight(.bold)).monospacedDigit()
                         .frame(width: 24, height: 24)
                         .background(Theme.subtle, in: Circle())
-                    Text(line).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                    Text(line).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                 }
                 .accessibilityElement(children: .combine)

@@ -40,9 +40,9 @@ private struct BlockHeader: View {
     var trailing: String? = nil
     var body: some View {
         AdaptiveRow(alignment: .firstTextBaseline, spacing: Theme.Space.item) {
-            Label(title, systemImage: icon).font(.headline)
+            Label(title, systemImage: icon).font(Theme.TypeScale.title)
         } trailing: {
-            if let trailing { Text(trailing).font(.footnote).foregroundStyle(.secondary).lineLimit(1) }
+            if let trailing { Text(trailing).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1) }
         }
     }
 }
@@ -63,7 +63,7 @@ struct AgentFormView: View {
         VStack(alignment: .leading, spacing: Theme.Space.block) {
             BlockHeader(title: form.title, icon: "hand.tap")
             if let sent = convo.answeredForms[key] {
-                StatusLabel(.good("已发送：\(sent)")).font(.subheadline)
+                StatusLabel(.good("已发送：\(sent)")).font(Theme.TypeScale.body)
             } else {
                 ForEach(form.fields) { field($0) }
                 if !form.submitsOnTap {
@@ -82,7 +82,7 @@ struct AgentFormView: View {
         switch f.kind {
         case .choice(let options, let multiple):
             VStack(alignment: .leading, spacing: Theme.Space.item) {
-                if !form.submitsOnTap { Text(f.label).font(.subheadline).foregroundStyle(.secondary) }
+                if !form.submitsOnTap { Text(f.label).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
                 FlowLayout(spacing: Theme.Space.item) {
                     ForEach(options, id: \.self) { o in
                         let on = choices[f.id, default: []].contains(o)
@@ -96,7 +96,7 @@ struct AgentFormView: View {
                                 if on { Image(systemName: "checkmark").fontWeight(.semibold).imageScale(.small) }
                                 Text(o)
                             }
-                            .font(.subheadline)
+                            .font(Theme.TypeScale.body)
                             .frame(minHeight: Theme.Size.borderedLabel)
                         }
                         .buttonStyle(.bordered)
@@ -108,7 +108,7 @@ struct AgentFormView: View {
             }
         case .weekdays:
             VStack(alignment: .leading, spacing: Theme.Space.item) {
-                Text(f.label).font(.subheadline).foregroundStyle(.secondary)
+                Text(f.label).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 // Tight, so seven day circles stay close to the 44 pt tap width on a phone.
                 HStack(spacing: Theme.Space.tight) {
                     ForEach(Weekday.mondayFirst, id: \.self) { wd in
@@ -118,7 +118,7 @@ struct AgentFormView: View {
                             if on { cur.remove(wd) } else { cur.insert(wd) }
                             days[f.id] = cur
                         } label: {
-                            Text(Weekday.name(wd)).font(.subheadline.weight(on ? .semibold : .regular)).lineLimit(1).minimumScaleFactor(0.8)
+                            Text(Weekday.name(wd)).font(Theme.TypeScale.body.weight(on ? .semibold : .regular)).lineLimit(1)
                                 .foregroundStyle(on ? Color.white : Color.primary)
                                 .frame(maxWidth: .infinity, minHeight: Theme.Size.tap)
                                 .background(on ? Theme.accent : Theme.subtle, in: Circle())
@@ -134,14 +134,14 @@ struct AgentFormView: View {
             let v = numbers[f.id] ?? initial
             Stepper(value: Binding(get: { numbers[f.id] ?? initial }, set: { numbers[f.id] = $0 }), in: lo...hi, step: step) {
                 HStack {
-                    Text(f.label).font(.subheadline)
+                    Text(f.label).font(Theme.TypeScale.body)
                     Spacer()
-                    Text("\(v) \(unit)").font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+                    Text("\(v) \(unit)").font(Theme.TypeScale.body.monospacedDigit()).foregroundStyle(.secondary)
                 }
             }
             .frame(minHeight: Theme.Size.tap)
         case .toggle:
-            Toggle(f.label, isOn: Binding(get: { toggles[f.id] ?? false }, set: { toggles[f.id] = $0 })).font(.subheadline)
+            Toggle(f.label, isOn: Binding(get: { toggles[f.id] ?? false }, set: { toggles[f.id] = $0 })).font(Theme.TypeScale.body)
         }
     }
 
@@ -192,10 +192,10 @@ struct PlanProposalCard: View {
             VStack(alignment: .leading, spacing: Theme.Space.item) {
                 ForEach(p.lines) { line in
                     HStack(alignment: .firstTextBaseline, spacing: Theme.Space.block) {
-                        Text(Weekday.name(line.weekday)).font(.subheadline.weight(.semibold)).frame(width: dayColumn, alignment: .leading)
+                        Text(Weekday.name(line.weekday)).font(Theme.TypeScale.body.weight(.semibold)).frame(width: dayColumn, alignment: .leading)
                         VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                            Text(line.before).font(.footnote).foregroundStyle(.secondary).strikethrough()
-                            Text(line.after).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                            Text(line.before).font(Theme.TypeScale.body).foregroundStyle(.secondary).strikethrough()
+                            Text(line.after).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     .accessibilityElement(children: .ignore)
@@ -203,13 +203,13 @@ struct PlanProposalCard: View {
                 }
             }
             ForEach(p.notes, id: \.self) { n in
-                Text(n).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text(n).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Divider()
             VStack(alignment: .leading, spacing: Theme.Space.item) {
-                Label("Pulse 本机安全检查", systemImage: "checkmark.shield").font(.subheadline.weight(.semibold))
+                Label("Pulse 本机安全检查", systemImage: "checkmark.shield").font(Theme.TypeScale.body.weight(.semibold))
                 ForEach(p.checks, id: \.self) { c in
-                    Text("• " + c).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text("• " + c).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
             actions
@@ -229,7 +229,7 @@ struct PlanProposalCard: View {
                     .buttonStyle(.bordered)
             }
         case .applied(let undo):
-            StatusLabel(.good("已更新到「计划 › \(p.scope.label)」")).font(.subheadline)
+            StatusLabel(.good("已更新到「计划 › \(p.scope.label)」")).font(Theme.TypeScale.body)
             HStack(spacing: Theme.Space.item) {
                 NavigationLink {
                     WeeklyPlanView(startOnNextWeek: p.scope == .nextWeek)
@@ -243,11 +243,11 @@ struct PlanProposalCard: View {
                 .buttonStyle(.bordered)
             }
         case .dismissed:
-            StatusLabel(.neutral("没有采纳，计划保持不变")).font(.subheadline)
+            StatusLabel(.neutral("没有采纳，计划保持不变")).font(Theme.TypeScale.body)
         case .undone:
-            StatusLabel(.neutral("已撤销，计划恢复原样")).font(.subheadline)
+            StatusLabel(.neutral("已撤销，计划恢复原样")).font(Theme.TypeScale.body)
         case .outdated:
-            StatusLabel(.neutral("这张卡片已过期：\(p.scope.label)的计划后来有了变化，这次没有改动。再说一次想怎么调整，我按现在的计划来。")).font(.subheadline)
+            StatusLabel(.neutral("这张卡片已过期：\(p.scope.label)的计划后来有了变化，这次没有改动。再说一次想怎么调整，我按现在的计划来。")).font(Theme.TypeScale.body)
         }
     }
 }
@@ -265,22 +265,22 @@ struct ConditionCard: View {
         VStack(alignment: .leading, spacing: Theme.Space.block) {
             BlockHeader(title: "记下健康情况", icon: "cross.case", trailing: x.native != nil ? "Pulse 内置" : (x.known ? "Pulse 资料库" : "资料库未收录"))
             VStack(alignment: .leading, spacing: Theme.Space.tight) {
-                Text(x.name).font(.subheadline.weight(.semibold))
+                Text(x.name).font(Theme.TypeScale.body.weight(.semibold))
                 if !x.summary.isEmpty {
-                    Text(x.summary).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(x.summary).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
             VStack(alignment: .leading, spacing: Theme.Space.item) {
-                Text("记下后 Pulse 会").font(.subheadline.weight(.semibold))
+                Text("记下后 Pulse 会").font(Theme.TypeScale.body.weight(.semibold))
                 ForEach(x.changes, id: \.self) { line in
-                    Text("• " + line).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                    Text("• " + line).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
                 }
             }
             if !x.stopSigns.isEmpty {
                 Label(x.stopSigns, systemImage: "exclamationmark.triangle")
-                    .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            Text(ConditionLibrary.sourceNote).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text(ConditionLibrary.sourceNote).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             actions
         }
     }
@@ -298,7 +298,7 @@ struct ConditionCard: View {
                     .buttonStyle(.bordered)
             }
         case .recorded(let added):
-            StatusLabel(.good(added ? "已记在「我的 › 健康状况与用药」" : "之前已经记过")).font(.subheadline)
+            StatusLabel(.good(added ? "已记在「我的 › 健康状况与用药」" : "之前已经记过")).font(Theme.TypeScale.body)
             if added {
                 Button {
                     DataHub.forgetCondition(c.info, in: ctx)
@@ -307,9 +307,9 @@ struct ConditionCard: View {
                 .buttonStyle(.bordered)
             }
         case .dismissed:
-            StatusLabel(.neutral("没有记下")).font(.subheadline)
+            StatusLabel(.neutral("没有记下")).font(Theme.TypeScale.body)
         case .undone:
-            StatusLabel(.neutral("已撤销，没有记下")).font(.subheadline)
+            StatusLabel(.neutral("已撤销，没有记下")).font(Theme.TypeScale.body)
         }
     }
 }
@@ -353,7 +353,7 @@ struct RecordCard: View {
             VStack(alignment: .leading, spacing: Theme.Space.item) {
                 ForEach(Array(edited.items.enumerated()), id: \.offset) { _, item in
                     Label(RecordProposal.label(item), systemImage: RecordProposal.icon(item))
-                        .font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                        .font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
                 }
             }
             if let w = workout, convo.recordOutcomes[proposal.id] == nil {
@@ -363,20 +363,20 @@ struct RecordCard: View {
                     }
                     .labelsHidden()
                 }
-                .font(.subheadline)
+                .font(Theme.TypeScale.body)
                 Stepper("时长 \(w.minutes) 分钟", value: Binding(get: { w.minutes }, set: { workout = ChatRecord.changed(w, minutes: $0) }),
                         in: 5...360, step: 5)
-                    .font(.subheadline)
+                    .font(Theme.TypeScale.body)
             }
             if let rep = proposal.repeats {
-                Label("重复：\(rep.label)", systemImage: "repeat").font(.subheadline)
+                Label("重复：\(rep.label)", systemImage: "repeat").font(Theme.TypeScale.body)
             }
             if let r = reminder, convo.recordOutcomes[proposal.id] == nil {
                 // A repeating reminder's days follow its rule: only the time can change.
                 DatePicker("时间", selection: $due, in: Date.app.startOfDay...,
                            displayedComponents: proposal.repeats != nil ? [.hourAndMinute] : (r.timed ? [.date, .hourAndMinute] : [.date]))
-                    .font(.subheadline)
-                if !r.timed, proposal.repeats == nil { Text("当天上午 9 点提醒").font(.footnote).foregroundStyle(.secondary) }
+                    .font(Theme.TypeScale.body)
+                if !r.timed, proposal.repeats == nil { Text("当天上午 9 点提醒").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
             }
             actions
         }
@@ -394,7 +394,7 @@ struct RecordCard: View {
                     .buttonStyle(.bordered)
             }
         case .recorded(let undo):
-            StatusLabel(.good(proposal.reminder == nil ? "已记下" : "已加到「照护与随访事项」")).font(.subheadline)
+            StatusLabel(.good(proposal.reminder == nil ? "已记下" : "已加到「照护与随访事项」")).font(Theme.TypeScale.body)
             if proposal.reminder != nil, !careReminders {
                 Button {
                     Task {
@@ -410,9 +410,9 @@ struct RecordCard: View {
             } label: { Label("撤销", systemImage: "arrow.uturn.backward").frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel) }
             .buttonStyle(.bordered)
         case .dismissed:
-            StatusLabel(.neutral("没有记下")).font(.subheadline)
+            StatusLabel(.neutral("没有记下")).font(Theme.TypeScale.body)
         case .undone:
-            StatusLabel(.neutral("已撤销，没有记下")).font(.subheadline)
+            StatusLabel(.neutral("已撤销，没有记下")).font(Theme.TypeScale.body)
         }
     }
 }
@@ -429,7 +429,7 @@ struct AgentChartBlock: View {
         VStack(alignment: .leading, spacing: Theme.Space.block) {
             BlockHeader(title: metric.title, icon: metric.icon, trailing: metric == .glucose ? "近 \(days * 24) 小时" : "近 \(days) 天")
             AgentMetricChart(metric: metric, days: days, context: context)
-            if let caption { Text(caption).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+            if let caption { Text(caption).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
         }
     }
 }
@@ -455,7 +455,7 @@ struct AgentMetricChart: View {
                     ForEach(pts) { p in
                         LineMark(x: .value("日期", p.day), y: .value("bpm", p.value)).foregroundStyle(Theme.heartData).interpolationMethod(.monotone)
                     }
-                }
+                }.pulseChartAxes()
                 .chartYScale(domain: .automatic(includesZero: false))
                 .frame(height: height)
                 .accessibilityLabel("静息心率，近 \(days) 天，\(c.trend.avg7.map { "近 7 天平均 \($0.noDecimal)" } ?? "")")
@@ -468,7 +468,7 @@ struct AgentMetricChart: View {
                     ForEach(ds) { d in
                         LineMark(x: .value("日期", d.day), y: .value("ms", d.hrv ?? 0)).foregroundStyle(Theme.heartData).interpolationMethod(.monotone)
                     }
-                }
+                }.pulseChartAxes()
                 .chartYScale(domain: .automatic(includesZero: false))
                 .frame(height: height)
                 .accessibilityLabel("心率变异性，近 \(days) 天，\(ds.count) 天有数据")
@@ -479,14 +479,14 @@ struct AgentMetricChart: View {
                 Chart {
                     RuleMark(y: .value("目标", c.profile.sleepNeedMinutes / 60)).lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray)
                     ForEach(ds) { d in BarMark(x: .value("日期", d.day, unit: .day), y: .value("小时", (d.sleepMinutes ?? 0) / 60)).foregroundStyle(Theme.sleep) }
-                }
+                }.pulseChartAxes()
                 .frame(height: height)
                 .accessibilityLabel("睡眠时长，\(ds.count) 晚有记录")
                 Legend("虚线为你需要的睡眠时长。")
             }
         case .activity:
             let ds = c.days.filter { $0.day >= start }
-            Chart { ForEach(ds) { d in BarMark(x: .value("日期", d.day, unit: .day), y: .value("分钟", d.activeMinutes)).foregroundStyle(Theme.activity) } }
+            Chart { ForEach(ds) { d in BarMark(x: .value("日期", d.day, unit: .day), y: .value("分钟", d.activeMinutes)).foregroundStyle(Theme.activity) } }.pulseChartAxes()
                 .frame(height: height)
                 .accessibilityLabel("每日活动分钟，近 \(days) 天")
         case .glucose:
@@ -501,9 +501,9 @@ struct AgentMetricChart: View {
                     }
                     ForEach(Array(c.workouts.filter { $0.start > c.now.addingTimeInterval(-Double(days) * 86400) }.enumerated()), id: \.offset) { _, w in
                         RuleMark(x: .value("训练", w.start)).foregroundStyle(Theme.activity.opacity(0.6))
-                            .annotation(position: .top, spacing: Theme.Space.hairline) { Image(systemName: "figure.run").font(.caption).foregroundStyle(Theme.activity) }
+                            .annotation(position: .top, spacing: Theme.Space.hairline) { Image(systemName: "figure.run").font(Theme.TypeScale.body).foregroundStyle(Theme.activity) }
                     }
-                }
+                }.pulseChartAxes()
                 .frame(height: height + 10)
                 .padding(.top, Theme.Space.block)
                 .accessibilityLabel("CGM 血糖曲线，虚线为目标范围 \(c.profile.glucoseLow.oneDecimal) 到 \(c.profile.glucoseHigh.oneDecimal)")
@@ -520,7 +520,7 @@ struct AgentMetricChart: View {
                             PointMark(x: .value("日期", v.time), y: .value("舒张压", d)).foregroundStyle(by: .value("类型", "舒张压")).symbol(by: .value("类型", "舒张压"))
                         }
                     }
-                }
+                }.pulseChartAxes()
                 .chartForegroundStyleScale(["收缩压": Theme.heartData, "舒张压": Theme.heartData.opacity(0.45)])
                 .chartYScale(domain: .automatic(includesZero: false))
                 .frame(height: height)
@@ -537,7 +537,7 @@ struct AgentMetricChart: View {
                         LineMark(x: .value("日期", p.date), y: .value("eGFR", p.value)).foregroundStyle(Theme.labs)
                         PointMark(x: .value("日期", p.date), y: .value("eGFR", p.value)).foregroundStyle(Theme.labs)
                     }
-                }
+                }.pulseChartAxes()
                 .chartYScale(domain: .automatic(includesZero: false))
                 .frame(height: height)
                 .accessibilityLabel("eGFR，\(pts.count) 次化验，最近一次 \(pts.last?.valueText ?? "")")
@@ -553,7 +553,7 @@ struct AgentMetricChart: View {
                     BarMark(x: .value("日期", d, unit: .day), y: .value("记录", 1))
                         .foregroundStyle(by: .value("状态", has ? "有夜间数据" : "缺失"))
                 }
-            }
+            }.pulseChartAxes()
             .chartForegroundStyleScale(["有夜间数据": Theme.heartData, "缺失": Color.gray.opacity(0.3)])
             .chartYAxis(.hidden)
             .frame(height: 70)
@@ -566,7 +566,7 @@ struct AgentMetricChart: View {
     private struct Legend: View {
         let text: Text
         init(_ s: LocalizedStringKey) { text = Text(s) }
-        var body: some View { text.font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+        var body: some View { text.font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
     }
 }
 
@@ -616,11 +616,11 @@ struct AgentStepsView: View {
             BlockHeader(title: steps.title, icon: "list.number")
             ForEach(steps.steps) { s in
                 HStack(alignment: .top, spacing: Theme.Space.block) {
-                    Image(systemName: s.icon).font(.title3).foregroundStyle(Theme.accent).frame(width: 28)
+                    Image(systemName: s.icon).font(Theme.TypeScale.title).foregroundStyle(Theme.accent).frame(width: 28)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                        Text(s.title).font(.subheadline.weight(.semibold))
-                        Text(s.detail).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Text(s.title).font(Theme.TypeScale.body.weight(.semibold))
+                        Text(s.detail).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .accessibilityElement(children: .combine)
@@ -639,7 +639,7 @@ struct AgentAskButton: View {
 
     var body: some View {
         Button { open = true } label: {
-            Label(title, systemImage: "sparkles").font(.subheadline.weight(.semibold))
+            Label(title, systemImage: "sparkles").font(Theme.TypeScale.body.weight(.semibold))
                 .frame(maxWidth: .infinity, minHeight: Theme.Size.borderedLabel)
         }
         .buttonStyle(.bordered)

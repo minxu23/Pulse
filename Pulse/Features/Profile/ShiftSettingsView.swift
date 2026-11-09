@@ -93,8 +93,8 @@ struct ShiftSettingsView: View {
                             apply(p, todayIndex: todayIndex)
                         } label: {
                             VStack(spacing: Theme.Space.hairline) {
-                                Text("\(i + 1)").font(.caption).foregroundStyle(i == todayIndex ? Color.white : .secondary)
-                                Text(k.short).font(.headline)
+                                Text("\(i + 1)").font(Theme.TypeScale.body).foregroundStyle(i == todayIndex ? Color.white : .secondary)
+                                Text(k.short).font(Theme.TypeScale.title)
                             }
                             .foregroundStyle(i == todayIndex ? Color.white : Color.primary)
                             .frame(width: Theme.Size.tap, height: 52)
@@ -142,22 +142,22 @@ struct ShiftSettingsView: View {
         let bedDay = w.bed.startOfDay == day ? "" : "次日 "
         return HStack(spacing: Theme.Space.block) {
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                Text(day.formatted(.dateTime.month().day())).font(.subheadline.weight(.semibold)).monospacedDigit()
-                Text(Weekday.name(day.weekday)).font(.caption).foregroundStyle(.secondary)
+                Text(day.formatted(.dateTime.month().day())).font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit()
+                Text(Weekday.name(day.weekday)).font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
             .frame(width: 52, alignment: .leading)
             HStack(alignment: .firstTextBaseline, spacing: Theme.Space.iconGap) {
                 Image(systemName: k.icon).imageScale(.small).foregroundStyle(k == .night ? Color.indigo : (k == .day ? Color.orange : Color.secondary))
                 Text(k.label)
             }
-            .font(.subheadline)
+            .font(Theme.TypeScale.body)
             .frame(width: 72, alignment: .leading)
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                Text("\(Clock.text(w.wake.minutesOfDay)) 起床 · \(bedDay)\(Clock.text(w.bed.minutesOfDay)) 入睡").font(.subheadline).monospacedDigit()
+                Text("\(Clock.text(w.wake.minutesOfDay)) 起床 · \(bedDay)\(Clock.text(w.bed.minutesOfDay)) 入睡").font(Theme.TypeScale.body).monospacedDigit()
                 if let nap = w.nap {
-                    Text("上班前 \(Clock.text(nap.start.minutesOfDay)) 小睡 90 分钟").font(.footnote).foregroundStyle(.secondary)
+                    Text("上班前 \(Clock.text(nap.start.minutesOfDay)) 小睡 90 分钟").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 } else if w.afterNightShift {
-                    Text(k == .night ? "夜班后白天补觉" : "夜班后补觉，晚上按时睡").font(.footnote).foregroundStyle(.secondary)
+                    Text(k == .night ? "夜班后白天补觉" : "夜班后补觉，晚上按时睡").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: 0)

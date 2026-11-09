@@ -96,7 +96,7 @@ struct MorningCheckInView: View {
 
     private func labeled<C: View>(_ title: String, @ViewBuilder _ c: () -> C) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.item) {
-            Text(title).font(.subheadline.weight(.medium))
+            Text(title).font(Theme.TypeScale.body.weight(.medium))
             c()
         }
         .padding(.vertical, Theme.Space.tight)

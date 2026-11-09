@@ -19,6 +19,10 @@ final class ActivitySession {
     var fluidMl: Double? = nil
     var feelingRaw: String? = nil
     var note: String = ""
+    /// Heart rate each minute of the session (mean bpm); empty when not read.
+    var hrSeries: [Int] = []
+    /// How far heart rate fell in the minute after the session (bpm).
+    var hrRecovery: Double? = nil
 
     init(start: Date, type: WorkoutType, minutes: Double, source: DataSource = .manual) {
         self.start = start

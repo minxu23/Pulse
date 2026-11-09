@@ -50,10 +50,10 @@ struct EventRow: View {
                 .frame(width: Theme.Size.iconTile, height: Theme.Size.iconTile)
                 .background(Theme.severity(event.severity).opacity(0.12), in: Circle())
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                Text(event.title).font(.subheadline.weight(.semibold))
+                Text(event.title).font(Theme.TypeScale.body.weight(.semibold))
                 // One text, so at large sizes it wraps as a line instead of splitting into columns.
                 Text([event.severity.label, event.status.label, event.relatedDate.formatted(.dateTime.month().day())].joined(separator: " · "))
-                    .font(.footnote).foregroundStyle(.secondary)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, Theme.Space.hairline)
@@ -71,16 +71,16 @@ struct HealthEventDetailView: View {
             Section {
                 VStack(alignment: .leading, spacing: Theme.Space.item) {
                     StatusLabel(text: event.severity.label, icon: event.severity.icon, color: Theme.severity(event.severity))
-                        .font(.subheadline.weight(.semibold))
-                    Text(event.title).font(.title3.bold())
-                    Text(event.detail).font(.subheadline)
+                        .font(Theme.TypeScale.body.weight(.semibold))
+                    Text(event.title).font(Theme.TypeScale.title.bold())
+                    Text(event.detail).font(Theme.TypeScale.body)
                     Text("\(event.relatedDate.formatted(date: .abbreviated, time: .shortened))\(event.valueText.isEmpty ? "" : " · \(event.valueText)")")
-                        .font(.footnote).foregroundStyle(.secondary)
+                        .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
                 .padding(.vertical, Theme.Space.tight)
             }
             Section("建议的处理") {
-                Text(event.guidance).font(.subheadline)
+                Text(event.guidance).font(Theme.TypeScale.body)
                 if event.severity == .urgent {
                     Link(destination: URL(string: "tel://120")!) {
                         Label("拨打 120", systemImage: "phone.fill").fontWeight(.semibold)
@@ -102,7 +102,7 @@ struct HealthEventDetailView: View {
                 Button { addingTask = true } label: { Label("添加就诊 / 随访事项", systemImage: "calendar.badge.plus") }
             }
             Section("跟进记录") {
-                ForEach(event.followUpLog.reversed(), id: \.self) { Text($0).font(.subheadline) }
+                ForEach(event.followUpLog.reversed(), id: \.self) { Text($0).font(Theme.TypeScale.body) }
                 HStack {
                     TextField("如：复测 128/82；已预约心内科", text: $note)
                     Button("添加") {
@@ -113,7 +113,7 @@ struct HealthEventDetailView: View {
                 }
             }
             Section {
-                Text("Pulse 的提示基于你记录或设备提供的数据，用于提醒你核实或寻求专业帮助，不构成诊断。").font(.footnote).foregroundStyle(.secondary)
+                Text("Pulse 的提示基于你记录或设备提供的数据，用于提醒你核实或寻求专业帮助，不构成诊断。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
         .navigationTitle("异常详情").calmStyle()
@@ -144,7 +144,7 @@ struct CareTaskRow: View {
                 if done { task.reopen() } else { task.complete(now: .app) }
                 CareReminders.sync(in: ctx)
             } label: {
-                Image(systemName: done ? "checkmark.circle.fill" : "circle").font(.title3)
+                Image(systemName: done ? "checkmark.circle.fill" : "circle").font(Theme.TypeScale.title)
                     .foregroundStyle(done ? .green : .secondary)
                     .frame(width: Theme.Size.tap, height: Theme.Size.tap)
                     .contentShape(Rectangle())
@@ -152,7 +152,7 @@ struct CareTaskRow: View {
             .buttonStyle(.plain)
             .accessibilityLabel(done ? "标记为未完成" : (task.repeats == nil ? "标记为完成" : "标记这次已完成"))
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                Text(task.title).font(.subheadline).strikethrough(task.done)
+                Text(task.title).font(Theme.TypeScale.body).strikethrough(task.done)
                 HStack(spacing: Theme.Space.item) {
                     Label(task.area.label, systemImage: task.area.icon)
                     if let r = task.repeats { Label(r.label, systemImage: "repeat") }
@@ -168,9 +168,9 @@ struct CareTaskRow: View {
                         }
                     }
                 }
-                .font(.footnote).foregroundStyle(.secondary)
+                .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 .labelStyle(.inline)
-                if !task.note.isEmpty { Text(task.note).font(.footnote).foregroundStyle(.secondary) }
+                if !task.note.isEmpty { Text(task.note).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
             }
         }
     }

@@ -22,10 +22,11 @@ struct ProfileView: View {
                         .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
 
                     Section {
+                        NavigationLink("方案与历史报告") { ProgramHistoryView() }
                         link("基础信息", "person", Theme.body) { Form { BasicsSection(p: p) }.navigationTitle("基础信息").calmStyle() }
                         link("健康状况与用药", "cross.case", .pink) { Form { ConditionsSection(p: p); DietTargetsSection(p: p); if p.conditions.contains(.ckd) || p.dialysis { DialysisSection(p: p) }; MedicationsSection() }.navigationTitle("健康状况与用药").calmStyle() }
                         link("运动基础与生活节奏", "figure.walk", Theme.activity) { Form { ExerciseBaseSection(p: p); LifeConstraintsSection(p: p) }.navigationTitle("运动与生活节奏").calmStyle() }
-                        link("改善方向与目标", "target", .blue) { Form { GoalsSection(p: p) }.navigationTitle("目标").calmStyle() }
+                        link("改善方向与目标", "target", .blue) { UsageDirectionView(profile: p) }
                         link("静息心率基线", "heart.text.square", Theme.heartData) { BaselineView(profile: p, analytics: a) }
                         link("恢复目标", "moon.stars", Theme.sleep) { Form { HabitTargetsSection(p: p) }.navigationTitle("恢复目标").calmStyle() }
                         link("作息与倒班", "moon.haze", .indigo) { ShiftSettingsView(profile: p) }
@@ -39,7 +40,7 @@ struct ProfileView: View {
                                     if m == .marathon && on && p.raceDate == nil { p.raceDate = p.targetDate ?? .app.adding(days: 140) }
                                     DataHub.regenerateWeekPlan(in: ctx)
                                 })) {
-                                    Label { VStack(alignment: .leading, spacing: Theme.Space.hairline) { Text(m.label); Text(m.subtitle).font(.footnote).foregroundStyle(.secondary) } }
+                                    Label { VStack(alignment: .leading, spacing: Theme.Space.hairline) { Text(m.label); Text(m.subtitle).font(Theme.TypeScale.body).foregroundStyle(.secondary) } }
                                     icon: { Image(systemName: m.icon).foregroundStyle(m == .marathon ? Theme.activity : (m == .cardioCare ? Theme.heartData : Theme.glucose)) }
                                 }
                             }
@@ -50,7 +51,7 @@ struct ProfileView: View {
                                     case .cardioCare: CardioCareView()
                                     case .diabetesCare: DiabetesCareView()
                                     }
-                                } label: { Text("打开\(m.label)").font(.subheadline).foregroundStyle(Theme.accent) }
+                                } label: { Text("打开\(m.label)").font(Theme.TypeScale.body).foregroundStyle(Theme.accent) }
                             }
                         }
                     } header: { Text("按需启用的专业支持") } footer: {
@@ -121,20 +122,29 @@ struct ProfileView: View {
                         }
                     }
 
+                    if DataStores.shared.testingEnabled {
                     Section {
+                        if DataStores.shared.mode == .sample {
+                            Button {
+                                DataStores.shared.exitTesting()
+                            } label: {
+                                Label("回到我自己的数据", systemImage: "person.crop.circle.badge.checkmark")
+                                    .frame(minHeight: Theme.Size.tap)
+                            }
+                        }
                         ForEach(DemoPersona.allCases) { persona in
                             Button { pendingPersona = persona } label: {
                                 HStack(spacing: Theme.Space.block) {
                                     Text(String(persona.name.prefix(1)))
-                                        .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                                        .font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.white)
                                         .frame(width: Theme.Size.iconTile, height: Theme.Size.iconTile).background(Color.gray.gradient, in: Circle())
                                     VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                                         Text(persona.name).foregroundStyle(.primary)
-                                        Text(persona.summary).font(.footnote).foregroundStyle(.secondary)
+                                        Text(persona.summary).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                                     }
                                     Spacer()
                                     if p.usesDemoData && (p.demoPersona == persona.rawValue || (p.demoPersona.isEmpty && persona == .xiaolin)) {
-                                        Text("当前").font(.footnote).foregroundStyle(.secondary)
+                                        Text("当前").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                                     }
                                 }
                                 .frame(minHeight: Theme.Size.tap)
@@ -148,9 +158,11 @@ struct ProfileView: View {
                             }
                         }
                     } header: { Text("示例用户") } footer: {
-                        Text(AgentNameSettings.shared.phrase("晓林、陈杰、林悦、王建国有 120 天的模拟记录；孙浩、周敏、赵立强、何静有一整年，各有一种需要长期照护的情况，适合看长期变化。陈杰、林悦、王建国的健康情况一般、计划遵从性较差，可用来查看 Pulse 和", "如何应对。载入会替换当前所有记录。"))
+                        Text(AgentNameSettings.shared.phrase("晓林、陈杰、林悦、王建国、刘洋有 120 天的模拟记录（刘洋每周打两次网球）；孙浩、周敏、赵立强、何静有一整年，各有一种需要长期照护的情况，适合看长期变化。陈杰、林悦、王建国的健康情况一般、计划遵从性较差，可用来查看 Pulse 和", "如何应对。示例数据和你自己的记录分开保存，载入示例用户不会影响你的记录，随时可以回来。"))
+                    }
                     }
                     Section {
+                        NavigationLink("关于 Pulse") { TestingAccessView() }
                         Disclaimer().listRowBackground(Color.clear)
                     }
                 }
@@ -158,15 +170,20 @@ struct ProfileView: View {
                 // Small titles, as on every tab; pages opened from here inherit it.
                 .navigationBarTitleDisplayMode(.inline)
                 .agentRenameAlert(isPresented: $renamingAgent)
-                .confirmationDialog("载入「\(pendingPersona?.name ?? "")」的示例数据会替换当前所有记录。",
+                .confirmationDialog(DataStores.shared.mode == .own
+                                        ? "载入「\(pendingPersona?.name ?? "")」的示例数据？示例数据单独保存，你自己的记录不受影响，随时可以在这里回来。"
+                                        : "载入「\(pendingPersona?.name ?? "")」的示例数据，替换当前的示例用户。",
                                     isPresented: Binding(get: { pendingPersona != nil }, set: { if !$0 { pendingPersona = nil } }),
                                     titleVisibility: .visible, presenting: pendingPersona) { persona in
-                    Button("载入示例数据", role: .destructive) {
-                        DemoDataGenerator.populate(ctx, persona: persona)
+                    Button("载入示例数据") {
+                        // Into the sample store: your own records stay where they are.
+                        DataStores.shared.use(.sample)
+                        let c = DataStores.shared.container.mainContext
+                        DemoDataGenerator.populate(c, persona: persona)
                         // Another person's sample data: the conversation was about someone else.
                         AgentConversation.shared.clear()
-                        DataHub.ensureWeekPlan(in: ctx)
-                        try? ctx.save()
+                        DataHub.ensureWeekPlan(in: c)
+                        try? c.save()
                     }
                 }
             }
@@ -183,13 +200,13 @@ struct ProfileView: View {
     private func setting(_ title: String, _ detail: String) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.hairline) {
             Text(title)
-            Text(detail).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text(detail).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, Theme.Space.tight)
     }
 
     private func tileIcon(_ icon: String, _ color: Color) -> some View {
-        Image(systemName: icon).foregroundStyle(.white).font(.caption.weight(.semibold))
+        Image(systemName: icon).foregroundStyle(.white).font(Theme.TypeScale.body.weight(.semibold))
             // Settings-style 28 pt square: the List aligns its separators to it.
             .frame(width: 28, height: 28).background(color, in: RoundedRectangle(cornerRadius: Theme.Radius.tile(28), style: .continuous))
     }
@@ -198,12 +215,12 @@ struct ProfileView: View {
         Card {
             HStack(spacing: Theme.Space.block) {
                 Text(String(p.displayName.prefix(1)))
-                    .font(.title.bold()).foregroundStyle(.white)
+                    .font(Theme.TypeScale.title.bold()).foregroundStyle(.white)
                     .frame(width: Theme.Size.hero, height: Theme.Size.hero).background(Color.gray.gradient, in: Circle())
                 VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                    Text(p.displayName).font(.title3.bold())
-                    Text("\(p.age) 岁 · \(p.sex.label) · BMI \(String(format: "%.1f", p.bmi)) · \(p.activityLevel.label)")
-                        .font(.footnote).foregroundStyle(.secondary)
+                    Text(p.displayName).font(Theme.TypeScale.title.bold())
+                    Text(p.basicsSummary + " · " + p.activityLevel.label)
+                        .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             }
             MetricRow {
@@ -218,7 +235,7 @@ struct ProfileView: View {
                 if p.fluidLimit { Chip(text: "限水 \(p.waterTargetMl) ml", icon: "drop", color: .gray) }
                 ForEach(meds.filter(\.isActive)) { Chip(text: $0.name, icon: "pills", color: .gray) }
             }
-            if !p.goalNote.isEmpty { Text("“\(p.goalNote)”").font(.subheadline).foregroundStyle(.secondary) }
+            if !p.goalNote.isEmpty { Text("“\(p.goalNote)”").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
         }
         .padding(.vertical, Theme.Space.tight)
     }
@@ -248,7 +265,7 @@ struct BaselineView: View {
                 Picker("主要来源", selection: Binding(get: { profile.rhrMethod }, set: { profile.rhrMethod = $0 })) {
                     ForEach(RHRSource.allCases) { Text($0.label).tag($0) }
                 }
-                Text("改变测量方式后，前后数值不宜直接比较。建议以新方式记录 2 周后重新建立基线。").font(.footnote).foregroundStyle(.secondary)
+                Text("改变测量方式后，前后数值不宜直接比较。建议以新方式记录 2 周后重新建立基线。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
             Section {
                 if let m = recentMedian {
@@ -290,7 +307,7 @@ struct DataSourcesView: View {
                     profile.useHealthKit = on
                     if on { Task { try? await hk.requestAuthorization(); await hk.sync(into: ctx) } }
                 }))
-                .disabled(!hk.isAvailable)
+                .disabled(!hk.isAvailable || profile.usesDemoData)
                 if profile.useHealthKit {
                     Button {
                         Task { await hk.sync(into: ctx) }
@@ -305,14 +322,42 @@ struct DataSourcesView: View {
                     if let last = profile.lastSync {
                         LabeledContent("上次同步", value: last.formatted(date: .abbreviated, time: .shortened))
                     }
-                    if let msg = hk.lastMessage { Text(msg).font(.footnote).foregroundStyle(.secondary) }
+                    if let msg = hk.lastMessage { Text(msg).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
                 }
             } header: {
                 Text("智能手表 / 手环 / CGM")
             } footer: {
-                Text(hk.isAvailable
+                Text(profile.usesDemoData ? "现在看的是示例用户，不读取 Apple 健康。到「我的 › 示例用户」回到你自己的数据后再连接。" : hk.isAvailable
                      ? "读取 Apple Watch 等设备写入健康 App 的静息心率、HRV、睡眠、活动、血氧、血压、血糖（含 CGM）等。Pulse 只读取，不会写入。权限可随时在「设置 › 健康 › 数据访问与设备」中修改。"
                      : "此设备不支持健康数据，可使用手动记录。")
+            }
+            if profile.useHealthKit && hk.isAvailable {
+                Section {
+                    if hk.inventory.isEmpty {
+                        Text("正在检查…").foregroundStyle(.secondary)
+                    }
+                    ForEach(hk.inventory) { item in
+                        VStack(alignment: .leading, spacing: Theme.Space.hairline) {
+                            HStack {
+                                Text(item.label)
+                                Spacer()
+                                Text(item.count == 0 ? "没有数据" : item.count >= 200 ? "200 条以上" : "\(item.count) 条")
+                                    .foregroundStyle(item.count == 0 ? Theme.warning : .secondary)
+                            }
+                            if item.count > 0 {
+                                Text(([item.latest.map { "最近 " + $0.formatted(.dateTime.month().day()) }].compactMap { $0 } + [item.sources.joined(separator: "、")] + [item.note].compactMap { $0 })
+                                        .filter { !$0.isEmpty }.joined(separator: " · "))
+                                    .font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    Button("重新检查") { Task { await hk.checkInventory() } }
+                } header: {
+                    Text("Apple 健康里的数据（近 60 天）")
+                } footer: {
+                    Text("「没有数据」有两种可能：设备或它的 App 没有把这一项写入 Apple 健康；或者没有允许 Pulse 读取。健康 App 里能看到、这里却没有的，到「设置 › 健康 › 数据访问与设备 › Pulse」把对应项目打开。静息心率、心率变异性、睡眠分期、锻炼分钟、最大摄氧量通常只有 Apple Watch 会写入；手环只写入心率时，Pulse 用夜间最低的心率估算静息心率。")
+                }
+                .task { if hk.inventory.isEmpty { await hk.checkInventory() } }
             }
             Section {
                 Label("晨起手动测量静息心率", systemImage: "hand.point.up.left")

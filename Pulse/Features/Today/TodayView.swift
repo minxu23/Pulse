@@ -81,7 +81,7 @@ struct TodayView: View {
                             }
                             Button { edit(cards) } label: { Label("编辑首页", systemImage: "square.grid.2x2") }
                                 .buttonStyle(.bordered)
-                                .font(.subheadline.weight(.semibold))
+                                .font(Theme.TypeScale.body.weight(.semibold))
                                 .frame(maxWidth: .infinity)
                             Disclaimer()
                         }
@@ -97,10 +97,23 @@ struct TodayView: View {
         }
     }
 
+    /// Your own records hold nothing from the last 7 days: no resting heart rate, steps, sleep or check-in.
+    static func needsHealthSetup(_ p: UserProfile, _ d: TodayData) -> Bool {
+        guard !p.usesDemoData else { return false }
+        let since = d.day.adding(days: -7)
+        return !d.analytics.days.contains { $0.day >= since && ($0.rhr != nil || $0.steps != nil || $0.sleepMinutes != nil || $0.checkedIn) }
+    }
+
     @ViewBuilder private func card(_ c: HomeCard, _ d: TodayData) -> some View {
         switch c {
         case .state: StateCard(data: d, onHeart: { tab = .heart })
-        case .now: NowCard(data: d, sheet: $sheet, tab: $tab)
+        case .now:
+            // Nothing recorded this past week: how to connect Health comes first. The day's own card stays,
+            // since check-ins are how someone without a watch records, and a sync never swaps it away.
+            VStack(spacing: Theme.Space.cardGap) {
+                if let p = d.profile, Self.needsHealthSetup(p, d) { HealthConnectionCard(profile: p) }
+                NowCard(data: d, sheet: $sheet, tab: $tab)
+            }
         case .glucose, .bloodPressure, .race: TodayModuleCard(data: d, card: c, onEdit: { edit(HomeLayout.visible(order: order, seen: seen, available: HomeLayout.available(d.profile))) })
         case .phases:
             // The same spacing as the card stack, so the title sits as it does above any other cards.
@@ -131,8 +144,8 @@ struct TodayView: View {
         return HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 Text("\(d.day.formatted(.dateTime.month().day().weekday(.wide)))\(d.window.kind.map { " · \($0.label)" } ?? "")\(DayClock.startedEarly(d.now, d.p) ? DayClock.earlyStart.map { " · \(Clock.text($0.minutesOfDay)) 开始" } ?? "" : "") · \(source)\(cgm ? " · CGM" : "")")
-                    .font(.footnote).foregroundStyle(.secondary)
-                Text("\(greeting(d))，\(d.profile?.displayName ?? "你")").font(.title2.bold())
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                Text("\(greeting(d))，\(d.profile?.displayName ?? "你")").font(Theme.TypeScale.title.bold())
             }
             Spacer()
             Menu {
@@ -140,7 +153,7 @@ struct TodayView: View {
                     Button { sheet = k == .workout ? .workout(nil) : .log(k) } label: { Label(k.label, systemImage: k.icon) }
                 }
             } label: {
-                Image(systemName: "plus").font(.body.weight(.semibold)).foregroundStyle(.primary)
+                Image(systemName: "plus").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.primary)
                     .frame(width: Theme.Size.tap, height: Theme.Size.tap).background(Theme.card, in: Circle())
             }
             .accessibilityLabel("快速记录")
@@ -204,22 +217,37 @@ struct StateCard: View {
                     Rectangle().fill(Color(.separator)).frame(width: 0.5).padding(.horizontal, Theme.Space.cardPadding)
                 }
 
-                Button(action: onHeart) {
-                    metric(label: "静息心率 · 7 日均值",
-                           value: rhr.map { $0.noDecimal } ?? "—", unit: "bpm",
-                           footnote: footnote(delta, t)) {
-                        if series.count >= 5 { sparkline(series) } else { Color.clear.frame(height: 5) }
+                // 改善期: the pack's main target takes this place (resting heart rate stays in 趋势).
+                if let tr = data.target, let p = data.profile {
+                    NavigationLink { ProgramDetailScreen() } label: {
+                        metric(label: tr.label, value: tr.valueText, unit: tr.unitShort,
+                               footnote: TargetTracker.footnote(tr, goal: p.targetGoal, now: data.now)) {
+                            if tr.series.count >= 3 { targetSparkline(tr) } else { Color.clear.frame(height: 5) }
+                        }
                     }
+                    .buttonStyle(.plain)
+                } else {
+                    Button(action: onHeart) {
+                        metric(label: "静息心率 · 7 日均值",
+                               value: rhr.map { $0.noDecimal } ?? "未记录", unit: rhr == nil ? "" : "bpm",
+                               footnote: footnote(delta, t)) {
+                            if series.count >= 5 { sparkline(series) } else { Color.clear.frame(height: 5) }
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
 
             Divider()
 
+            if data.profile?.usageIntent == .recording && data.profile?.programPhase != .improve {
+                Text("记录身体状况 · 连接设备或手动补充记录").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+            } else {
             AdaptiveStack(alignment: .top, spacing: 0, stackedSpacing: Theme.Space.item) {
                 advice("运动", night ? "明天看准备度" : data.guidance.exerciseShort)
                 advice("负荷", night ? "不再加练" : data.guidance.loadShort)
                 advice("恢复", night ? "现在去睡" : data.guidance.recoveryShort)
+            }
             }
         }
         .cardSurface()
@@ -230,20 +258,20 @@ struct StateCard: View {
         // At accessibility sizes the label and footnote may wrap rather than be cut short.
         let ax = size.isAccessibilitySize
         return VStack(alignment: .leading, spacing: Theme.Space.tight) {
-            Text(label).font(.caption).foregroundStyle(.secondary).lineLimit(ax ? nil : 1)
+            Text(label).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(ax ? nil : 1)
             HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
-                Text(value).font(.system(.largeTitle, design: .rounded).weight(.bold)).monospacedDigit()
+                Text(value).font(Theme.TypeScale.title.weight(.bold)).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.6)
                 if let dot = unitDot {
                     StatusLabel(text: unit, icon: "circle.fill", color: dot)
-                        .font(.subheadline.weight(.semibold)).lineLimit(1)
+                        .font(Theme.TypeScale.body.weight(.semibold)).lineLimit(1)
                         .imageScale(.small)
                 } else {
-                    Text(unit).font(.subheadline.weight(.semibold)).lineLimit(1)
+                    Text(unit).font(Theme.TypeScale.body.weight(.semibold)).lineLimit(1)
                 }
             }
             visual().frame(height: 22, alignment: .center)
-            Text(footnote).font(.caption).foregroundStyle(.secondary).lineLimit(ax ? nil : 1).minimumScaleFactor(0.8)
+            Text(footnote).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(ax ? nil : 1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
@@ -256,23 +284,38 @@ struct StateCard: View {
                 .foregroundStyle(Theme.heartData)
                 .lineStyle(StrokeStyle(lineWidth: 1.8, lineCap: .round))
                 .interpolationMethod(.catmullRom)
-        }
+        }.pulseChartAxes()
         .chartXAxis(.hidden)
         .chartYAxis(.hidden)
         .chartYScale(domain: lo...hi)
     }
 
+    private func targetSparkline(_ r: TargetReading) -> some View {
+        let values = r.series.map(\.value)
+        let lo = (values.min() ?? 0), hi = (values.max() ?? 1)
+        let pad = max(0.5, (hi - lo) * 0.1)
+        return Chart(r.series, id: \.day) { p in
+            LineMark(x: .value("日", p.day), y: .value("值", p.value))
+                .foregroundStyle(r.target.color)
+                .lineStyle(StrokeStyle(lineWidth: 1.8, lineCap: .round))
+                .interpolationMethod(.catmullRom)
+        }.pulseChartAxes()
+        .chartXAxis(.hidden)
+        .chartYAxis(.hidden)
+        .chartYScale(domain: (lo - pad)...(hi + pad))
+    }
+
     private func footnote(_ delta: Double?, _ t: RHRTrend) -> String {
         var parts: [String] = []
-        if let d = delta { parts.append("较基线 \(d.signedText)") } else { parts.append("建立基线 \(t.points.count)/14") }
+        if let d = delta { parts.append("较基线 \(d.signedText)") } else { parts.append(t.points.isEmpty ? "尚无静息心率记录" : "已有 \(t.points.count) 天记录") }
         if let target = data.profile?.targetRHR { parts.append("目标 \(target.noDecimal)") }
         return parts.joined(separator: " · ")
     }
 
     private func advice(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.tight) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.subheadline.weight(.semibold)).lineLimit(size.isAccessibilitySize ? nil : 1).minimumScaleFactor(0.8)
+            Text(title).font(Theme.TypeScale.body).foregroundStyle(.secondary)
+            Text(value).font(Theme.TypeScale.body.weight(.semibold)).lineLimit(size.isAccessibilitySize ? nil : 1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -306,12 +349,17 @@ struct NowCard: View {
     var body: some View {
         let ph = phase
         VStack(spacing: 0) {
+            // 基线期: its progress sits in this card, not in a card of its own (Docs 2.1).
+            if data.profile?.programPhase == .baseline {
+                BaselineProgressLine(tab: $tab)
+                Divider().padding(.vertical, Theme.Space.block)
+            }
             main(ph)
             // From 3 am someone who is up for the day can start it early; quiet so it never nudges anyone awake.
             if ph == .review && DayClock.canStartEarly(data.now, data.p) {
                 Divider().padding(.top, Theme.Space.block)
                 HStack {
-                    Text("已经起床了？").font(.subheadline).foregroundStyle(.secondary)
+                    Text("已经起床了？").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     Spacer()
                     Button("开始今天") { sheet = .earlyStart }
                         .buttonStyle(.bordered).tint(Theme.accent)
@@ -330,16 +378,16 @@ struct NowCard: View {
             NavigationLink { TodayPhaseView(phase: ph, tab: $tab) } label: {
                 HStack(alignment: .center, spacing: Theme.Space.block) {
                     Image(systemName: c.icon)
-                        .font(.title3.weight(.semibold)).foregroundStyle(.white)
+                        .font(Theme.TypeScale.title.weight(.semibold)).foregroundStyle(.white)
                         .frame(width: Theme.Size.tileIcon, height: Theme.Size.tileIcon)
                         .background(ph.color, in: RoundedRectangle(cornerRadius: Theme.Radius.tile(Theme.Size.tileIcon), style: .continuous))
                     VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                        Text("现在 · \(ph.title)").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                        Text(c.title).font(.headline).lineLimit(ax ? nil : 1)
-                        Text(c.detail).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Text("现在 · \(ph.title)").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.secondary)
+                        Text(c.title).font(Theme.TypeScale.title).lineLimit(ax ? nil : 1)
+                        Text(c.detail).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         if let w = c.weather {
                             StatusLabel(text: w.short, icon: w.icon, color: .orange, secondaryText: true)
-                                .font(.footnote).lineLimit(ax ? nil : 1).symbolRenderingMode(.multicolor)
+                                .font(Theme.TypeScale.body).lineLimit(ax ? nil : 1).symbolRenderingMode(.multicolor)
                         }
                         if let p = c.progress { ProgressBar(value: p, color: ph.color, height: 4).padding(.top, Theme.Space.hairline) }
                     }
@@ -351,10 +399,10 @@ struct NowCard: View {
 
             if let done = c.done {
                 Label(done, systemImage: "checkmark.circle.fill").labelStyle(.iconOnly)
-                    .font(.title2).foregroundStyle(.green).accessibilityLabel(done)
+                    .font(Theme.TypeScale.title).foregroundStyle(.green).accessibilityLabel(done)
             } else if let a = c.action {
                 Button(action: a.run) {
-                    Text(a.label).font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                    Text(a.label).font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.white)
                         .padding(.horizontal, Theme.Space.cardPadding).frame(minHeight: Theme.Size.tap)
                         .background(Theme.accent, in: Capsule())
                 }
@@ -398,7 +446,7 @@ struct NowCard: View {
             let v = data.vitality
             let zh = Locale(identifier: "zh_CN")
             return Content(title: data.todayItems.first?.title ?? "恢复日",
-                           detail: "\(v.steps.formatted(.number.locale(zh))) / \(v.stepsTarget.formatted(.number.locale(zh))) 步 · 活动 \(Int(v.activeMinutes)) 分钟",
+                           detail: data.analytics.today?.steps.map { "\($0.formatted(.number.locale(zh))) 步 · 活动 \(Int(v.activeMinutes)) 分钟" } ?? "尚无步数记录，可同步健康或手动记录运动",
                            icon: "figure.walk", progress: Double(v.steps) / Double(max(1, v.stepsTarget)),
                            action: ("记录", { sheet = .workout(nil) }))
         }
@@ -445,7 +493,7 @@ struct PhaseTileInfo {
                 return PhaseTileInfo(phase: ph, metric: "\(main.minutes)", unit: "分钟", caption: w?.short ?? "\(main.title) · \(status)",
                                      state: state(data.trainings.allSatisfy { $0.status != .planned }), flag: w?.badge, flagIcon: w?.icon)
             }
-            return PhaseTileInfo(phase: ph, metric: v.steps.formatted(.number.locale(Locale(identifier: "zh_CN"))), unit: "步", caption: "活力度 \(v.score) · 活动 \(Int(v.activeMinutes)) 分钟",
+            return PhaseTileInfo(phase: ph, metric: d?.steps.map { $0.formatted(.number.locale(Locale(identifier: "zh_CN"))) } ?? "未记录", unit: d?.steps == nil ? "" : "步", caption: d?.steps == nil ? "同步健康或手动记录运动" : "活动 \(Int(v.activeMinutes)) 分钟",
                                  state: state(v.score >= 80), flag: nil)
         case .nutrition:
             var parts: [String] = ["\(data.todayMeals.count) 餐"]
@@ -457,7 +505,7 @@ struct PhaseTileInfo {
             let due = data.openTasks.contains {
                 ($0.due ?? .distantFuture) < data.now.adding(days: LabRecheck.groups(inTitle: $0.title).isEmpty ? 1 : LabRecheck.flagLead)
             }
-            return PhaseTileInfo(phase: ph, metric: "\(data.record?.waterMl ?? 0)", unit: "ml 饮水", caption: parts.joined(separator: " · "),
+            return PhaseTileInfo(phase: ph, metric: (data.record?.waterMl ?? 0) > 0 ? "\(data.record!.waterMl)" : "未记录", unit: (data.record?.waterMl ?? 0) > 0 ? "ml 饮水" : "饮水", caption: parts.joined(separator: " · "),
                                  state: state(false), flag: due ? "照护" : nil)
         case .evening:
             let r = data.record
@@ -511,7 +559,7 @@ struct PhaseTile: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
                 Image(systemName: info.phase.icon)
-                    .font(.headline)
+                    .font(Theme.TypeScale.title)
                     .foregroundStyle(.white)
                     .frame(width: Theme.Size.tileIcon, height: Theme.Size.tileIcon)
                     .background(color.gradient, in: RoundedRectangle(cornerRadius: Theme.Radius.tile(Theme.Size.tileIcon), style: .continuous))
@@ -519,14 +567,14 @@ struct PhaseTile: View {
                 badge
             }
             Spacer(minLength: Theme.Space.block)
-            Text(info.phase.title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+            Text(info.phase.title).font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.primary)
             HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
-                Text(info.metric).font(.system(.title2, design: .rounded).weight(.bold)).monospacedDigit()
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                if !info.unit.isEmpty { Text(info.unit).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                Text(info.metric).font(Theme.TypeScale.title.weight(.bold)).monospacedDigit()
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                if !info.unit.isEmpty { Text(info.unit).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1) }
             }
             .padding(.top, Theme.Space.hairline)
-            Text(info.caption).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+            Text(info.caption).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(2)
                 .padding(.top, Theme.Space.hairline)
         }
         .padding(Theme.Space.cardPadding)
@@ -538,12 +586,12 @@ struct PhaseTile: View {
     @ViewBuilder
     private var badge: some View {
         if let flag = info.flag {
-            StatusLabel(text: flag, icon: info.flagIcon ?? "exclamationmark.circle.fill", color: .orange).font(.caption.weight(.semibold))
+            StatusLabel(text: flag, icon: info.flagIcon ?? "exclamationmark.circle.fill", color: .orange).font(Theme.TypeScale.body.weight(.semibold))
         } else if info.state == .done {
-            Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(.green)
+            Image(systemName: "checkmark.circle.fill").font(Theme.TypeScale.title).foregroundStyle(.green)
         } else if info.state == .current {
             StatusLabel(text: "现在", icon: "circle.fill", color: info.phase.color)
-                .font(.caption.weight(.semibold)).imageScale(.small)
+                .font(Theme.TypeScale.body.weight(.semibold)).imageScale(.small)
                 .padding(.horizontal, Theme.Space.item).padding(.vertical, Theme.Space.tight).background(Theme.subtle, in: Capsule())
         }
     }
@@ -553,18 +601,18 @@ struct QuickLogTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Image(systemName: "plus")
-                .font(.headline).foregroundStyle(Theme.accent)
+                .font(Theme.TypeScale.title).foregroundStyle(Theme.accent)
                 .frame(width: Theme.Size.tileIcon, height: Theme.Size.tileIcon)
                 .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: Theme.Radius.tile(Theme.Size.tileIcon), style: .continuous))
             Spacer(minLength: Theme.Space.block)
-            Text("快速记录").font(.subheadline.weight(.semibold))
+            Text("快速记录").font(Theme.TypeScale.body.weight(.semibold))
             HStack(spacing: Theme.Space.item) {
                 ForEach(["fork.knife", "drop", "gauge.with.dots.needle.33percent", "drop.fill", "figure.run"], id: \.self) {
-                    Image(systemName: $0).font(.subheadline).foregroundStyle(.secondary)
+                    Image(systemName: $0).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             }
             .padding(.top, Theme.Space.item)
-            Text("饮食 · 饮水 · 指标 · 运动").font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+            Text("饮食 · 饮水 · 指标 · 运动").font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1)
                 .padding(.top, Theme.Space.tight)
         }
         .padding(Theme.Space.cardPadding)

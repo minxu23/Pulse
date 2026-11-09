@@ -75,13 +75,13 @@ struct RHRTrendView: View {
         Card {
             AdaptiveRow(alignment: .firstTextBaseline, stackedSpacing: Theme.Space.item) {
                 VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                    Text("最近一次").font(.caption).foregroundStyle(.secondary)
+                    Text("最近一次").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
-                        Text(t.latest.map { $0.value.noDecimal } ?? "—").font(.system(.largeTitle, design: .rounded).weight(.bold)).monospacedDigit()
+                        Text(t.latest.map { $0.value.noDecimal } ?? "—").font(Theme.TypeScale.title.weight(.bold)).monospacedDigit()
                         Text("bpm").foregroundStyle(.secondary)
                     }
                     if let l = t.latest {
-                        Text("\(l.day.formatted(.dateTime.month().day())) · \(l.source.label)").font(.footnote).foregroundStyle(.secondary)
+                        Text("\(l.day.formatted(.dateTime.month().day())) · \(l.source.label)").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                 }
             } trailing: {
@@ -89,11 +89,11 @@ struct RHRTrendView: View {
                     statusChip(t)
                     if let c = t.changeFromBaseline {
                         StatusLabel(text: "较基线 \(c.signedText) bpm", icon: c <= -1 ? "arrow.down.circle.fill" : (c >= 2 ? "arrow.up.circle.fill" : "equal.circle.fill"),
-                                    color: c <= -1 ? .green : (c >= 2 ? .orange : .gray), secondaryText: true).font(.caption)
+                                    color: c <= -1 ? .green : (c >= 2 ? .orange : .gray), secondaryText: true).font(Theme.TypeScale.body)
                     }
                 }
             }
-            Text(t.headline).font(.headline).fixedSize(horizontal: false, vertical: true)
+            Text(t.headline).font(Theme.TypeScale.title).fixedSize(horizontal: false, vertical: true)
             MetricRow {
                 MetricTile(label: "7 日均值", value: t.avg7.map { $0.noDecimal } ?? "—", unit: "bpm", icon: "7.circle", color: Theme.heartData,
                            footnote: "\(t.coverage7)/7 天")
@@ -146,7 +146,7 @@ struct RHRTrendView: View {
                             .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                             .foregroundStyle(Color.gray)
                             .annotation(position: .top, alignment: .leading) {
-                                Text("基线 \(b.noDecimal)").font(.caption2).foregroundStyle(.secondary)
+                                Text("基线 \(b.noDecimal)").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                             }
                     }
                     ForEach(excluded) { p in
@@ -171,20 +171,20 @@ struct RHRTrendView: View {
                             .foregroundStyle(Color.gray.opacity(0.4))
                             .annotation(position: .top, overflowResolution: .init(x: .fit, y: .disabled)) {
                                 VStack(spacing: Theme.Space.hairline) {
-                                    Text("\(s.value.noDecimal) bpm").font(.caption.bold())
-                                    Text(s.day.formatted(.dateTime.month().day())).font(.caption2).foregroundStyle(.secondary)
+                                    Text("\(s.value.noDecimal) bpm").font(Theme.TypeScale.body.bold())
+                                    Text(s.day.formatted(.dateTime.month().day())).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                                 }
                                 .padding(Theme.Space.item)
                                 .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
                                 .shadow(radius: 2)
                             }
                     }
-                }
+                }.pulseChartAxes()
                 .chartYScale(domain: lo...hi)
                 .chartXSelection(value: $selected)
                 .frame(height: 220)
                 if !excluded.isEmpty {
-                    Text("空心灰点为其他测量方式的数值（\(excluded.count) 个），不参与趋势计算。").font(.footnote).foregroundStyle(.secondary)
+                    Text("空心灰点为其他测量方式的数值（\(excluded.count) 个），不参与趋势计算。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
                 if let s = sel, let d = a.day(s.day) {
                     let tags = d.tags.union(a.day(s.day.adding(days: -1))?.tags.filter(\.actsOnNextMorning) ?? [])
@@ -211,9 +211,9 @@ struct RHRTrendView: View {
             ForEach(t.elevatedDays.prefix(6)) { d in
                 VStack(alignment: .leading, spacing: Theme.Space.item) {
                     AdaptiveRow {
-                        Text(d.day.formatted(.dateTime.month().day().weekday())).font(.subheadline.weight(.medium))
+                        Text(d.day.formatted(.dateTime.month().day().weekday())).font(Theme.TypeScale.body.weight(.medium))
                     } trailing: {
-                        StatusLabel(text: "\(d.value.noDecimal) bpm（+\(d.delta.noDecimal)）", icon: "arrow.up.circle.fill", color: .orange).font(.subheadline).monospacedDigit()
+                        StatusLabel(text: "\(d.value.noDecimal) bpm（+\(d.delta.noDecimal)）", icon: "arrow.up.circle.fill", color: .orange).font(Theme.TypeScale.body).monospacedDigit()
                     }
                     if d.hasExplanation {
                         FlowLayout(spacing: Theme.Space.item) {
@@ -222,7 +222,7 @@ struct RHRTrendView: View {
                         }
                     } else {
                         AdaptiveRow(stackedSpacing: Theme.Space.item) {
-                            Text("没有记录到相关背景").font(.footnote).foregroundStyle(.secondary)
+                            Text("没有记录到相关背景").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                         } trailing: {
                             Button("补充背景") { contextDay = d.day }.buttonStyle(.bordered)
                         }
@@ -231,7 +231,7 @@ struct RHRTrendView: View {
                 if d.id != t.elevatedDays.prefix(6).last?.id { Divider() }
             }
             Text("这些是同时出现的情况，不一定是原因。持续记录后，可在「复盘」中查看哪些因素与你的心率变化关联更稳定。")
-                .font(.footnote).foregroundStyle(.secondary)
+                .font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
     }
 
@@ -239,7 +239,7 @@ struct RHRTrendView: View {
         Card {
             CardHeader(title: "判断的局限", subtitle: t.limitations.isEmpty ? "当前数据条件良好" : "以下情况会影响解读", icon: "exclamationmark.circle", color: .gray)
             if t.limitations.isEmpty {
-                Text("近期数据充足，测量方式一致，未记录到影响可比性的用药或生病。").font(.subheadline).foregroundStyle(.secondary)
+                Text("近期数据充足，测量方式一致，未记录到影响可比性的用药或生病。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
             ForEach(t.limitations, id: \.self) { Callout(kind: .limitation, text: $0) }
         }
@@ -256,7 +256,7 @@ struct RHRTrendView: View {
                         BarMark(x: .value("日期", p.0, unit: .day), y: .value("ms", p.1))
                             .foregroundStyle(Theme.heartData.opacity(0.6))
                     }
-                }
+                }.pulseChartAxes()
                 .frame(height: 120)
             }
         }

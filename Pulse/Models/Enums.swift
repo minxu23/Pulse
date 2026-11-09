@@ -238,7 +238,11 @@ enum ContextTag: String, Codable, CaseIterable, Identifiable {
 // MARK: - Activity & plans
 
 enum WorkoutType: String, Codable, CaseIterable, Identifiable {
-    case run, walk, cycle, swim, strength, hiit, yoga, ball, other
+    case run, walk, cycle, swim, strength, hiit, yoga
+    case tennis, badminton, tableTennis, basketball, soccer
+    /// Other ball games, and every ball game recorded before they were told apart.
+    case ball
+    case other
     var id: String { rawValue }
     var label: String {
         switch self {
@@ -249,7 +253,12 @@ enum WorkoutType: String, Codable, CaseIterable, Identifiable {
         case .strength: "力量训练"
         case .hiit: "间歇训练"
         case .yoga: "瑜伽 / 拉伸"
-        case .ball: "球类"
+        case .tennis: "网球"
+        case .badminton: "羽毛球"
+        case .tableTennis: "乒乓球"
+        case .basketball: "篮球"
+        case .soccer: "足球"
+        case .ball: "其他球类"
         case .other: "其他"
         }
     }
@@ -262,17 +271,68 @@ enum WorkoutType: String, Codable, CaseIterable, Identifiable {
         case .strength: "dumbbell"
         case .hiit: "bolt.heart"
         case .yoga: "figure.yoga"
-        case .ball: "figure.basketball"
+        case .tennis: "figure.tennis"
+        case .badminton: "figure.badminton"
+        case .tableTennis: "figure.table.tennis"
+        case .basketball: "figure.basketball"
+        case .soccer: "figure.indoor.soccer"
+        case .ball: "sportscourt"
         case .other: "figure.mixed.cardio"
         }
     }
     var defaultRPE: Int {
         switch self {
         case .walk, .yoga: 3
+        case .tableTennis: 4
         case .run, .cycle, .swim: 5
-        case .strength, .ball: 6
+        case .strength, .ball, .tennis, .badminton: 6
+        case .basketball, .soccer: 7
         case .hiit: 8
         case .other: 4
+        }
+    }
+    /// Ball and racquet games: their intensity depends on how they are played, so Pulse reads it from heart rate.
+    var isBallGame: Bool { [.tennis, .badminton, .tableTennis, .basketball, .soccer, .ball].contains(self) }
+}
+
+/// How seriously someone plays a sport they like.
+enum SportLevel: String, Codable, CaseIterable, Identifiable {
+    case beginner, regular, competitive
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .beginner: "刚开始"
+        case .regular: "常练"
+        case .competitive: "比赛"
+        }
+    }
+}
+
+/// A sport the user likes and their level, stored as "tennis:regular".
+struct SportPreference: Equatable, Hashable, Identifiable {
+    var type: WorkoutType
+    var level: SportLevel
+    var id: String { type.rawValue }
+    var raw: String { "\(type.rawValue):\(level.rawValue)" }
+    init(type: WorkoutType, level: SportLevel = .regular) { self.type = type; self.level = level }
+    init?(raw: String) {
+        let p = raw.split(separator: ":").map(String.init)
+        guard let t = p.first.flatMap(WorkoutType.init(rawValue:)) else { return nil }
+        type = t
+        level = p.count > 1 ? SportLevel(rawValue: p[1]) ?? .regular : .regular
+    }
+}
+
+/// What an Apple Watch ECG recording was classified as.
+enum ECGResult: String, Codable {
+    case sinus, afib, inconclusive, highHR, lowHR
+    var label: String {
+        switch self {
+        case .sinus: "窦性心律"
+        case .afib: "提示房颤"
+        case .inconclusive: "无法判断"
+        case .highHR: "心率过高，无法判断"
+        case .lowHR: "心率过低，无法判断"
         }
     }
 }

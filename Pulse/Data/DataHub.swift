@@ -10,6 +10,7 @@ extension UserProfile {
         s.age = age
         s.sex = sex
         s.bmi = bmi
+        s.heightCm = heightCm
         s.neckCm = neckCm
         s.level = activityLevel
         s.conditions = conditions
@@ -24,6 +25,17 @@ extension UserProfile {
         let free = availableWeekdays.filter { !sessions.contains($0) }
         let between = Array(Weekday.mondayFirst.filter { !sessions.contains($0) }.prefix(availableWeekdays.count))
         s.availableWeekdays = !free.isEmpty ? free : (between.isEmpty ? availableWeekdays : between)
+        s.preferredTime = preferredTime
+        s.favoriteSports = favoriteSports
+        s.smoker = smoker
+        s.familyHistoryCVD = familyHistoryCVD
+        s.parqAnswers = parqAnswers
+        s.hasBPMonitor = hasBPMonitor
+        s.programPhase = programPhase
+        if programPhase.runsPack { s.program = programPlan }
+        if let date = strengthTestDate, strengthPushups != nil || strengthChairStands != nil {
+            s.strengthTest = StrengthTest(pushups: strengthPushups, chairStands: strengthChairStands, date: date)
+        }
         s.sessionMinutes = sessionMinutes
         s.weeklyTimeBudget = weeklyTimeBudget
         s.weeklyTargetMinutes = weeklyTargetMinutes
@@ -81,7 +93,8 @@ extension PlanItem {
 
 extension ActivitySession {
     var point: WorkoutPoint {
-        WorkoutPoint(start: start, type: type, minutes: minutes, avgHR: avgHR, rpe: rpe, distanceKm: distanceKm)
+        WorkoutPoint(start: start, type: type, minutes: minutes, avgHR: avgHR, rpe: rpe, distanceKm: distanceKm,
+                     maxHR: maxHR, hrSeries: hrSeries, hrRecovery: hrRecovery)
     }
 }
 
@@ -106,6 +119,15 @@ enum DayBuilder {
             d.breathingDisturbances = r.breathingDisturbances
             d.respiratoryRate = r.respiratoryRate
             d.vo2Max = r.vo2Max
+            d.bodyFatPct = r.bodyFatPct
+            d.leanMassKg = r.leanMassKg
+            d.waistCm = r.waistCm
+            d.walkingHR = r.walkingHR
+            d.hrRecovery = r.hrRecovery
+            d.afBurden = r.afBurden
+            d.ecgResult = r.ecgResultRaw.flatMap(ECGResult.init(rawValue:))
+            d.standHours = r.standHours
+            d.stepsByHour = r.stepsByHour
             d.steps = r.steps
             d.exerciseMinutes = r.exerciseMinutes
             d.energy = r.energy
@@ -220,8 +242,12 @@ enum DataHub {
     /// Creates this week's plan if it does not exist yet, progressing the weekly target from
     /// last week's completion (需求 4).
     static func ensureWeekPlan(in ctx: ModelContext, now: Date = .app) {
-        guard let profile = profile(in: ctx), profile.onboardingDone else { return }
+        guard let profile = profile(in: ctx), profile.onboardingDone, profile.makesPlans else { return }
         let ws = now.weekStart
+        // 改善期: weeks of illness or travel lengthen the round before its next week is planned.
+        ProgramFlow.syncRoundLength(profile, in: ctx, now: now)
+        // 改善期: this week's step target, also when the round's first week was made in advance.
+        if let steps = programStepsTarget(profile, weekStart: ws) { profile.stepsTarget = steps }
         // A plan generated last week from the weekly review: adopt its target now that the week has begun.
         // The marker stays for that week, so a plan adopted just after midnight on Monday (still the
         // previous week in 复盘) keeps showing as adopted.
@@ -236,30 +262,48 @@ enum DataHub {
         }
         guard planItems(weekStart: ws, in: ctx).isEmpty else { return }
 
-        let last = planItems(weekStart: ws.adding(days: -7), in: ctx).filter { $0.kind.isTraining }
-        let completion: Double? = last.isEmpty ? nil :
-            last.reduce(0.0) { $0 + ($1.status == .done ? 1 : ($1.status == .partial ? 0.5 : 0)) } / Double(last.count)
-        let snap = profile.snapshot(medications: medications(in: ctx))
-        let (target, reason) = PlanGenerator.nextWeeklyTarget(current: profile.weeklyTargetMinutes,
-                                                               lastWeekCompletion: completion, profile: snap)
-        profile.weeklyTargetMinutes = target
-        profile.weeklyTargetReason = reason
+        // 基线期 records what is usual and 总结期 holds the round's effort: neither moves the weekly target.
+        if !(profile.programPhase == .baseline || profile.programPhase == .summary) {
+            let last = planItems(weekStart: ws.adding(days: -7), in: ctx).filter { $0.kind.isTraining }
+            let completion: Double? = last.isEmpty ? nil :
+                last.reduce(0.0) { $0 + ($1.status == .done ? 1 : ($1.status == .partial ? 0.5 : 0)) } / Double(last.count)
+            let snap = profile.snapshot(medications: medications(in: ctx))
+            let (target, reason) = PlanGenerator.nextWeeklyTarget(current: profile.weeklyTargetMinutes,
+                                                                   lastWeekCompletion: completion, profile: snap)
+            profile.weeklyTargetMinutes = target
+            profile.weeklyTargetReason = reason
+        }
         insertPlan(for: profile, weekStart: ws, fromDay: now.startOfDay, in: ctx)
     }
 
     /// Rebuilds the remaining days of this week after settings change; completed items are kept.
     static func regenerateWeekPlan(in ctx: ModelContext, now: Date = .app) {
-        guard let profile = profile(in: ctx) else { return }
+        // Recording only: no plan is made, and the days that are there stay.
+        guard let profile = profile(in: ctx), profile.makesPlans else { return }
         let ws = now.weekStart
-        for item in planItems(weekStart: ws, in: ctx) where item.day >= now.startOfDay && item.status == .planned {
-            ctx.delete(item)
-        }
+        clearPlannedDays(from: now.startOfDay, in: ctx, weekStart: ws)
         insertPlan(for: profile, weekStart: ws, fromDay: now.startOfDay, in: ctx)
     }
 
+    /// Removes the sessions still only planned from `day` on (this week's when `weekStart` is given);
+    /// what was done or logged stays.
+    static func clearPlannedDays(from day: Date, in ctx: ModelContext, weekStart: Date? = nil) {
+        let items = weekStart.map { planItems(weekStart: $0, in: ctx) } ?? ((try? ctx.fetch(FetchDescriptor<PlanItem>())) ?? [])
+        for item in items where item.day >= day && item.status == .planned { ctx.delete(item) }
+    }
+
+    /// The pack's step target for the week starting `ws`, once the round has begun; it holds after the round.
+    static func programStepsTarget(_ p: UserProfile, weekStart ws: Date) -> Int? {
+        guard p.programPhase.runsPack, let x = p.programPlan, ws >= x.roundStart.weekStart else { return nil }
+        return PackPlanner.stepsTarget(x, age: p.age, week: p.programPhase == .summary ? max(1, x.weeks) : x.roundWeek(ws))
+    }
+
     static func insertPlan(for profile: UserProfile, weekStart ws: Date, fromDay: Date, in ctx: ModelContext) {
+        guard profile.makesPlans else { return }
         let snap = profile.snapshot(medications: medications(in: ctx))
         let plan = PlanGenerator.generate(profile: snap, weekStart: ws)
+        // 改善期: this week's step target rises from the baseline.
+        if let steps = plan.stepsTarget, ws == Date.app.weekStart { profile.stepsTarget = steps }
         let existingDays = Set(planItems(weekStart: ws, in: ctx).map(\.day))
         for s in plan.sessions {
             let day = ws.adding(days: PlanGenerator.order(s.weekday))
@@ -527,6 +571,9 @@ enum DataHub {
         CloudModelSettings.shared.eraseAll()
         AgentNameSettings.shared.set(nil)
         DataExporter.removeExports()
+        // The Health data check (what Health holds, which apps wrote it) goes too.
+        try? FileManager.default.removeItem(at: HealthKitService.inventoryURL)
+        HealthKitService.shared.inventory = []
         if let domain = Bundle.main.bundleIdentifier { clearPreferences(UserDefaults.standard, domain: domain) }
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
         CareReminders.sync(in: ctx)

@@ -26,6 +26,8 @@ struct TodayData {
     let phase: DayPhase
     /// Today's forecast, when there is one.
     var weather: DayWeather? = nil
+    /// 改善期 of the 三阶段计划: the pack's main target, shown in place of resting heart rate.
+    var target: TargetReading? = nil
     /// Today's weather for today's outdoor training.
     var weatherReminder: WeatherReminder? { WeatherPlanner.reminder(today: weather, sessions: trainings.map(\.snapshot), profile: p) }
 
@@ -67,6 +69,13 @@ struct TodayDataReader<Content: View>: View {
             .task(id: Date.app.startOfDay) { await WeatherStore.shared.load(demo: profiles.first?.usesDemoData == true) }
     }
 
+    private func target(today: Date, analytics a: Analytics) -> TargetReading? {
+        guard let p = profiles.first, p.programPhase.runsPack, let t = p.programTarget else { return nil }
+        let back = today.adding(days: -60)
+        return TargetTracker.reading(t, days: a.days, vitals: vitals.filter { $0.time > back }.map(\.point),
+                                     workouts: sessions.filter { $0.start > back }.map(\.point), end: today.adding(days: 1), profile: a.profile)
+    }
+
     private func make() -> TodayData {
         let now = Date.app
         let snap = profiles.first?.snapshot(medications: meds)
@@ -95,7 +104,8 @@ struct TodayDataReader<Content: View>: View {
             openTasks: tasks.filter { !$0.done },
             vitality: VitalityEngine.evaluate(today: a.today, plannedMinutes: planned, stepsTarget: a.profile.stepsTarget, readiness: readiness),
             phase: DayPhase.current(at: now, window: window),
-            weather: WeatherStore.shared.days.first { $0.day == today })
+            weather: WeatherStore.shared.days.first { $0.day == today },
+            target: target(today: today, analytics: a))
     }
 }
 

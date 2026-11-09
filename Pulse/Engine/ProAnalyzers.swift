@@ -138,6 +138,9 @@ enum HRZones {
                 HRZone(index: 4, name: "阈值", low: b[3], high: b[4] - 1, purpose: "阈值跑、巡航间歇"),
                 HRZone(index: 5, name: "高强度", low: b[4], high: b[5], purpose: "短间歇，专项期少量使用"),
             ]
+        } else if !p.ageKnown {
+            basis = "填写出生年份后，按年龄估算心率区间；现在以主观感受为准"
+            out = []
         } else {
             let mx = p.estimatedMaxHR
             basis = "以估算最大心率 \(Int(mx)) bpm 为参照（208 − 0.7 × 年龄，个体差异较大）"

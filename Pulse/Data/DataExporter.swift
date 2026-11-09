@@ -173,7 +173,7 @@ enum DataExporter {
                              "生成时间：\(Date.app.formatted(date: .long, time: .shortened))", ""]
         if categories.contains(.profile) {
             out.append("【基础信息】")
-            out.append("年龄 \(p.age) 岁 · 性别 \(p.sex.label) · BMI \(String(format: "%.1f", p.bmi)) · 活动水平 \(p.level.label)")
+            out.append("\(p.ageKnown ? "年龄 " : "")\(p.ageText) · 性别 \(p.sex.label) · \(p.bodySizeText) · 活动水平 \(p.level.label)")
             if !p.conditionNames.isEmpty { out.append("已知情况：\(p.conditionNames.joined(separator: "、"))") }
             if p.fluidLimited { out.append("限水：每天不超过 \(p.waterTargetMl) ml") }
             if let note = profile?.goalNote, !note.isEmpty { out.append("个人目标：\(note)") }

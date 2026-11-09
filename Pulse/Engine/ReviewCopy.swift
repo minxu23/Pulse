@@ -22,6 +22,10 @@ struct ReviewFacts: Equatable {
     var fallback: ReviewCopy
     /// What each item is about (title and reason), used to put the model's sentences under the right item.
     var references: [String] = []
+    /// Used only by the on-device identity filter; never appended to a model prompt.
+    var knownNames: [String] = []
+    /// The weekly review's interpretation (本周变化): its items may give the possible reasons the facts name.
+    var explainsWeek = false
     /// Stable for the same facts, so a page isn't rewritten on every visit.
     var key: String { kind + "-" + String(Self.fnv1a(text), radix: 16) }
 
@@ -52,7 +56,7 @@ extension ReviewCopy {
         let refs = facts.references.count == f.items.count ? facts.references : f.items
         let placed = Self.align(items, to: refs)
         out.items = f.items.indices.map { j in
-            placed[j].map { keep(Self.droppingTitle($0, of: refs[j]), f.items[j], max: 90) } ?? { replaced += 1; return f.items[j] }()
+            placed[j].map { keep(Self.droppingTitle($0, of: refs[j]), f.items[j], max: 90, causes: !facts.explainsWeek) } ?? { replaced += 1; return f.items[j] }()
         }
         return (out, replaced)
     }

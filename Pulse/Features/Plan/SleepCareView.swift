@@ -39,7 +39,7 @@ struct SleepCareView: View {
                 Button { logSleep = true } label: {
                     Text("补记睡眠").frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
                 }
-                .font(.subheadline)
+                .font(Theme.TypeScale.body)
             }
             MetricRow {
                 MetricTile(label: "平均睡眠", value: s.avgMinutes.map { ($0 / 60).oneDecimal } ?? "—", unit: "小时", icon: "moon", color: Theme.sleep,
@@ -67,7 +67,7 @@ struct SleepCareView: View {
                             .foregroundStyle(n.1 >= a.profile.sleepNeedMinutes / 60 - 0.5 ? Theme.sleep : Theme.sleep.opacity(0.45))
                             .cornerRadius(3)
                     }
-                }
+                }.pulseChartAxes()
                 .frame(height: 150)
             }
         }
@@ -103,7 +103,7 @@ struct SleepCareView: View {
                 cueTile("白天困倦", c.sleepy, "cup.and.saucer")
                 cueTile("血氧 <88%", c.lowSpO2Nights, "lungs")
             }
-            Text("近 30 天记录 \(c.nightsObserved) 晚。\(c.message)").font(.subheadline)
+            Text("近 30 天记录 \(c.nightsObserved) 晚。\(c.message)").font(Theme.TypeScale.body)
             if p.apneaStatus != .diagnosed {
                 NavigationLink { StopBangView(profile: p) } label: {
                     HStack {
@@ -112,7 +112,7 @@ struct SleepCareView: View {
                         Spacer()
                         Image(systemName: "chevron.right").foregroundStyle(.tertiary)
                     }
-                    .font(.subheadline)
+                    .font(Theme.TypeScale.body)
                     .frame(minHeight: Theme.Size.tap)
                     .contentShape(Rectangle())
                 }
@@ -134,23 +134,23 @@ struct SleepCareView: View {
                             Label("分享 / 保存摘要", systemImage: "square.and.arrow.up")
                                 .frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
                         }
-                        .font(.subheadline)
+                        .font(Theme.TypeScale.body)
                     }
                 }
             }
             Picker("我的状态", selection: Binding(get: { p.apneaStatus }, set: { p.apneaStatus = $0 })) {
                 ForEach(ApneaStatus.allCases) { Text($0.label).tag($0) }
             }
-            .font(.subheadline)
-            Text("设备的呼吸紊乱、血氧信号和自述线索只能提示可能性，不能代替专业诊断。").font(.footnote).foregroundStyle(.secondary)
+            .font(Theme.TypeScale.body)
+            Text("设备的呼吸紊乱、血氧信号和自述线索只能提示可能性，不能代替专业诊断。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
     }
 
     private func cueTile(_ title: String, _ count: Int, _ icon: String) -> some View {
         VStack(spacing: Theme.Space.tight) {
-            Image(systemName: icon).font(.caption).foregroundStyle(count > 0 ? .orange : .secondary)
-            Text("\(count)").font(.headline).monospacedDigit()
-            Text(title).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+            Image(systemName: icon).font(Theme.TypeScale.body).foregroundStyle(count > 0 ? .orange : .secondary)
+            Text("\(count)").font(Theme.TypeScale.title).monospacedDigit()
+            Text(title).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1)
         }
         .frame(maxWidth: .infinity)
         .padding(Theme.Space.block)
@@ -177,13 +177,13 @@ struct SleepCareView: View {
                         ForEach(used, id: \.0) { u in
                             BarMark(x: .value("日期", u.0, unit: .day), y: .value("小时", u.1)).foregroundStyle(Theme.respiratory)
                         }
-                    }
+                    }.pulseChartAxes()
                     .frame(height: 110)
                 }
                 Text("在晨起感受中记录每晚使用时长。面罩不适、漏气、口干等问题，请与睡眠医生或设备服务方沟通调整，而不是自行停用。")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
-            Text("持续治疗后，可留意白天精力、血压与静息心率是否有变化，并在复诊时与医生讨论。").font(.subheadline).foregroundStyle(.secondary)
+            Text("持续治疗后，可留意白天精力、血压与静息心率是否有变化，并在复诊时与医生讨论。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
     }
 
@@ -192,12 +192,12 @@ struct SleepCareView: View {
         return Card {
             CardHeader(title: "睡眠照护事项", subtitle: "复诊、检查、设备耗材更换等", icon: "list.clipboard") {
                 Button { addTask = true } label: {
-                    Image(systemName: "plus.circle").font(.title3)
+                    Image(systemName: "plus.circle").font(Theme.TypeScale.title)
                         .frame(width: Theme.Size.tap, height: Theme.Size.tap).contentShape(Rectangle())
                 }
                 .accessibilityLabel("添加睡眠照护事项")
             }
-            if list.isEmpty { Text("暂无事项").font(.subheadline).foregroundStyle(.secondary) }
+            if list.isEmpty { Text("暂无事项").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
             ForEach(list) { CareTaskRow(task: $0) }
         }
     }
@@ -216,10 +216,10 @@ struct StopBangView: View {
                     if q.id < answers.count {
                         Toggle(isOn: $answers[q.id]) {
                             HStack(alignment: .top, spacing: Theme.Space.item) {
-                                Text(q.letter).font(.headline).foregroundStyle(.secondary).frame(width: 18)
+                                Text(q.letter).font(Theme.TypeScale.title).foregroundStyle(.secondary).frame(width: 18)
                                 VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                                    Text(q.text).font(.subheadline)
-                                    if q.autoDerived { Text("已根据档案预填").font(.caption).foregroundStyle(.secondary) }
+                                    Text(q.text).font(Theme.TypeScale.body)
+                                    if q.autoDerived { Text("已根据档案预填").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
                                 }
                             }
                         }
@@ -230,11 +230,11 @@ struct StopBangView: View {
             }
             Section("结果") {
                 HStack {
-                    Text("\(result.score) / 8").font(.title2.bold()).monospacedDigit()
+                    Text("\(result.score) / 8").font(Theme.TypeScale.title.bold()).monospacedDigit()
                     Spacer()
                     Chip(text: result.risk, color: result.score >= 5 ? .red : (result.score >= 3 ? .orange : .green), filled: true)
                 }
-                Text(result.advice).font(.subheadline)
+                Text(result.advice).font(Theme.TypeScale.body)
             }
             Section {
                 Button("保存结果") {

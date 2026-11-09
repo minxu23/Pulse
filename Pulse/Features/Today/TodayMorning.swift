@@ -11,15 +11,15 @@ struct EventsBanner: View {
         let color = Theme.severity(top.severity)
         NavigationLink { HealthEventsView() } label: {
             HStack(spacing: Theme.Space.block) {
-                Image(systemName: top.severity.icon).font(.title3).foregroundStyle(color)
+                Image(systemName: top.severity.icon).font(Theme.TypeScale.title).foregroundStyle(color)
                 VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                     Text(events.count == 1 ? top.title : "\(events.count) 项需要关注：\(top.title)")
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(.primary).multilineTextAlignment(.leading)
-                    Text("\(top.severity.label) · 点击查看处理建议并记录跟进").font(.footnote).foregroundStyle(.secondary)
+                        .font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.primary).multilineTextAlignment(.leading)
+                    Text("\(top.severity.label) · 点击查看处理建议并记录跟进").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                         .multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: Theme.Space.item)
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                Image(systemName: "chevron.right").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.tertiary)
             }
             .padding(Theme.Space.cardPadding)
             .background(color.opacity(0.1), in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
@@ -40,25 +40,25 @@ struct ReadinessDetailView: View {
                 HStack(spacing: Theme.Space.block) {
                     ScoreRing(progress: Double(result.score ?? 0) / 100, color: color, lineWidth: 10) {
                         Text(result.score.map(String.init) ?? "—")
-                            .font(.system(.title, design: .rounded).weight(.bold)).monospacedDigit()
-                            .lineLimit(1).minimumScaleFactor(0.5).padding(.horizontal, 10)
+                            .font(Theme.TypeScale.title.weight(.bold)).monospacedDigit()
+                            .lineLimit(1).padding(.horizontal, 10)
                     }
                     .frame(width: 88, height: 88)
                     .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: Theme.Space.tight) {
                         if result.score != nil {
                             StatusLabel(text: result.level.label, icon: "circle.fill", color: color)
-                                .font(.title3.weight(.semibold)).imageScale(.small)
+                                .font(Theme.TypeScale.title.weight(.semibold)).imageScale(.small)
                         } else {
-                            Text("待评估").font(.title3.weight(.semibold))
+                            Text("待评估").font(Theme.TypeScale.title.weight(.semibold))
                         }
-                        Text(result.confidence.label).font(.subheadline).foregroundStyle(.secondary)
+                        Text(result.confidence.label).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                     .accessibilityElement(children: .combine)
                 }
-                Text(result.recommendation).font(.subheadline).fixedSize(horizontal: false, vertical: true)
-                ForEach(result.overrides, id: \.self) { StatusLabel(text: $0, icon: "exclamationmark.triangle.fill", color: .orange).font(.subheadline) }
-                ForEach(result.notes, id: \.self) { StatusLabel(text: $0, icon: "info.circle.fill", color: .gray, secondaryText: true).font(.subheadline) }
+                Text(result.recommendation).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
+                ForEach(result.overrides, id: \.self) { StatusLabel(text: $0, icon: "exclamationmark.triangle.fill", color: .orange).font(Theme.TypeScale.body) }
+                ForEach(result.notes, id: \.self) { StatusLabel(text: $0, icon: "info.circle.fill", color: .gray, secondaryText: true).font(Theme.TypeScale.body) }
             }
             .cardSurface()
 
@@ -93,17 +93,17 @@ struct ReadinessDetailView: View {
             IconTile(icon: f.icon, color: .secondary)
             VStack(alignment: .leading, spacing: Theme.Space.tight) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(f.name).font(.subheadline.weight(.semibold))
+                    Text(f.name).font(Theme.TypeScale.body.weight(.semibold))
                     Spacer()
-                    Text(f.value).font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
+                    Text(f.value).font(Theme.TypeScale.body).monospacedDigit().foregroundStyle(.secondary)
                 }
                 if let s = f.score {
                     ProgressBar(value: s / 100, color: f.impact == .negative ? .orange : (f.impact == .positive ? .green : .gray), height: 6)
                         .accessibilityHidden(true)
                 }
-                StatusLabel(status).font(.footnote)
-                Text(f.detail).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Text("权重 \(Int(f.weight * 100))%").font(.caption).foregroundStyle(.secondary)
+                StatusLabel(status).font(Theme.TypeScale.body)
+                Text(f.detail).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text("权重 \(Int(f.weight * 100))%").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, Theme.Space.item)

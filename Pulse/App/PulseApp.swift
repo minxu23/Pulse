@@ -3,16 +3,8 @@ import SwiftData
 
 @main
 struct PulseApp: App {
-    let container: ModelContainer = {
-        let schema = Schema(PulseSchema.models)
-        let inMemory = ProcessInfo.processInfo.arguments.contains("-PulseInMemory")
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory)
-        do {
-            return try ModelContainer(for: schema, configurations: [config])
-        } catch {
-            fatalError("无法创建数据存储：\(error)")
-        }
-    }()
+    /// Your own records and the sample users, in separate stores (see DataStores).
+    @State private var stores = DataStores.shared
 
     init() {
         // Pulse is written in Simplified Chinese only. On a device that lists Traditional Chinese
@@ -24,12 +16,26 @@ struct PulseApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            // Switching between your own data and a sample user rebuilds the screens on the other store.
+            VStack(spacing: 0) {
+                if stores.mode == .sample {
+                    HStack {
+                        Text("测试模式 · 示例数据").font(Theme.TypeScale.body.weight(.semibold))
+                        Spacer()
+                        Button("退出测试") { stores.exitTesting() }
+                    }
+                    .padding(.horizontal, Theme.Space.gutter).padding(.vertical, Theme.Space.item)
+                    .background(Theme.card)
+                }
+                RootView()
+            }
+                .id(stores.mode)
+                .modelContainer(stores.container)
                 .tint(Theme.accent)
+                .font(Theme.TypeScale.body)
                 .pageMargins()
         }
-        .modelContainer(container)
-        .backgroundTask(.appRefresh(BackgroundCheck.id)) { await BackgroundCheck.run(container) }
+        .backgroundTask(.appRefresh(BackgroundCheck.id)) { await BackgroundCheck.runOwn() }
     }
 }
 
@@ -43,13 +49,16 @@ struct RootView: View {
     @Query private var profiles: [UserProfile]
     @State private var tab: AppTab = .today
     @State private var booted = false
+    @State private var prepared = false
     #if DEBUG
     @State private var debugPage: DebugPage?
     #endif
 
     var body: some View {
         Group {
-            if let p = profiles.first, p.onboardingDone {
+            if !prepared {
+                ProgressView("正在读取档案")
+            } else if let p = profiles.first, p.onboardingDone {
                 TabView(selection: $tab) {
                     Tab("今日", systemImage: "sun.max", value: AppTab.today) { TodayView(tab: $tab) }
                     Tab("趋势", systemImage: "heart.text.square", value: AppTab.heart) { HeartView() }
@@ -65,23 +74,39 @@ struct RootView: View {
             guard !booted else { return }
             booted = true
             let args = ProcessInfo.processInfo.arguments
+            let demoLaunch = args.contains("-PulseDemo") && DataStores.shared.mode == .sample
             // 演示时间 belongs to the demo: a real start, a fresh demo or a test run uses the real clock;
             // -PulseTime HH:mm (or yyyy-MM-dd HH:mm) starts the demo at that moment.
             let demoTime = args.firstIndex(of: "-PulseTime").flatMap { i in i + 1 < args.count ? DemoTimeView.parse(args[i + 1]) : nil }
-            if !args.contains("-PulseDemo") || args.contains("-PulseReset") || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            if !demoLaunch || args.contains("-PulseReset") || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
                 DemoClock.set(nil)
             }
-            if args.contains("-PulseDemo"), let t = demoTime { DemoClock.set(t) }
+            if demoLaunch, let t = demoTime { DemoClock.set(t) }
             // A demo reopened on a later day would have no night for today (身体准备度 empty): it is
             // generated again for the same sample user, so the sample always reaches today.
             let stale = DemoDataGenerator.isStale(in: ctx)
-            if args.contains("-PulseDemo") && (profiles.first == nil || args.contains("-PulseReset") || stale || demoTime != nil) {
+            if demoLaunch && (DataHub.profile(in: ctx) == nil || args.contains("-PulseReset") || stale || demoTime != nil) {
                 let persona = args.firstIndex(of: "-PulsePersona").flatMap { i in i + 1 < args.count ? DemoPersona(rawValue: args[i + 1]) : nil }
                     ?? DataHub.profile(in: ctx).flatMap { DemoPersona(rawValue: $0.demoPersona) }
                 DemoDataGenerator.populate(ctx, persona: persona ?? .xiaolin)
                 AgentConversation.shared.clear()
             }
             #if DEBUG
+            // Screenshot helper: put the sample user N weeks into a pack (-PulseProgram cardio|fitness|metabolic|event|auto,
+            // -PulseProgramWeek N), with the baseline taken from the two weeks before the round began.
+            if let v = DebugLaunch.value("-PulseProgram"), let p = DataHub.profile(in: ctx), p.usesDemoData {
+                p.programQuestionsDone = true
+                p.parqAnswers = Array(repeating: false, count: ParQ.allCases.count)
+                let n = max(1, Int(DebugLaunch.value("-PulseProgramWeek") ?? "1") ?? 1)
+                let monday = DayClock.logicalToday(.app).weekStart.adding(days: -7 * (n - 1))
+                let window = DateInterval(start: monday.adding(days: -14), end: monday)
+                let result = DataHub.baseline(in: ctx, window: window, now: monday)
+                // A sample user's danger signs count as seen by a doctor, so the screenshot shows the pack.
+                ProgramFlow.confirmDoctor(p, result.report)
+                ProgramFlow.choose(ProgramPack(rawValue: v) ?? result.recommendation.recommended.pack, result: result, profile: p, in: ctx, now: monday)
+                DataHub.regenerateWeekPlan(in: ctx)
+                try? ctx.save()
+            }
             // Screenshot helper: make today a training day in the demo plan.
             if args.contains("-PulseTrainingToday"), let p = DataHub.profile(in: ctx), !p.availableWeekdays.contains(Date.app.weekday) {
                 p.availableWeekdays.append(Date.app.weekday)
@@ -92,6 +117,7 @@ struct RootView: View {
             if let i = args.firstIndex(of: "-PulseTab"), i + 1 < args.count {
                 tab = ["heart": .heart, "plan": .plan, "review": .review, "me": .me][args[i + 1]] ?? .today
             }
+            prepared = true
             refresh()
         }
         .onChange(of: scenePhase) { _, phase in
@@ -131,13 +157,15 @@ struct RootView: View {
         if p.useHealthKit {
             Task { await HealthKitService.shared.sync(into: ctx, days: 14) }
         }
+        // New readings (blood pressure first) show on 今日 as soon as Apple Health has them.
+        HealthKitService.shared.observeUpdates(into: p.useHealthKit && !p.usesDemoData ? ctx : nil)
     }
 }
 
 #if DEBUG
 /// Pages that `-PulseOpen <name>` presents directly, for screenshots.
 enum DebugPage: String, Identifiable {
-    case glucose, cardio, marathon, agent, nutrition, evening, review, readiness, cloud, nextweek, labs, events
+    case glucose, cardio, marathon, agent, nutrition, evening, review, readiness, cloud, nextweek, labs, events, baseline, packs
     var id: String { rawValue }
     @MainActor @ViewBuilder var view: some View {
         switch self {
@@ -153,6 +181,8 @@ enum DebugPage: String, Identifiable {
         case .nextweek: WeeklyPlanView(startOnNextWeek: true).navigationTitle("运动计划").navigationBarTitleDisplayMode(.inline)
         case .labs: LabResultsView()
         case .events: HealthEventsView()
+        case .baseline: ProgramReportScreen()
+        case .packs: DebugPackPicker()
         }
     }
 }

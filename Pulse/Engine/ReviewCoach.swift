@@ -42,6 +42,11 @@ struct WeekSnapshot: Equatable {
 
 struct BriefMetric: Identifiable, Equatable {
     enum Trend { case better, worse, flat, none }
+    /// The names the review looks metrics up by, in one place for the code that makes them and the code that reads them.
+    enum Name {
+        static let training = "训练完成", activity = "活动", rhr = "静息心率", homeBP = "家庭血压"
+        static let timeInRange = "血糖达标", weight = "体重", steps = "日均步数"
+    }
     var id: String { name }
     let name: String
     let icon: String
@@ -156,13 +161,13 @@ enum ReviewCoach {
             return BriefMetric(name: name, icon: icon, value: fmt(v), unit: unit, delta: (d > 0 ? "+" : "") + fmt(d), trend: better ? .better : .worse)
         }
         // Sessions read more clearly as "2/3 次" than as a percentage; the change is still the completion rate.
-        let rate = metric("训练完成", "checklist", c.completion.map { $0 * 100 }, p.completion.map { $0 * 100 }, unit: "%", threshold: 10)
+        let rate = metric(BriefMetric.Name.training, "checklist", c.completion.map { $0 * 100 }, p.completion.map { $0 * 100 }, unit: "%", threshold: 10)
         let sessions = BriefMetric(name: rate.name, icon: rate.icon, value: c.total > 0 ? "\(c.done)/\(c.total)" : "—", unit: "次",
                                    delta: c.total > 0 ? rate.delta.map { $0 == "持平" ? $0 : $0 + "%" } : nil, trend: c.total > 0 ? rate.trend : .none)
         let metrics = [
-            metric("静息心率", "heart.fill", c.rhr, p.rhr, unit: "bpm", lowerIsBetter: true, threshold: 1),
+            metric(BriefMetric.Name.rhr, "heart.fill", c.rhr, p.rhr, unit: "bpm", lowerIsBetter: true, threshold: 1),
             metric("平均睡眠", "bed.double.fill", c.sleepHours, p.sleepHours, unit: "小时", decimals: 1, threshold: 0.2),
-            metric("活动", "figure.walk", c.activeMinutes, p.activeMinutes, unit: "分钟", threshold: max(15, p.activeMinutes * 0.1)),
+            metric(BriefMetric.Name.activity, "figure.walk", c.activeMinutes, p.activeMinutes, unit: "分钟", threshold: max(15, p.activeMinutes * 0.1)),
             sessions,
             metric("醒后精力", "bolt.fill", c.energy, p.energy, unit: "/ 5", decimals: 1, threshold: 0.2),
             metric("饮酒", "wineglass", c.alcohol, p.alcohol, unit: "单位", decimals: 1, lowerIsBetter: true, threshold: 0.5),
@@ -397,7 +402,8 @@ enum ReviewCoach {
 
     // MARK: Guided reflection
 
-    static func reflection(context c: AgentContext, week w: WeekSnapshot, priorities: [ReviewPriority] = []) -> [ReflectionStep] {
+    static func reflection(context c: AgentContext, week w: WeekSnapshot, priorities: [ReviewPriority] = [],
+                           program: ProgramWeekReport? = nil) -> [ReflectionStep] {
         let friendly: [String: String] = ["plan": "按计划运动", "bedtime": "按时上床", "sleepdur": "睡够时长", "alcohol": "控制饮酒",
                                           "caffeine": "下午不喝咖啡", "steps": "日常多走路", "checkin": "晨起记录"]
         var keep = c.adherence.filter { $0.verdict == .sustained }.compactMap { friendly[$0.id] }
@@ -410,7 +416,9 @@ enum ReviewCoach {
         // 「这周没喝酒」 already says it.
         if w.alcohol == 0 { keep.removeAll { $0 == friendly["alcohol"] } }
 
-        var hard: [String] = Array(Set(w.missedWeekdays)).sorted { PlanGenerator.order($0) < PlanGenerator.order($1) }.map { "\(Weekday.name($0))的训练" }
+        // 改善期: the pack's behaviour goals come first, the ones missed this week before the rest (Docs 5).
+        var hard: [String] = (program?.checks ?? []).sorted { !$0.met && $1.met }.map(\.title)
+        hard += Array(Set(w.missedWeekdays)).sorted { PlanGenerator.order($0) < PlanGenerator.order($1) }.map { "\(Weekday.name($0))的训练" }
         hard += c.adherence.filter { $0.verdict == .struggling }.compactMap { friendly[$0.id] }
         if w.alcohol > 0 { hard.append("饮酒") }
         if (w.stress ?? 0) >= 3.5 { hard.append("压力大") }
@@ -424,8 +432,11 @@ enum ReviewCoach {
         return [
             ReflectionStep(id: "keep", question: "这周哪些事最容易坚持？", options: Array(unique(keep).prefix(5)),
                            why: "下周会保留这些安排。"),
-            ReflectionStep(id: "change", question: "哪些安排比较难坚持？", options: Array(unique(hard).prefix(5)),
-                           why: "提到的日子下周会先不排训练；选「工作太忙」，单次训练会缩短。"),
+            program == nil
+                ? ReflectionStep(id: "change", question: "哪些安排比较难坚持？", options: Array(unique(hard).prefix(5)),
+                                 why: "提到的日子下周会先不排训练；选「工作太忙」，单次训练会缩短。")
+                : ReflectionStep(id: "change", question: "这周最难坚持的是哪一项？", options: Array(unique(hard).prefix(6)),
+                                 why: "下周会针对它调整；第 4 周结束时，也会看这几周最难坚持的是什么。"),
             ReflectionStep(id: "focus", question: "下周最想做好的一件事？", options: Array(unique(focus).prefix(4)),
                            why: "下周计划会围绕它来安排。"),
         ]
@@ -605,6 +616,26 @@ enum ReviewCoach {
             session = max(20, Int((Double(session) * 0.85 / 5).rounded()) * 5)
             changes.append(AgentPoint(icon: "timer", title: "单次训练缩短到 \(session) 分钟以内",
                                       detail: "每次练短一点、多练几次，忙的时候也更容易挤出时间。"))
+        }
+
+        // 3b. 改善期: the behaviour the review said was hardest (Docs 5).
+        if p.program != nil {
+            if mentioned.contains("步数") {
+                changes.append(AgentPoint(icon: "figure.walk", title: "步数目标先不加",
+                                          detail: "你说这周步数最难坚持：下周先稳住现在的量，通勤多走一段、饭后散步，比一下子加很多更容易做到。"))
+            }
+            if mentioned.contains("测血压") {
+                changes.append(AgentPoint(icon: "heart.text.square", title: "固定测血压的时间",
+                                          detail: "早上起床排尿后、晚上睡前各测一次，把血压计放在床头，测完自动同步。"))
+            }
+            if mentioned.contains("晚饭后散步") {
+                changes.append(AgentPoint(icon: "fork.knife", title: "给饭后散步定个时间",
+                                          detail: "晚饭后 15–30 分钟出门，走 10 分钟也算；下雨就在室内走一走。"))
+            }
+            if mentioned.contains("训练"), let slot = p.program?.mainSlot {
+                changes.append(AgentPoint(icon: "clock", title: "训练放在\(slot.label)",
+                                          detail: "你基线期大多在\(slot.label)运动，下周的训练也排在这个时段，更容易坚持。"))
+            }
         }
 
         // 4. Recovery focus carried over from the review.

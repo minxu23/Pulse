@@ -132,7 +132,7 @@ struct SessionHeroCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.block) {
             HStack {
-                Text("今日训练").font(.headline)
+                Text("今日训练").font(Theme.TypeScale.title)
                 Spacer()
                 if item.isKey { Chip(text: "重点课", icon: "star.fill", color: .yellow) }
             }
@@ -140,17 +140,17 @@ struct SessionHeroCard: View {
             HStack(alignment: .top, spacing: Theme.Space.block) {
                 HeroIcon(icon: item.kind.icon, color: Theme.activity)
                 VStack(alignment: .leading, spacing: Theme.Space.tight) {
-                    Text(item.title).font(.title3.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+                    Text(item.title).font(Theme.TypeScale.title.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: Theme.Space.item) {
-                        if item.minutes > 0 { Text("\(item.minutes) 分钟").font(.subheadline.weight(.semibold)).monospacedDigit() }
+                        if item.minutes > 0 { Text("\(item.minutes) 分钟").font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit() }
                         StatusLabel(text: item.intensity.label, icon: "circle.fill", color: Theme.intensity(item.intensity), secondaryText: true)
-                            .font(.subheadline).imageScale(.small)
+                            .font(Theme.TypeScale.body).imageScale(.small)
                     }
                 }
             }
             .accessibilityElement(children: .combine)
 
-            StatusLabel(text: fit.text, icon: fit.icon, color: fit.color, secondaryText: true).font(.subheadline)
+            StatusLabel(text: fit.text, icon: fit.icon, color: fit.color, secondaryText: true).font(Theme.TypeScale.body)
 
             if item.status == .planned {
                 HStack(spacing: Theme.Space.item) {
@@ -165,7 +165,7 @@ struct SessionHeroCard: View {
                         Button(action: onLog) { Label("记录运动详情", systemImage: "square.and.pencil") }
                     } label: {
                         // As tall as the large buttons beside it.
-                        Image(systemName: "ellipsis").font(.body.weight(.semibold))
+                        Image(systemName: "ellipsis").font(Theme.TypeScale.body.weight(.semibold))
                             .frame(width: 50, height: 50)
                             .background(Theme.subtle, in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
                     }
@@ -175,7 +175,7 @@ struct SessionHeroCard: View {
                 HStack {
                     StatusLabel(text: "\(item.status.label) · \(item.completedMinutes ?? item.minutes) 分钟", icon: item.status.icon,
                                 color: Theme.planStatus(item.status))
-                        .font(.subheadline.weight(.semibold))
+                        .font(Theme.TypeScale.body.weight(.semibold))
                     Spacer()
                     Button("记录详情", action: onLog).buttonStyle(.bordered)
                     Menu {
@@ -183,7 +183,7 @@ struct SessionHeroCard: View {
                             Button { onStatus(s) } label: { Label(s.label, systemImage: s.icon) }
                         }
                     } label: {
-                        Image(systemName: "ellipsis").font(.body.weight(.semibold)).frame(width: Theme.Size.tap, height: Theme.Size.tap)
+                        Image(systemName: "ellipsis").font(Theme.TypeScale.body.weight(.semibold)).frame(width: Theme.Size.tap, height: Theme.Size.tap)
                     }
                     .accessibilityLabel("更改状态")
                 }
@@ -226,17 +226,17 @@ struct ActivityDayHeroCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.block) {
-            Text("今日安排").font(.headline)
+            Text("今日安排").font(Theme.TypeScale.title)
             HStack(alignment: .top, spacing: Theme.Space.block) {
                 HeroIcon(icon: "figure.walk", color: Theme.activity)
                 VStack(alignment: .leading, spacing: Theme.Space.tight) {
-                    Text(title).font(.title3.weight(.semibold))
-                    Text(detail).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(title).font(Theme.TypeScale.title.weight(.semibold))
+                    Text(detail).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
             StatusLabel(text: vitality.message, icon: vitality.score >= 80 ? "checkmark.circle.fill" : "figure.walk.circle.fill",
                         color: vitality.score >= 80 ? .green : Theme.activity, secondaryText: true)
-                .font(.subheadline)
+                .font(Theme.TypeScale.body)
             Button(action: onLog) { Label("记录一次运动", systemImage: "plus").frame(maxWidth: .infinity) }
                 .buttonStyle(.bordered).controlSize(.large)
         }
@@ -251,13 +251,13 @@ struct OtherSessionsCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("其他安排").font(.headline).padding(.bottom, Theme.Space.tight)
+            Text("其他安排").font(Theme.TypeScale.title).padding(.bottom, Theme.Space.tight)
             ForEach(items) { item in
                 HStack(spacing: Theme.Space.block) {
                     Image(systemName: item.kind.icon).foregroundStyle(Theme.activity).frame(width: Self.glyphWidth)
                     VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                        Text(item.title).font(.body)
-                        Text("\(item.minutes) 分钟 · \(item.intensity.label)").font(.footnote).foregroundStyle(.secondary)
+                        Text(item.title).font(Theme.TypeScale.body)
+                        Text("\(item.minutes) 分钟 · \(item.intensity.label)").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                     Spacer()
                     Menu {
@@ -267,7 +267,7 @@ struct OtherSessionsCard: View {
                         Divider()
                         Button { onLog(item.id) } label: { Label("记录运动详情", systemImage: "square.and.pencil") }
                     } label: {
-                        Image(systemName: item.status.icon).font(.title2).foregroundStyle(Theme.planStatus(item.status))
+                        Image(systemName: item.status.icon).font(Theme.TypeScale.title).foregroundStyle(Theme.planStatus(item.status))
                             .frame(width: Theme.Size.tap, height: Theme.Size.tap)
                     }
                     .accessibilityLabel("\(item.title)，\(item.status.label)")
@@ -299,14 +299,14 @@ struct PreExerciseCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("提示").font(.headline).padding(.bottom, Theme.Space.tight)
+            Text("提示").font(Theme.TypeScale.title).padding(.bottom, Theme.Space.tight)
             ForEach(tips) { tip in
                 Group {
                     if tip.destination == .marathon {
                         NavigationLink { MarathonView() } label: {
                             HStack {
                                 IconTextRow(icon: tip.icon, color: tip.color, title: tip.title, text: tip.text)
-                                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                                Image(systemName: "chevron.right").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.tertiary)
                             }
                             .frame(minHeight: Theme.Size.tap)
                             .contentShape(Rectangle())
@@ -333,7 +333,7 @@ struct WorkoutLogCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("运动记录").font(.headline)
+                Text("运动记录").font(Theme.TypeScale.title)
                 Spacer()
                 Button(action: onLog) { Label("记录", systemImage: "plus") }
                     .buttonStyle(.bordered)
@@ -347,16 +347,16 @@ struct WorkoutLogCard: View {
                     IconTile(icon: s.type.icon, color: Theme.activity)
                     VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         Text("\(s.type.label) · \(Int(s.minutes)) 分钟\(s.distanceKm.map { " · \($0.oneDecimal) km" } ?? "")")
-                            .font(.body)
+                            .font(Theme.TypeScale.body)
                         Text([Clock.text(s.start.minutesOfDay), "用力 \(s.rpe ?? s.type.defaultRPE)/10",
                               s.avgHR.map { "平均心率 \(Int($0))" } ?? "", s.source.label]
                             .filter { !$0.isEmpty }.joined(separator: " · "))
-                            .font(.footnote).foregroundStyle(.secondary)
+                            .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: Theme.Space.tight)
                     if let f = s.feeling {
                         StatusLabel(text: f.label, icon: f.icon, color: f == .unwell ? .red : (f == .hard ? .orange : .gray), secondaryText: true)
-                            .font(.footnote)
+                            .font(Theme.TypeScale.body)
                     }
                 }
                 .padding(.vertical, Theme.Space.item)
@@ -379,13 +379,13 @@ struct WeatherReminderCard: View {
             } icon: {
                 Image(systemName: reminder.icon).symbolRenderingMode(.multicolor)
             }
-            .font(.headline)
-            Text(reminder.line).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+            .font(Theme.TypeScale.title)
+            Text(reminder.line).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
             if reminder.changePlan {
                 NavigationLink {
                     WeeklyPlanView().navigationTitle("运动计划").navigationBarTitleDisplayMode(.inline).calmStyle()
                 } label: {
-                    Label("按天气调整本周计划", systemImage: "calendar.badge.clock").font(.subheadline.weight(.semibold))
+                    Label("按天气调整本周计划", systemImage: "calendar.badge.clock").font(Theme.TypeScale.body.weight(.semibold))
                 }
                 .buttonStyle(.bordered)
             }

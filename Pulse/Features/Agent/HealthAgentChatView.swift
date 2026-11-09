@@ -5,6 +5,7 @@ import SwiftUI
 struct HealthAgentChatView: View {
     var initialQuestion: String? = nil
     var startListening = false
+    var reviewScope: ReviewChatScope? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var convo = AgentConversation.shared
     @State private var cloud = CloudModelSettings.shared
@@ -15,8 +16,11 @@ struct HealthAgentChatView: View {
 
     var body: some View {
         CalmNavigationStack {
-            AgentContextReader { ctx in
+            AgentContextReader(referenceDate: reviewScope?.referenceDate) { ctx in
                 AgentChatContent(context: ctx, initialQuestion: initialQuestion, startListening: startListening)
+            }
+            .safeAreaInset(edge: .top) {
+                if let reviewScope { Text(reviewScope.label).font(Theme.TypeScale.body).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.vertical, Theme.Space.item).background(.bar) }
             }
             .navigationTitle(names.name)
             .navigationBarTitleDisplayMode(.inline)
@@ -166,16 +170,16 @@ private struct AgentChatContent: View {
             if speech.isRecording {
                 HStack(spacing: Theme.Space.iconGap) {
                     Image(systemName: "waveform").symbolEffect(.variableColor.iterative, options: .repeating)
-                        .font(.footnote).imageScale(.small)
+                        .font(Theme.TypeScale.body).imageScale(.small)
                         .foregroundStyle(.red)
-                    Text("正在听…说完后轻点发送").font(.footnote).foregroundStyle(.secondary)
+                    Text("正在听…说完后轻点发送").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     Spacer()
-                    if speech.onDevice { Text("设备端识别").font(.caption).foregroundStyle(.secondary) }
+                    if speech.onDevice { Text("设备端识别").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
                 }
                 .accessibilityElement(children: .combine)
             }
             if let err = speech.errorMessage {
-                Text(err).font(.footnote).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                Text(err).font(Theme.TypeScale.body).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack(alignment: .bottom, spacing: Theme.Space.item) {
                 Button {
@@ -184,7 +188,7 @@ private struct AgentChatContent: View {
                     Task { await speech.toggle() }
                 } label: {
                     Image(systemName: speech.isRecording ? "stop.fill" : "mic.fill")
-                        .font(.body.weight(.semibold))
+                        .font(Theme.TypeScale.body.weight(.semibold))
                         .foregroundStyle(speech.isRecording ? Color.white : Theme.accent)
                         .frame(width: Theme.Size.tap, height: Theme.Size.tap)
                         .background(speech.isRecording ? Color.red : Theme.accent.opacity(0.12), in: Circle())
@@ -204,7 +208,7 @@ private struct AgentChatContent: View {
                     .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.Size.tap / 2, style: .continuous))
 
                 Button(action: submit) {
-                    Image(systemName: "arrow.up.circle.fill").font(.largeTitle)
+                    Image(systemName: "arrow.up.circle.fill").font(Theme.TypeScale.title)
                         .foregroundStyle(canSend ? Theme.accent : Color.gray.opacity(0.4))
                         .frame(width: Theme.Size.tap, height: Theme.Size.tap)
                         .contentShape(Rectangle())
@@ -254,13 +258,13 @@ private struct AgentIntro: View {
             HStack(spacing: Theme.Space.block) {
                 AgentAvatar(size: compact ? Theme.Size.iconTile : Theme.Size.tileIcon)
                 VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                    Text("你好\(context.name == "你" ? "" : "，\(context.name)")").font(compact ? .headline : .title3.weight(.semibold))
-                    Text(modeLine).font(.footnote).foregroundStyle(.secondary)
+                    Text("你好\(context.name == "你" ? "" : "，\(context.name)")").font(compact ? Theme.TypeScale.title : Theme.TypeScale.title)
+                    Text(modeLine).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             }
             if !compact {
                 Text("\(a.headline)。我可以解释你的数据变化、回答疑问、按你的情况调整训练计划，也可以指导手表和 CGM 的使用。可以打字，也可以按麦克风说话。")
-                    .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 FlowLayout(spacing: Theme.Space.item) {
                     ForEach(a.questions, id: \.self) { q in
                         Button { onAsk(q) } label: { Text(q).frame(minHeight: Theme.Size.borderedLabel) }
@@ -268,7 +272,7 @@ private struct AgentIntro: View {
                     }
                 }
                 Text(AgentNameSettings.shared.phrase("", "不做诊断，也不提供用药建议；紧急情况请拨打 120。"))
-                    .font(.footnote).foregroundStyle(.secondary)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
         .cardSurface()
@@ -295,7 +299,7 @@ private struct AgentMessageView: View {
             HStack {
                 Spacer(minLength: 48)
                 Text(message.text)
-                    .font(.body).foregroundStyle(.white)
+                    .font(Theme.TypeScale.body).foregroundStyle(.white)
                     .padding(.horizontal, Theme.Space.block).padding(.vertical, Theme.Space.item)
                     .background(Theme.accent, in: RoundedRectangle(cornerRadius: Theme.Radius.bubble, style: .continuous))
                     .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: Theme.Radius.bubble, style: .continuous))
@@ -328,7 +332,7 @@ private struct AgentMessageView: View {
                         AgentAnswerView(text: message.text, reply: message.reply, context: context, cards: hasBlocks ? message.blocks : [])
                     }
                     if let note = message.note {
-                        StatusLabel(.neutral(note)).font(.footnote)
+                        StatusLabel(.neutral(note)).font(Theme.TypeScale.body)
                     }
                     if !hasBlocks { actions }
                     if message.reply != nil, !message.streaming { byline }
@@ -395,11 +399,11 @@ private struct AgentMessageView: View {
                            + [message.masked.map { "发送前去掉了\($0)" }].compactMap { $0 }).joined(separator: " · "))
                         .lineLimit(3)
                 }
-                .font(.footnote).foregroundStyle(.secondary)
+                .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 Spacer(minLength: Theme.Space.tight)
                 Button(action: onSpeak) {
                     Image(systemName: speaking ? "speaker.wave.2.fill" : "speaker.wave.2")
-                        .font(.subheadline).frame(width: Theme.Size.tap, height: Theme.Size.tap)
+                        .font(Theme.TypeScale.body).frame(width: Theme.Size.tap, height: Theme.Size.tap)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain).foregroundStyle(Theme.accent)
@@ -408,7 +412,7 @@ private struct AgentMessageView: View {
             // Exactly what went to the cloud, so the masking can be checked.
             if let sent = message.sent {
                 Button { showSent = true } label: {
-                    Text("查看发送的内容").font(.footnote).frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
+                    Text("查看发送的内容").font(Theme.TypeScale.body).frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain).foregroundStyle(Theme.accent)
                 .sheet(isPresented: $showSent) { SentContentSheet(text: sent, masked: message.masked) }
@@ -430,8 +434,8 @@ private struct SentContentSheet: View {
                 VStack(alignment: .leading, spacing: Theme.Space.block) {
                     Text(masked.map { "发送前在本机把\($0)换成了 [姓名1] 这样的代号，回答回来后再换回原文。年龄、日期和健康数据照原样发送。" }
                          ?? "这次的内容里没有姓名、电话、证件号、邮箱、地址、医院或医生，照原样发送。")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                    Text(text).font(.subheadline).textSelection(.enabled)
+                        .font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                    Text(text).font(Theme.TypeScale.body).textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(Theme.Space.block)
                         .background(Theme.subtle.opacity(0.6), in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
@@ -457,7 +461,7 @@ private struct WithdrawnNotice: View {
             }
             .foregroundStyle(Theme.accent)
         }
-        .font(.footnote)
+        .font(Theme.TypeScale.body)
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("你撤回了一个问题")
@@ -481,7 +485,7 @@ private struct TypingBubble: View {
 private struct TypingDots: View {
     var body: some View {
         Image(systemName: "ellipsis")
-            .font(.title3.weight(.bold)).foregroundStyle(.secondary)
+            .font(Theme.TypeScale.title.weight(.bold)).foregroundStyle(.secondary)
             .symbolEffect(.variableColor.iterative, options: .repeating)
             .frame(height: 20)
     }
@@ -492,7 +496,7 @@ struct AgentAvatar: View {
     var size: CGFloat = Theme.Size.iconTile
     var body: some View {
         Image(systemName: "sparkles")
-            .font(.system(size: size * 0.46, weight: .semibold)).foregroundStyle(.white)
+            .font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.white)
             .frame(width: size, height: size)
             .background(AngularGradient(colors: [.orange, .pink, .purple, .indigo, .cyan, .orange], center: .center), in: Circle())
             .accessibilityHidden(true)

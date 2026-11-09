@@ -29,7 +29,7 @@ struct CardioCareView: View {
                 if let n = NextHourForecaster.bloodPressure(points) {
                     Label { Text("未来 1 小时：" + n.message).fixedSize(horizontal: false, vertical: true) }
                         icon: { Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary) }
-                        .font(.subheadline)
+                        .font(Theme.TypeScale.body)
                         .cardSurface()
                 }
                 SectionTitle(title: "家庭血压监测", subtitle: "近 7 天")
@@ -72,11 +72,11 @@ struct CardioCareView: View {
         }()
         return VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("今天")
-            StatusLabel(bpStatus).font(.subheadline)
+            StatusLabel(bpStatus).font(Theme.TypeScale.body)
             StatusLabel(text: "晨起 \(morning ? "已测" : "未测") · 睡前 \(evening ? "已测" : "未测")", icon: morning && evening ? "checkmark.circle.fill" : "clock",
-                        color: morning && evening ? .green : .gray, secondaryText: true).font(.subheadline)
+                        color: morning && evening ? .green : .gray, secondaryText: true).font(Theme.TypeScale.body)
             StatusLabel(symptoms.isEmpty ? .good("今天没有记录不适症状") : .attention("记录了 \(symptoms.count) 项症状：\(symptoms.first!.title)"))
-                .font(.subheadline)
+                .font(Theme.TypeScale.body)
             if let r = record, !meds.filter(\.isActive).isEmpty {
                 Picker("今天是否按时服药", selection: Binding(get: { r.medsTaken }, set: { r.medsTaken = $0 })) {
                     Text("服药未记录").tag(Bool?.none)
@@ -112,7 +112,7 @@ struct CardioCareView: View {
         HealthMetricCard(title: "运动心率上限", icon: "heart.circle", color: Theme.heartData,
                          value: p.hrCap.map(String.init) ?? "未设定", unit: p.hrCap == nil ? "" : "bpm",
                          status: p.clinicianCleared ? .good("医生已确认强度范围") : .attention("确认前只安排低–中等强度"),
-                         valueFont: p.hrCap == nil ? .title3.weight(.semibold) : .system(.title, design: .rounded).weight(.semibold))
+                         valueFont: p.hrCap == nil ? .title3.weight(.semibold) : Theme.TypeScale.title.weight(.semibold))
     }
 
     private func adherenceCard(_ a: Analytics) -> some View {
@@ -169,9 +169,9 @@ struct CardioCareView: View {
                 HStack(spacing: Theme.Space.block) {
                     IconTile(icon: "pills.fill")
                     VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                        Text(m.name).font(.body)
+                        Text(m.name).font(Theme.TypeScale.body)
                         Text([m.dose, m.category.label, m.category.hrEffect.label].filter { !$0.isEmpty }.joined(separator: " · "))
-                            .font(.footnote).foregroundStyle(.secondary)
+                            .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 0)
                 }
@@ -195,7 +195,7 @@ struct CardioCareView: View {
             if related.isEmpty { EmptyLine("近期没有相关事件。") }
             ForEach(related) { e in
                 NavigationLink { HealthEventDetailView(event: e) } label: {
-                    HStack { EventRow(event: e); Spacer(); Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary) }
+                    HStack { EventRow(event: e); Spacer(); Image(systemName: "chevron.right").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.tertiary) }
                         .frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -222,7 +222,7 @@ struct CardioCareView: View {
                     Label("分享 / 保存摘要", systemImage: "square.and.arrow.up")
                         .frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
                 }
-                .font(.subheadline.weight(.semibold))
+                .font(Theme.TypeScale.body.weight(.semibold))
             }
         }
         .cardSurface()
@@ -239,12 +239,12 @@ struct EmergencyStrip: View {
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: Theme.Space.item)) : AnyLayout(HStackLayout(alignment: .center, spacing: Theme.Space.iconGap))
         layout {
             HStack(alignment: .center, spacing: Theme.Space.iconGap) {
-                Image(systemName: "cross.case.fill").font(.subheadline).imageScale(.small).foregroundStyle(.red).accessibilityHidden(true)
-                Text(text).font(.footnote).fixedSize(horizontal: false, vertical: true)
+                Image(systemName: "cross.case.fill").font(Theme.TypeScale.body).imageScale(.small).foregroundStyle(.red).accessibilityHidden(true)
+                Text(text).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
             }
             if !size.isAccessibilitySize { Spacer(minLength: Theme.Space.tight) }
             Link(destination: URL(string: "tel://120")!) {
-                Text("拨打 120").font(.subheadline.weight(.semibold))
+                Text("拨打 120").font(Theme.TypeScale.body.weight(.semibold))
                     .padding(.horizontal, Theme.Space.block).frame(minHeight: Theme.Size.tap)
                     .background(Color.red.opacity(0.12), in: Capsule())
             }
@@ -269,16 +269,16 @@ struct HomeBPCard: View {
             AdaptiveRow(alignment: .firstTextBaseline) {
                 HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
                     Text(status.overallAvg.map { "\(Int($0.sys))/\(Int($0.dia))" } ?? "—")
-                        .font(.system(.title, design: .rounded).weight(.semibold)).monospacedDigit().fixedSize()
-                    Text("mmHg 平均").font(.subheadline).foregroundStyle(.secondary)
+                        .font(Theme.TypeScale.title.weight(.semibold)).monospacedDigit().fixedSize()
+                    Text("mmHg 平均").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             } trailing: {
-                Text("\(Int(status.progress * 14))/14 次").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).monospacedDigit()
+                Text("\(Int(status.progress * 14))/14 次").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.secondary).monospacedDigit()
             }
             ProgressBar(value: status.progress, color: .gray, height: 6).accessibilityLabel("监测进度")
             StatusLabel(status.aboveHomeThreshold || (status.aboveTarget && status.progress >= 0.7) ? .attention(status.message)
                         : (status.progress < 0.7 ? .neutral(status.message) : .good(status.message)))
-                .font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                .font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 0) {
                 fact("晨起平均", status.morningAvg, status.morningCount)
                 fact("睡前平均", status.eveningAvg, status.eveningCount)
@@ -287,7 +287,7 @@ struct HomeBPCard: View {
                 Chart {
                     RuleMark(y: .value("目标", profile.bpTargetSys))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray)
-                        .annotation(position: .top, alignment: .leading) { Text("目标 \(profile.bpTargetSys)").font(.caption2).foregroundStyle(.secondary) }
+                        .annotation(position: .top, alignment: .leading) { Text("目标 \(profile.bpTargetSys)").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
                     ForEach(Array(morning.enumerated()), id: \.offset) { _, v in
                         LineMark(x: .value("日期", v.time, unit: .day), y: .value("收缩压", v.value), series: .value("时段", "晨起"))
                             .foregroundStyle(Theme.heartData).symbol(.circle)
@@ -296,23 +296,23 @@ struct HomeBPCard: View {
                         LineMark(x: .value("日期", v.time, unit: .day), y: .value("收缩压", v.value), series: .value("时段", "睡前"))
                             .foregroundStyle(Theme.heartData.opacity(0.45)).symbol(.diamond)
                     }
-                }
+                }.pulseChartAxes()
                 .chartYScale(domain: ((recent.map(\.value).min() ?? 110) - 8)...((recent.map(\.value).max() ?? 140) + 8))
-                .chartXAxis { AxisMarks(values: .stride(by: .day, count: 4)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy) } }
-                .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) }
+                .chartXAxis { AxisMarks(values: .stride(by: .day, count: 4)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy).font(Theme.TypeScale.body) } }
+                .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
                 .frame(height: 140)
                 .accessibilityLabel("近 14 天晨起与睡前收缩压")
-                Text("近 14 天收缩压 · ● 晨起 · ◆ 睡前").font(.footnote).foregroundStyle(.secondary)
+                Text("近 14 天收缩压 · ● 晨起 · ◆ 睡前").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
-            Text("每次测量前静坐 5 分钟，连测 2 遍取平均；晨起在服药和早餐前。").font(.footnote).foregroundStyle(.secondary)
+            Text("每次测量前静坐 5 分钟，连测 2 遍取平均；晨起在服药和早餐前。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
         .cardSurface()
     }
 
     private func fact(_ label: String, _ v: (sys: Double, dia: Double)?, _ n: Int) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.tight) {
-            Text("\(label) · \(n) 次").font(.caption).foregroundStyle(.secondary)
-            Text(v.map { "\(Int($0.sys))/\(Int($0.dia))" } ?? "—").font(.headline).monospacedDigit()
+            Text("\(label) · \(n) 次").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+            Text(v.map { "\(Int($0.sys))/\(Int($0.dia))" } ?? "—").font(Theme.TypeScale.title).monospacedDigit()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)

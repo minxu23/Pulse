@@ -286,7 +286,12 @@ enum ChatRecord {
         (["游泳", "游了"], .swim),
         (["力量", "举铁", "撸铁", "哑铃", "深蹲", "器械"], .strength),
         (["瑜伽", "拉伸", "太极", "八段锦"], .yoga),
-        (["篮球", "足球", "羽毛球", "乒乓", "网球", "打球"], .ball),
+        (["网球"], .tennis),
+        (["羽毛球"], .badminton),
+        (["乒乓"], .tableTennis),
+        (["篮球"], .basketball),
+        (["足球", "踢球"], .soccer),
+        (["排球", "打球"], .ball),
     ]
 
     /// 「刚走了 40 分钟」「早上跑了 5 公里」「骑车一个半小时」: what, how long, when. Steps (「走了 8000 步」)
@@ -308,7 +313,8 @@ enum ChatRecord {
         let estimated = minutes == 0
         if estimated, let km, let pace = perKm[type] { minutes = (km * pace / 5).rounded() * 5 }
         guard (5...360).contains(minutes) else { return nil }
-        let base: [WorkoutType: Int] = [.walk: 3, .run: 5, .cycle: 4, .swim: 5, .strength: 5, .hiit: 7, .yoga: 2, .ball: 6]
+        let base: [WorkoutType: Int] = [.walk: 3, .run: 5, .cycle: 4, .swim: 5, .strength: 5, .hiit: 7, .yoga: 2, .ball: 6,
+                                        .tennis: 6, .badminton: 6, .tableTennis: 4, .basketball: 7, .soccer: 7]
         var effort = base[type] ?? 4
         if a.has(["累", "吃力", "喘", "很辛苦"]) { effort += 2 } else if a.has(["轻松"]) { effort -= 1 }
         // Ended just now, or at the time of day said.

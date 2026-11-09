@@ -23,9 +23,9 @@ struct DemoTimeView: View {
             Section {
                 VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                     Text(Date.app.formatted(.dateTime.month().day().weekday(.wide).hour().minute()))
-                        .font(.title2.weight(.semibold))
+                        .font(Theme.TypeScale.title.weight(.semibold))
                     Text(DemoClock.isShifted ? "演示时间 · 实际时间 \(Date().formatted(.dateTime.hour().minute()))" : "与实际时间相同")
-                        .font(.footnote).foregroundStyle(.secondary)
+                        .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
                 .padding(.vertical, Theme.Space.tight)
             } header: { Text("现在的演示时间") }
@@ -36,7 +36,7 @@ struct DemoTimeView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                                 Text("\(name) \(Clock.text(h * 60 + m))").foregroundStyle(.primary)
-                                Text(detail).font(.footnote).foregroundStyle(.secondary)
+                                Text(detail).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                             }
                             Spacer()
                         }
@@ -73,7 +73,7 @@ struct DemoTimeView: View {
         .safeAreaInset(edge: .bottom) {
             // Not scroll content, so the page margin is set here by hand.
             Text("切换后会按新的时间重新生成当前示例用户的数据，演示中新增的记录会被替换。状态栏仍显示手机的实际时间。")
-                .font(.footnote).foregroundStyle(.secondary)
+                .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 .padding(.horizontal, Theme.Space.gutter).padding(.bottom, Theme.Space.item)
         }
     }

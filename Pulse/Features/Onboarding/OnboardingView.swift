@@ -8,8 +8,11 @@ struct OnboardingView: View {
     @State private var step = 0
     @State private var connecting = false
     @State private var healthMessage: String?
+    @State private var importingProfile = false
+    @State private var profileImport: HealthProfileImport?
+    @State private var profileImportMessage: String?
 
-    private let titles = ["", "基础信息", "健康状况与用药", "运动基础与生活节奏", "目标", "数据来源与测量", ""]
+    private let titles = ["", "基础信息", "健康状况与用药", "运动基础与生活节奏", "数据来源", ""]
 
     var body: some View {
         Group {
@@ -21,7 +24,7 @@ struct OnboardingView: View {
                         .toolbar {
                             if step > 0 && step < titles.count - 1 {
                                 ToolbarItem(placement: .topBarLeading) {
-                                    Button("上一步") { withAnimation { step -= 1 } }
+                                    Button("上一步") { withAnimation { step = (step == 4 && p.usageIntent == .recording) ? 2 : step - 1 } }
                                 }
                                 ToolbarItem(placement: .principal) {
                                     ProgressView(value: Double(step), total: Double(titles.count - 2))
@@ -34,20 +37,27 @@ struct OnboardingView: View {
                 ProgressView()
             }
         }
+        .sheet(item: $profileImport) { imported in
+            HealthProfileImportSheet(values: imported) {
+                guard let p = profiles.first, !p.usesDemoData else { return }
+                imported.apply(to: p)
+                try? ctx.save()
+                profileImportMessage = "已填充可读取的项目，请核对；其余信息可手动补充。"
+            }
+        }
         .onAppear {
-            if profiles.isEmpty { ctx.insert(UserProfile()) }
+            if DataHub.profile(in: ctx) == nil { ctx.insert(UserProfile()) }
         }
     }
 
     @ViewBuilder
     private func content(_ p: UserProfile) -> some View {
         switch step {
-        case 0: welcome
-        case 1: form(p) { BasicsSection(p: p) }
+        case 0: welcome(p)
+        case 1: form(p) { profileImportSection(p); BasicsSection(p: p) }
         case 2: form(p) { ConditionsSection(p: p); MedicationsSection() }
         case 3: form(p) { ExerciseBaseSection(p: p); LifeConstraintsSection(p: p) }
-        case 4: form(p) { GoalsSection(p: p); modulesSection(p) }
-        case 5: form(p) { dataSection(p); HabitTargetsSection(p: p) }
+        case 4: form(p) { dataSection(p) }
         default: finish(p)
         }
     }
@@ -57,9 +67,9 @@ struct OnboardingView: View {
             c()
             Section {
                 Button {
-                    withAnimation { step += 1 }
+                    withAnimation { step = (step == 2 && p.usageIntent == .recording) ? 4 : step + 1 }
                 } label: {
-                    Text(step == 5 ? "完成" : "下一步").frame(maxWidth: .infinity).fontWeight(.semibold)
+                    Text(step == 4 ? "完成" : "下一步").frame(maxWidth: .infinity).fontWeight(.semibold)
                 }
                 .buttonStyle(.borderedProminent)
                 .listRowBackground(Color.clear)
@@ -68,50 +78,51 @@ struct OnboardingView: View {
         }
     }
 
-    private var welcome: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Theme.Space.cardGap) {
-                Image(systemName: "heart.text.square.fill")
-                    .font(.system(size: 52))
-                    .foregroundStyle(Theme.heartData)
-                    .padding(.top, Theme.Space.section)
-                VStack(alignment: .leading, spacing: Theme.Space.item) {
-                    Text("Pulse").font(.largeTitle.bold())
-                    Text("围绕智能穿戴设备的静息心率健康管理").font(.title3).foregroundStyle(.secondary)
-                }
-                Text("通过可持续的运动、睡眠、饮食和恢复管理，促进适合你个人情况的静息心率改善，同时提升日常精力与运动能力。")
-                    .font(.body)
-                VStack(alignment: .leading, spacing: Theme.Space.block) {
-                    ForEach(JourneyStage.allCases) { s in
-                        HStack(alignment: .top, spacing: Theme.Space.block) {
-                            Text("\(s.rawValue + 1)")
-                                .font(.subheadline.bold()).foregroundStyle(Color(.systemBackground))
-                                .frame(width: 26, height: 26).background(Color.primary, in: Circle())
-                            VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                                Text(s.title).font(.headline)
-                                Text(s.focus).font(.subheadline).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-                Callout(kind: .info, text: "静息心率受运动水平、睡眠、压力、疾病、药物等多种因素影响。Pulse 结合你的个人背景与其他表现来评估进展，不提供医疗诊断。")
-                VStack(spacing: Theme.Space.item) {
-                    Button { withAnimation { step = 1 } } label: {
-                        Text("建立我的健康档案").frame(maxWidth: .infinity).fontWeight(.semibold).padding(.vertical, 6)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    Button {
-                        DemoDataGenerator.populate(ctx)
-                    } label: {
-                        Text("先用示例数据体验").frame(maxWidth: .infinity).padding(.vertical, 6)
-                    }
-                    .buttonStyle(.bordered)
-                }
-                // The actions are their own group: a section gap above them.
-                .padding(.top, Theme.Space.section - Theme.Space.cardGap)
+    private func welcome(_ p: UserProfile) -> some View {
+        ScreenScroll {
+            Text("欢迎使用 Pulse").font(Theme.TypeScale.title).frame(maxWidth: .infinity, alignment: .leading)
+            Text("选择你的使用方向").font(Theme.TypeScale.title).frame(maxWidth: .infinity, alignment: .leading)
+            Text("可以只记录身体状况，方向以后也能更改。")
+                .foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+            Card {
+                UsageIntentSelector(selection: Binding(get: { p.usageIntent }, set: { p.usageIntent = $0 }))
             }
-            // Side margins come from the app's page margins; only the vertical inset is set here.
-            .padding(.vertical, Theme.Space.block)
+            Button("建立我的档案") { withAnimation { step = 1 } }
+                .buttonStyle(.borderedProminent).frame(maxWidth: .infinity, minHeight: Theme.Size.tap)
+            Text("数据保存在本机。连接 Apple 健康后，可以查看身体指标和变化。")
+                .foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func profileImportSection(_ p: UserProfile) -> some View {
+        Section {
+            Button {
+                importingProfile = true
+                profileImportMessage = nil
+                Task { @MainActor in
+                    defer { importingProfile = false }
+                    do {
+                        let values = try await HealthKitService.shared.readProfileForImport()
+                        if values.isEmpty {
+                            profileImportMessage = "没有读到可填充的信息。Apple 健康可能尚未记录，或未允许 Pulse 读取；你可以手动填写。"
+                        } else {
+                            profileImport = values
+                        }
+                    } catch {
+                        profileImportMessage = "暂时无法读取：" + error.localizedDescription + "。你可以继续手动填写。"
+                    }
+                }
+            } label: {
+                HStack {
+                    Label("从 Apple 健康填充", systemImage: "heart.text.square")
+                    Spacer()
+                    if importingProfile { ProgressView() }
+                }
+            }
+            .disabled(importingProfile || p.usesDemoData || !HealthKitService.shared.isAvailable)
+            if let profileImportMessage { Text(profileImportMessage).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
+        } footer: {
+            Text("授权后读取出生年份、性别及最近记录的身高、体重，确认后填入。昵称、健康状况和用药由你填写。")
         }
     }
 
@@ -122,7 +133,7 @@ struct OnboardingView: View {
                     Label {
                         VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                             Text(m.label)
-                            Text(m.subtitle).font(.footnote).foregroundStyle(.secondary)
+                            Text(m.subtitle).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                         }
                     } icon: { Image(systemName: m.icon) }
                 }
@@ -154,7 +165,7 @@ struct OnboardingView: View {
                     if connecting { ProgressView() } else if p.useHealthKit { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
                 }
             }
-            if let healthMessage { Text(healthMessage).font(.footnote).foregroundStyle(.secondary) }
+            if let healthMessage { Text(healthMessage).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
             Picker("静息心率主要来源", selection: Binding(get: { p.rhrMethod }, set: { p.rhrMethod = $0 })) {
                 ForEach(RHRSource.allCases) { Text($0.label).tag($0) }
             }
@@ -166,36 +177,24 @@ struct OnboardingView: View {
     }
 
     private func finish(_ p: UserProfile) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Theme.Space.cardGap) {
-                Image(systemName: "checkmark.seal.fill").font(.system(size: 48)).foregroundStyle(.green).padding(.top, Theme.Space.section)
-                Text("档案已建立").font(.largeTitle.bold())
-                Text("接下来的 2 周是「了解个人基础」阶段：").font(.headline)
-                VStack(alignment: .leading, spacing: Theme.Space.item) {
-                    BulletText(text: "每天在相同条件下获取静息心率（\(p.rhrMethod.label)），建立个人基线。")
-                    BulletText(text: "每天早晨花 20 秒记录醒后感受，晚上看看恢复重点。")
-                    BulletText(text: "第一周计划以 \(p.weeklyTargetMinutes) 分钟有氧为目标，安排在 \(p.availableWeekdays.sorted { PlanGenerator.order($0) < PlanGenerator.order($1) }.map(Weekday.name).joined(separator: "、"))。")
-                    if p.conditions.contains(where: \.isCardiovascular) {
-                        BulletText(text: "你记录了心血管相关情况，计划会先以低–中等强度为主，请与医生确认运动强度范围。", color: .pink)
-                    }
-                }
-                Button {
-                    p.weeklyTargetMinutes = max(45, min(p.activityLevel.startingWeeklyMinutes, Int(Double(p.weeklyTimeBudget) * 0.8)))
-                    p.weeklyTargetReason = "按当前运动基础设置第一周的有氧目标。"
-                    if p.hasModule(.marathon) && p.raceDate == nil { p.raceDate = p.targetDate }
-                    p.onboardingDone = true
-                    try? ctx.save()
-                    DataHub.ensureWeekPlan(in: ctx)
-                    if p.useHealthKit { Task { await HealthKitService.shared.sync(into: ctx) } }
-                } label: {
-                    Text("开始").frame(maxWidth: .infinity).fontWeight(.semibold).padding(.vertical, 6)
-                }
-                .buttonStyle(.borderedProminent)
-                // The action is its own group: a section gap above it.
-                .padding(.top, Theme.Space.section - Theme.Space.cardGap)
+        ScreenScroll {
+            Text("档案已建立").font(Theme.TypeScale.title).frame(maxWidth: .infinity, alignment: .leading)
+            Card {
+                Text(p.usageIntent == .recording ? "记录身体状况" : "开始基线评估").font(Theme.TypeScale.title)
+                Text(p.usageIntent == .recording
+                     ? "查看身体指标和趋势，也可以随时补充记录。以后需要时再选择改善方案。"
+                     : "先记录一周，了解身体状况和日常习惯，再确认改善方案。已有足够数据时，可以直接查看基线报告。")
+                if !p.hasAge || !p.hasBodySize { Text("未填写的资料可稍后补充；相关排名和 BMI 暂不评价。").foregroundStyle(.secondary) }
             }
-            // Side margins come from the app's page margins; only the vertical inset is set here.
-            .padding(.vertical, Theme.Space.block)
+            Button(p.usageIntent == .recording ? "开始记录" : "开始评估") {
+                p.onboardingDone = true
+                try? ctx.save()
+                Task { @MainActor in
+                    if p.useHealthKit { await HealthKitService.shared.sync(into: ctx) }
+                    if p.usageIntent != .recording { ProgramFlow.startBaseline(p, in: ctx) }
+                }
+            }
+            .buttonStyle(.borderedProminent).frame(minHeight: Theme.Size.tap)
         }
     }
 }

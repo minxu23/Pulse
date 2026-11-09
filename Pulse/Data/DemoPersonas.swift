@@ -7,7 +7,7 @@ import SwiftData
 /// 赵立强 and 何静 cover a whole year and the care Pulse offers for a diagnosis: a breathing machine,
 /// dialysis, heart failure on a beta blocker, type 1 diabetes.
 enum DemoPersona: String, CaseIterable, Identifiable {
-    case xiaolin, chenjie, linyue, wangjianguo, sunhao, zhoumin, zhaoliqiang, hejing
+    case xiaolin, chenjie, linyue, wangjianguo, sunhao, zhoumin, zhaoliqiang, hejing, liuyang
     var id: String { rawValue }
     var name: String {
         switch self {
@@ -19,6 +19,7 @@ enum DemoPersona: String, CaseIterable, Identifiable {
         case .zhoumin: "周敏"
         case .zhaoliqiang: "赵立强"
         case .hejing: "何静"
+        case .liuyang: "刘洋"
         }
     }
     var summary: String {
@@ -31,6 +32,7 @@ enum DemoPersona: String, CaseIterable, Identifiable {
         case .zhoumin: "52 岁 · 血液透析（周一三五），限水，周末后体重常涨多"
         case .zhaoliqiang: "63 岁 · 心梗放支架后心衰，吃 β 受体阻滞剂，坚持康复"
         case .hejing: "29 岁 · 1 型糖尿病，练半马，跑步后夜里偶有低血糖"
+        case .liuyang: "44 岁 · 每周打两次网球，想让体能跟上，睡得偏少"
         }
     }
     var spec: PersonaSpec? {
@@ -43,6 +45,7 @@ enum DemoPersona: String, CaseIterable, Identifiable {
         case .zhoumin: .zhoumin
         case .zhaoliqiang: .zhaoliqiang
         case .hejing: .hejing
+        case .liuyang: .liuyang
         }
     }
     /// How many days of records the sample user has.
@@ -62,6 +65,7 @@ extension DemoDataGenerator {
 
     static func populate(_ ctx: ModelContext, persona: DemoPersona, now: Date = .app) {
         if let spec = persona.spec { PersonaGenerator.populate(ctx, spec: spec, now: now) } else { populate(ctx, now: now) }
+        DemoEnrichment.enrich(ctx, persona: persona.rawValue, now: now)
         DataHub.profile(in: ctx)?.demoPersona = persona.rawValue
         try? ctx.save()
     }
@@ -252,6 +256,8 @@ struct PersonaSpec {
     var reviews: [(weeksAgo: Int, summary: String, keep: String, change: String, focus: String)] = []
     var symptoms: [(daysAgo: Int, title: String, detail: String)] = []
     var events: [PastEvent] = []
+    /// Regular games on fixed weekdays (网球、羽毛球…): start minute, length, heart rate.
+    var games: [(type: WorkoutType, weekday: Int, minute: Int, minutes: Double, avgHR: Double, maxHR: Double)] = []
 }
 
 // MARK: - The three low-adherence personas
@@ -1015,10 +1021,57 @@ enum PersonaGenerator {
         for l in s.labs where l.daysAgo >= 0 {
             ctx.insert(LabResult(date: today.adding(days: -l.daysAgo).adding(minutes: 8 * 60), kind: l.kind, value: l.value))
         }
+        // Regular games on their weekdays, from their own sequence (the other sample users have none).
+        if !s.games.isEmpty {
+            var gameRng = SeededRandom(seed: 9_311_026)
+            var d = start
+            while d <= today {
+                let wd = Calendar.pulse.component(.weekday, from: d)
+                for g in s.games where g.weekday == wd {
+                    let t = d.adding(minutes: g.minute + gameRng.int(0...20))
+                    guard t.adding(minutes: Int(g.minutes)) <= now, !gameRng.chance(0.12) else { continue }
+                    let w = ActivitySession(start: t, type: g.type, minutes: (g.minutes + gameRng.normal(0, 8)).rounded(), source: .demo)
+                    w.avgHR = (g.avgHR + gameRng.normal(0, 4)).rounded()
+                    w.maxHR = (g.maxHR + gameRng.normal(0, 3)).rounded()
+                    w.rpe = 7
+                    ctx.insert(w)
+                }
+                d = d.adding(days: 1)
+            }
+        }
         try? ctx.save()
         DataHub.updateBaselineIfNeeded(in: ctx)
         p.baselineSetAt = start.adding(days: 14)
         DataHub.refreshAlerts(in: ctx, now: now)
         try? ctx.save()
     }
+}
+
+// MARK: - The tennis player (三阶段计划: sports in the plan)
+
+extension PersonaSpec {
+    /// 每周二、六晚上打网球，打得很投入（心率常在高强度区间）；平时坐办公室，步数一般，睡得偏少，
+    /// 想让体能跟上球场。用来演示「喜欢的运动算进方案」。
+    static let liuyang = PersonaSpec(
+        nickname: "刘洋", age: 44, sex: .male, heightCm: 176, weightKg: 80, neckCm: 39, level: .moderate,
+        goals: [.fitness, .energy], goalNote: "网球打到第三盘就没劲了，想把体能提上来。",
+        weekdays: [4, 1], sessionMinutes: 40, preferredTime: .evening, weeklyBudget: 300, startTarget: 120,
+        targetRHR: nil, bedtimeTarget: 23 * 60 + 30, wakeTarget: 7 * 60, sleepNeedHours: 7.5,
+        waterTarget: 2000, stepsTarget: 8000, caffeineCutoff: 15, alcoholLimit: 4,
+        rhrStart: 63, rhrEnd: 62, rhrNoise: 1.8, hrvBase: 42, spo2Mean: 96,
+        sleep: { i, _, weekend, rng in
+            SleepNight(start: (weekend ? 30 : 0) + Int(rng.normal(0, 25)), minutes: rng.normal(weekend ? 430 : 385, 30))
+        },
+        vo2Max: 37, vo2MaxEnd: 37.5,
+        doneP: 0.65, partialP: 0.1, fade: 0.2,
+        wearP: 0.95,
+        checkInP: 0.5, eveningP: 0.2,
+        alcoholWeekdayP: 0.05, alcoholWeekendP: 0.3, alcoholUnits: 1...3,
+        cups: 1...3, lateCaffeineP: 0.2, waterMean: 1700, lateMealP: 0.25, balancedP: 0.5,
+        stepsMean: 6800, stressMean: 3.0, energyMean: 3.2,
+        snoringP: 0.08, gaspP: 0.0, sleepyP: 0.25, headacheP: 0.05,
+        meals: [(7 * 60 + 40, .breakfast, 50, "包子、豆浆"), (12 * 60 + 15, .lunch, 80, "公司食堂"), (19 * 60, .dinner, 70, "家里饭菜")],
+        bp: BPSpec(sys: 124, dia: 80, sd: 5, everyDays: 10, missedMedBump: 0, eveningP: 0),
+        weight: WeightSpec(start: 80.5, end: 80, everyDays: 4, sd: 0.4),
+        games: [(.tennis, 3, 19 * 60 + 30, 90, 148, 176), (.tennis, 7, 16 * 60, 100, 146, 178)])
 }

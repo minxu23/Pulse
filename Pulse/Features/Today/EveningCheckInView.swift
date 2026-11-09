@@ -46,7 +46,7 @@ struct EveningCheckInView: View {
                     let short = planMinutes < Int((p?.sleepNeedHours ?? 7.5) * 60) - 30
                     StatusLabel(short ? .attention("计划睡眠约 \((Double(planMinutes) / 60).oneDecimal) 小时，少于目标 \(p.map { $0.sleepNeedHours.oneDecimal } ?? "7.5") 小时")
                                 : .good("计划睡眠约 \((Double(planMinutes) / 60).oneDecimal) 小时（目标 \(p.map { $0.sleepNeedHours.oneDecimal } ?? "7.5") 小时）"))
-                        .font(.footnote)
+                        .font(Theme.TypeScale.body)
                     TextField(p?.apneaTreatment == .cpap ? "如：整晚使用 CPAP、侧卧睡" : "如：侧卧睡、睡前不看手机", text: $plan)
                 } header: { Text("睡眠安排") }
 
@@ -76,7 +76,7 @@ struct EveningCheckInView: View {
 
     private func labeled<C: View>(_ title: String, @ViewBuilder _ c: () -> C) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.item) {
-            Text(title).font(.subheadline.weight(.medium))
+            Text(title).font(Theme.TypeScale.body.weight(.medium))
             c()
         }
         .padding(.vertical, Theme.Space.tight)

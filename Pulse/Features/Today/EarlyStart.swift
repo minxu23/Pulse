@@ -15,8 +15,8 @@ struct EarlyStartSheet: View {
         let need = data.p.sleepNeedMinutes
         VStack(alignment: .leading, spacing: Theme.Space.block) {
             Label("开始 \(today.formatted(.dateTime.month().day()))？", systemImage: "sunrise.fill")
-                .font(.title3.weight(.semibold)).labelStyle(.inline)
-            Text("晨起评估会用昨夜到现在的数据：").font(.subheadline).foregroundStyle(.secondary)
+                .font(Theme.TypeScale.title.weight(.semibold)).labelStyle(.inline)
+            Text("晨起评估会用昨夜到现在的数据：").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             // Only a night that has actually ended counts (synced sleep that ends before now).
             if let n = night, let s = n.sleepStart, let e = n.sleepEnd, e <= now, let m = n.sleepMinutes {
                 HStack {
@@ -24,16 +24,16 @@ struct EarlyStartSheet: View {
                     Spacer()
                     Text("\(Clock.text(s.minutesOfDay)) → \(Clock.text(e.minutesOfDay)) · \((m / 60).oneDecimal) 小时").monospacedDigit()
                 }
-                .font(.subheadline)
+                .font(Theme.TypeScale.body)
                 .padding(Theme.Space.block)
                 .background(Theme.page, in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
                 if m < need - 60 {
                     Text("比你需要的 \((need / 60).oneDecimal) 小时少约 \(((need - m) / 60).oneDecimal) 小时，准备度会把这一点算进去。")
-                        .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             } else {
                 Text("昨夜的睡眠数据还没有同步，可以在晨起评估里补记。")
-                    .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
             Button(action: onStart) {
@@ -57,13 +57,13 @@ struct EarlyStartUndoRow: View {
     let start: Date
     var body: some View {
         HStack(spacing: Theme.Space.item) {
-            Label("\(Clock.text(start.minutesOfDay)) 开始今天", systemImage: "sunrise").font(.subheadline).foregroundStyle(.secondary)
+            Label("\(Clock.text(start.minutesOfDay)) 开始今天", systemImage: "sunrise").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             Spacer(minLength: 0)
-            Text("不是起床？").font(.subheadline).foregroundStyle(.secondary)
+            Text("不是起床？").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             Button { DayClock.undoEarlyStart() } label: {
                 Text("撤销").frame(minWidth: Theme.Size.tap, minHeight: Theme.Size.tap, alignment: .trailing).contentShape(Rectangle())
             }
-            .font(.subheadline.weight(.semibold))
+            .font(Theme.TypeScale.body.weight(.semibold))
         }
         // The 44 pt button already leaves 12 pt above and below its line; 4 more matches the 16 pt sides.
         .padding(.horizontal, Theme.Space.cardPadding)

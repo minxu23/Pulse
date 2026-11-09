@@ -295,8 +295,8 @@ struct CardHeader<Trailing: View>: View {
         let heading = HStack(alignment: .center, spacing: Theme.Space.block) {
             IconTile(icon: icon, color: calm ? .secondary : color)
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                Text(title).font(.headline)
-                if let subtitle { Text(subtitle).font(.footnote).foregroundStyle(.secondary) }
+                Text(title).font(Theme.TypeScale.title)
+                if let subtitle { Text(subtitle).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
             }
         }
         // At accessibility sizes the badge or button goes under the title instead of squeezing it.
@@ -369,13 +369,14 @@ struct MetricTile: View {
                 Image(systemName: icon).imageScale(.small).foregroundStyle(Theme.tone(color, calm: calm))
                 Text(label).foregroundStyle(.secondary)
             }
-            .font(.caption)
+            .font(Theme.TypeScale.body)
             HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
-                Text(value).font(.title3.weight(.semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
-                if !unit.isEmpty { Text(unit).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                // A number shrinks a little rather than being cut to 「12…」 in a narrow tile.
+                Text(value).font(Theme.TypeScale.title.weight(.semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+                if !unit.isEmpty { Text(unit).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1) }
             }
             // One line, so a footnote never makes one tile taller than its neighbours.
-            if let footnote { Text(footnote).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8) }
+            if let footnote { Text(footnote).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(Theme.Space.block)
@@ -405,11 +406,10 @@ struct Chip: View {
     @Environment(\.calmColors) private var calm
     var body: some View {
         let c = Theme.tone(color, calm: calm)
-        let neutral = c == .secondary
         HStack(spacing: Theme.Space.iconGap) {
-            if let icon { Image(systemName: icon).font(.caption2.weight(.semibold)).foregroundStyle(c) }
-            Text(text).font(.caption.weight(filled ? .semibold : .medium)).lineLimit(1)
-                .foregroundStyle(neutral ? Color.secondary : Color.primary)
+            if let icon { Image(systemName: icon).font(Theme.TypeScale.body.weight(.semibold)).imageScale(.small).foregroundStyle(c) }
+            Text(text).font(Theme.TypeScale.body.weight(filled ? .semibold : .medium)).lineLimit(1)
+                .foregroundStyle(Color.primary)
         }
         .padding(.horizontal, Theme.Space.item)
         .padding(.vertical, Theme.Space.tight)
@@ -446,10 +446,10 @@ struct Callout: View {
         // In calm mode only caution and urgent keep their colour.
         let color = calm && ![.caution, .urgent].contains(kind) ? Color.secondary : kind.color
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.iconGap) {
-            Image(systemName: kind.icon).foregroundStyle(color).font(.subheadline).imageScale(.small)
+            Image(systemName: kind.icon).foregroundStyle(color).font(Theme.TypeScale.body).imageScale(.small)
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                if let title { Text(title).font(.subheadline.weight(.semibold)) }
-                Text(text).font(.subheadline).foregroundStyle(.primary)
+                if let title { Text(title).font(Theme.TypeScale.body.weight(.semibold)) }
+                Text(text).font(Theme.TypeScale.body).foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
@@ -482,7 +482,7 @@ struct BulletText: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.item) {
             Circle().fill(Theme.tone(color, calm: calm)).frame(width: 5, height: 5).offset(y: -2)
-            Text(text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+            Text(text).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -507,7 +507,7 @@ struct Disclaimer: View {
     var text = "Pulse 帮助你记录与理解自己的健康数据，不提供医疗诊断。出现胸痛、晕厥、严重气短等情况请立即拨打 120。"
     var body: some View {
         Text(text)
-            .font(.footnote)
+            .font(Theme.TypeScale.body)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
@@ -520,8 +520,8 @@ struct EmptyHint: View {
     let text: String
     var body: some View {
         VStack(spacing: Theme.Space.item) {
-            Image(systemName: icon).font(.title2).foregroundStyle(.secondary)
-            Text(text).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Image(systemName: icon).font(Theme.TypeScale.title).foregroundStyle(.secondary)
+            Text(text).font(Theme.TypeScale.body).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Theme.Space.cardPadding)
@@ -548,7 +548,7 @@ struct RatingPicker: View {
                         value = selected ? nil : v
                     } label: {
                         Text(labels.map { $0[v - range.lowerBound] } ?? "\(v)")
-                            .font(.subheadline.weight(selected ? .semibold : .regular))
+                            .font(Theme.TypeScale.body.weight(selected ? .semibold : .regular))
                             .frame(maxWidth: .infinity, minHeight: Theme.Size.tap)
                             .foregroundStyle(selected ? Color.white : Color.primary)
                             .background(selected ? color : Theme.subtle, in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
@@ -562,7 +562,7 @@ struct RatingPicker: View {
                     Spacer()
                     Text(highLabel)
                 }
-                .font(.caption)
+                .font(Theme.TypeScale.body)
                 .foregroundStyle(.secondary)
             }
         }
@@ -607,6 +607,9 @@ struct ToggleChip: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(text)
+        .accessibilityValue(isOn ? "已选择" : "未选择")
         .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 }

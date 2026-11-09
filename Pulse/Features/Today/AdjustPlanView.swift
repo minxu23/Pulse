@@ -44,7 +44,7 @@ struct AdjustPlanView: View {
                         ForEach(timeOptions, id: \.self) { v in Text(v.map { "约 \($0) 分钟" } ?? "按计划").tag(v) }
                     }
                     VStack(alignment: .leading, spacing: Theme.Space.item) {
-                        Text("肌肉酸痛").font(.subheadline)
+                        Text("肌肉酸痛").font(Theme.TypeScale.body)
                         RatingPicker(value: $soreness, range: 0...3, labels: ["无", "轻微", "明显", "严重"])
                     }
                     .padding(.vertical, Theme.Space.tight)
@@ -52,7 +52,7 @@ struct AdjustPlanView: View {
                         Picker("部位", selection: $area) { ForEach(SorenessArea.allCases) { Text($0.label).tag($0) } }
                     }
                     VStack(alignment: .leading, spacing: Theme.Space.item) {
-                        Text("此刻的精力").font(.subheadline)
+                        Text("此刻的精力").font(Theme.TypeScale.body)
                         RatingPicker(value: $energy, lowLabel: "很疲惫", highLabel: "充沛")
                     }
                     .padding(.vertical, Theme.Space.tight)
@@ -66,20 +66,20 @@ struct AdjustPlanView: View {
                     ForEach(result.proposals) { p in
                         VStack(alignment: .leading, spacing: Theme.Space.tight) {
                             if p.changed {
-                                Text(p.original.title).font(.caption).strikethrough().foregroundStyle(.secondary)
+                                Text(p.original.title).font(Theme.TypeScale.body).strikethrough().foregroundStyle(.secondary)
                                 HStack(alignment: .firstTextBaseline, spacing: Theme.Space.iconGap) {
                                     Image(systemName: "arrow.turn.down.right").imageScale(.small).foregroundStyle(.secondary)
                                     Text(p.countsAsDone ? "\(p.original.title)（已完成）" : p.title)
                                 }
-                                .font(.subheadline.weight(.semibold))
+                                .font(Theme.TypeScale.body.weight(.semibold))
                                 Text(p.countsAsDone ? "计为完成" : "\(p.minutes) 分钟 · \(p.intensity.label)")
-                                    .font(.footnote).foregroundStyle(.secondary)
+                                    .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                                 ForEach(p.reasons, id: \.self) { r in
-                                    Label(r, systemImage: "lightbulb").font(.footnote).foregroundStyle(.primary)
+                                    Label(r, systemImage: "lightbulb").font(Theme.TypeScale.body).foregroundStyle(.primary)
                                 }
                             } else {
-                                Text(p.title).font(.subheadline.weight(.semibold))
-                                Text("\(p.minutes) 分钟 · \(p.intensity.label) · 保持原计划").font(.footnote).foregroundStyle(.secondary)
+                                Text(p.title).font(Theme.TypeScale.body.weight(.semibold))
+                                Text("\(p.minutes) 分钟 · \(p.intensity.label) · 保持原计划").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                             }
                         }
                         .padding(.vertical, Theme.Space.tight)

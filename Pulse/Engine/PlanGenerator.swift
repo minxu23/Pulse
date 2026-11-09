@@ -18,6 +18,8 @@ struct WeekPlan: Equatable {
     var weeklyTargetMinutes: Int
     var notes: [String]
     var marathon: MarathonWeek?
+    /// 改善期: the week's step target, rising from the baseline.
+    var stepsTarget: Int? = nil
 }
 
 /// Builds a sustainable weekly plan from the user's level, goals, available days, time,
@@ -43,6 +45,12 @@ enum PlanGenerator {
     }
 
     static func generate(profile: ProfileSnapshot, weekStart: Date) -> WeekPlan {
+        // 基线期: a week of finding out how things are, not of training more (Docs 2.1).
+        if profile.programPhase == .baseline { return PackPlanner.baselineWeek(profile: profile, weekStart: weekStart) }
+        // 改善期 of the 三阶段计划: the chosen pack decides the week (from the week before the round starts).
+        if let x = profile.program, weekStart >= x.roundStart.weekStart {
+            return PackPlanner.week(profile: profile, input: x, weekStart: weekStart)
+        }
         if profile.modules.contains(.marathon), let race = profile.race,
            race.date >= weekStart.adding(days: -21) {
             return marathonWeek(profile: profile, race: race, weekStart: weekStart)
@@ -184,7 +192,7 @@ enum PlanGenerator {
                         weeklyTargetMinutes: p.weeklyTargetMinutes, notes: notes, marathon: nil)
     }
 
-    private static func aerobic(_ wd: Int, minutes: Int, _ p: ProfileSnapshot) -> PlannedSession {
+    static func aerobic(_ wd: Int, minutes: Int, _ p: ProfileSnapshot) -> PlannedSession {
         let title: String
         switch p.level {
         case .sedentary: title = "快走"
@@ -197,14 +205,14 @@ enum PlanGenerator {
                               minimumDetail: "快走 \(max(10, minutes / 3)) 分钟", intensity: .easy, isKey: false)
     }
 
-    private static func long(_ wd: Int, minutes: Int, _ p: ProfileSnapshot) -> PlannedSession {
+    static func long(_ wd: Int, minutes: Int, _ p: ProfileSnapshot) -> PlannedSession {
         PlannedSession(weekday: wd, kind: .long, title: p.level.rank <= 1 ? "较长时间步行 / 徒步" : "长时间轻松有氧",
                        detail: "本周最长的一次有氧，强度保持轻松，重点是时长。可以选择户外、和家人朋友一起。",
                        guidance: guidance(.easy, p), minutes: minutes, minimumMinutes: max(15, minutes / 2),
                        minimumDetail: "缩短为 \(max(15, minutes / 2)) 分钟轻松有氧", intensity: .easy, isKey: true)
     }
 
-    private static func strength(_ wd: Int, minutes: Int, _ p: ProfileSnapshot) -> PlannedSession {
+    static func strength(_ wd: Int, minutes: Int, _ p: ProfileSnapshot) -> PlannedSession {
         var detail = "全身力量：深蹲（或坐站起）、俯卧撑（可扶墙 / 跪姿）、弹力带划船、臀桥、平板支撑，各 2–3 组，每组 8–12 次，动作平稳、不憋气。"
         if p.hasCardiac { detail += " 避免长时间憋气用力（如极限重量）。" }
         return PlannedSession(weekday: wd, kind: .strength, title: "全身力量训练", detail: detail,
@@ -212,7 +220,7 @@ enum PlanGenerator {
                               minimumDetail: "10 分钟：深蹲 + 俯卧撑 + 平板支撑各 2 组", intensity: .moderate, isKey: false)
     }
 
-    private static func quality(_ wd: Int, minutes: Int, _ p: ProfileSnapshot) -> PlannedSession {
+    static func quality(_ wd: Int, minutes: Int, _ p: ProfileSnapshot) -> PlannedSession {
         PlannedSession(weekday: wd, kind: .quality, title: "间歇训练",
                        detail: "热身 10 分钟 → 4–6 组 × 2–3 分钟较高强度 + 2 分钟轻松 → 放松 10 分钟。提升心肺能力，每周 1 次即可。",
                        guidance: guidance(.hard, p), minutes: minutes, minimumMinutes: 20,
@@ -232,6 +240,7 @@ enum PlanGenerator {
             default: range = (0.95 * lthr, 1.02 * lthr)
             }
         } else {
+            guard p.ageKnown else { return intensity.talkTest + "。填写出生年份后，这里会给出参考心率；现在以主观感受为准。" }
             let mx = p.estimatedMaxHR
             switch intensity {
             case .easy: range = (0.60 * mx, 0.70 * mx)

@@ -192,7 +192,7 @@ struct WaterLogForm: View {
             Section {
                 VStack(alignment: .leading, spacing: Theme.Space.block) {
                     HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
-                        Text("\(ml)").font(.largeTitle.bold()).monospacedDigit()
+                        Text("\(ml)").font(Theme.TypeScale.title.bold()).monospacedDigit()
                         Text("/ \(limited ? "上限 " : "")\(target) ml").foregroundStyle(.secondary)
                     }
                     ProgressBar(value: Double(ml) / Double(target), color: limited && ml > target ? .orange : .cyan)
@@ -340,7 +340,7 @@ extension DietLogForm {
                 Stepper(value: Binding(get: { n }, set: { protein[f.name] = $0 }), in: 0...12) {
                     VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         Text(n > 0 ? "\(f.name) ×\(n)" : f.name)
-                        Text("\(f.portion) · 约 \(Int(f.proteinG)) g").font(.footnote).foregroundStyle(.secondary)
+                        Text("\(f.portion) · 约 \(Int(f.proteinG)) g").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                 }
                 .accessibilityValue("\(n) 份")
@@ -470,11 +470,11 @@ struct LabLogForm: View {
                                 Text(unit(k))
                                 Image(systemName: "chevron.up.chevron.down").imageScale(.small)
                             }
-                            .font(.footnote)
+                            .font(Theme.TypeScale.body)
                         }
                         .accessibilityLabel("单位：\(unit(k))")
                     } else {
-                        Text(k.unit).font(.footnote).foregroundStyle(.secondary)
+                        Text(k.unit).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
@@ -483,12 +483,12 @@ struct LabLogForm: View {
             }
             if let raw = typed(k), let v = value(k) {
                 if k.plausible.contains(v) {
-                    if unit(k) != k.unit { Text("约 \(k.format(v)) \(k.unit)").font(.subheadline).foregroundStyle(.secondary) }
-                    StatusLabel(LabAnalyzer.status(k, v, profile: p).metric).font(.subheadline)
+                    if unit(k) != k.unit { Text("约 \(k.format(v)) \(k.unit)").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
+                    StatusLabel(LabAnalyzer.status(k, v, profile: p).metric).font(Theme.TypeScale.body)
                 } else if let other = k.units.first(where: { $0 != unit(k) && k.plausible.contains(k.standard(raw, unit: $0)) }) {
-                    StatusLabel(.attention("这个数值像是 \(other)，点单位换一下")).font(.subheadline)
+                    StatusLabel(.attention("这个数值像是 \(other)，点单位换一下")).font(Theme.TypeScale.body)
                 } else {
-                    StatusLabel(.attention("数值好像不对，请对照化验单和单位")).font(.subheadline)
+                    StatusLabel(.attention("数值好像不对，请对照化验单和单位")).font(Theme.TypeScale.body)
                 }
             }
         }
@@ -607,7 +607,7 @@ struct KidneySignsLogForm: View {
                 }
                 .pickerStyle(.segmented)
                 if let e = edema {
-                    Text(e.detail).font(.subheadline).foregroundStyle(.secondary)
+                    Text(e.detail).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     if e != .none {
                         FlowLayout(spacing: Theme.Space.item) {
                             ForEach(KidneySigns.places, id: \.self) { f in
@@ -649,7 +649,7 @@ struct KidneySignsLogForm: View {
                     }
                     .padding(.vertical, Theme.Space.tight)
                     if KidneySigns.peritonitis(Array(pdSigns)) {
-                        StatusLabel(.urgent("可能是腹膜炎，请立即联系腹透中心或去急诊")).font(.subheadline)
+                        StatusLabel(.urgent("可能是腹膜炎，请立即联系腹透中心或去急诊")).font(Theme.TypeScale.body)
                     }
                 } header: {
                     Text("腹透")
@@ -700,7 +700,7 @@ struct SymptomLogForm: View {
         Form {
             if let c = saved {
                 Section {
-                    StatusLabel(text: c.severity.label, icon: c.severity.icon, color: Theme.severity(c.severity)).font(.headline)
+                    StatusLabel(text: c.severity.label, icon: c.severity.icon, color: Theme.severity(c.severity)).font(Theme.TypeScale.title)
                     Text(c.guidance).fixedSize(horizontal: false, vertical: true)
                     if c.severity == .urgent {
                         Link(destination: URL(string: "tel://120")!) {
@@ -782,7 +782,7 @@ struct VitalLogForm: View {
         Form {
             if let r = result {
                 Section {
-                    StatusLabel(text: r.title, icon: r.severity.icon, color: Theme.severity(r.severity)).font(.headline)
+                    StatusLabel(text: r.title, icon: r.severity.icon, color: Theme.severity(r.severity)).font(Theme.TypeScale.title)
                     Text(r.detail)
                     Text(r.guidance).fixedSize(horizontal: false, vertical: true)
                     if r.severity == .urgent {
@@ -835,7 +835,7 @@ struct VitalLogForm: View {
                 }
                 if kind == .glucose, let v = value, let p = profile {
                     Section("运动前参考（按你的照护计划阈值）") {
-                        Text(GlucoseAnalyzer.preExerciseAdvice(glucose: v, profile: p.snapshot(medications: meds))).font(.subheadline)
+                        Text(GlucoseAnalyzer.preExerciseAdvice(glucose: v, profile: p.snapshot(medications: meds))).font(Theme.TypeScale.body)
                     }
                 }
             }
@@ -1048,7 +1048,7 @@ struct WorkoutLogForm: View {
                         Button { feeling = on ? nil : f } label: {
                             VStack(spacing: Theme.Space.tight) {
                                 Image(systemName: f.icon)
-                                Text(f.label).font(.caption)
+                                Text(f.label).font(Theme.TypeScale.body)
                             }
                             .frame(maxWidth: .infinity, minHeight: Theme.Size.tap + Theme.Space.item)
                             .foregroundStyle(on ? Color.white : .primary)

@@ -463,7 +463,8 @@ extension HealthAgent {
                 sources.append("饮食记录")
             case .workout(let w):
                 let names: [WorkoutType: String] = [.run: "跑步", .walk: "步行", .cycle: "骑行", .swim: "游泳", .strength: "力量训练", .hiit: "间歇训练",
-                                                    .yoga: "瑜伽 / 拉伸", .ball: "球类运动"]
+                                                    .yoga: "瑜伽 / 拉伸", .ball: "球类运动", .tennis: "网球", .badminton: "羽毛球",
+                                                    .tableTennis: "乒乓球", .basketball: "篮球", .soccer: "足球"]
                 out.append("好的，\(names[w.type] ?? "运动")\(w.km.map { " \($0.cleanText) 公里" } ?? "")\(w.estimated ? "，按距离估算约" : " ")\(w.minutes) 分钟。")
                 if let s = ChatRecord.planned(for: w, in: c.plan) {
                     out.append("记下后算作\(Calendar.pulse.isDate(s.day, inSameDayAs: c.now) ? "今天" : "那天")计划的「\(s.title)」。")
@@ -486,7 +487,8 @@ extension HealthAgent {
     static func recordingNote(_ r: AgentReply, question q: String, context c: AgentContext) -> AgentReply {
         let a = AgentQuestion(q)
         guard ChatRecord.wanted(a), r.intent != .emergency, !r.urgent, r.blocks.allSatisfy({ $0.record == nil }) else { return r }
-        guard let p = ChatRecord.proposal(a, now: c.now) else {
+        // Recorded at the real time, also from a conversation about a past week.
+        guard let p = ChatRecord.proposal(a, now: c.liveNow ?? c.now) else {
             // Nothing Pulse could take from the sentence: how to say it, or where to record it.
             let note = a.has(["吃", "饭", "餐"]) ? "没认出吃了什么。可以说「午饭吃了两碗米饭、一个鸡蛋」，或者在「今日 › 饮食与指标」的「记录饮食」里记。"
                 : a.has(["跑", "练", "运动", "走", "骑", "游"]) ? "没认出运动了多久。可以说「刚快走了 40 分钟」「跑了 5 公里」，或者在「今日」右上角「+ › 运动」里记。"

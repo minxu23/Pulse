@@ -256,11 +256,11 @@ enum ReviewPriorities {
                 let cur = c.vitals.filter { $0.kind == .bloodPressure && inRange($0.time, ws, end) }
                 let prev = c.vitals.filter { $0.kind == .bloodPressure && inRange($0.time, pws, pend) }
                 guard let sys = Stats.mean(cur.map(\.value)), let dia = Stats.mean(cur.compactMap(\.value2)) else {
-                    out.append(BriefMetric(name: "家庭血压", icon: a.icon, value: "—", unit: "mmHg", delta: nil, trend: .none)); continue
+                    out.append(BriefMetric(name: BriefMetric.Name.homeBP, icon: a.icon, value: "—", unit: "mmHg", delta: nil, trend: .none)); continue
                 }
                 let ps = Stats.mean(prev.map(\.value))
                 let d = ps.map { sys - $0 }
-                out.append(BriefMetric(name: "家庭血压", icon: a.icon, value: "\(Int(sys.rounded()))/\(Int(dia.rounded()))", unit: "mmHg",
+                out.append(BriefMetric(name: BriefMetric.Name.homeBP, icon: a.icon, value: "\(Int(sys.rounded()))/\(Int(dia.rounded()))", unit: "mmHg",
                                        delta: d.map { abs($0) < 2 ? "持平" : "收缩压 \($0 > 0 ? "+" : "")\(Int($0.rounded()))" },
                                        trend: d.map { abs($0) < 2 ? .flat : ($0 < 0 ? .better : .worse) } ?? .none))
             case .glucose:
@@ -270,7 +270,7 @@ enum ReviewPriorities {
                 }
                 let t = tir(ws, end), pt = tir(pws, pend)
                 let d = t.flatMap { v in pt.map { (v - $0) * 100 } }
-                out.append(BriefMetric(name: "血糖达标", icon: a.icon, value: t.map { "\(Int($0 * 100))" } ?? "—", unit: "%",
+                out.append(BriefMetric(name: BriefMetric.Name.timeInRange, icon: a.icon, value: t.map { "\(Int($0 * 100))" } ?? "—", unit: "%",
                                        delta: d.map { abs($0) < 3 ? "持平" : "\($0 > 0 ? "+" : "")\(Int($0.rounded()))%" },
                                        trend: d.map { abs($0) < 3 ? .flat : ($0 > 0 ? .better : .worse) } ?? .none))
             case .kidney:
@@ -289,7 +289,7 @@ enum ReviewPriorities {
                 let cur = c.vitals.filter { $0.kind == .weight && inRange($0.time, ws, end) }.max { $0.time < $1.time }
                 let prev = c.vitals.filter { $0.kind == .weight && inRange($0.time, pws, pend) }.max { $0.time < $1.time }
                 let d = cur.flatMap { v in prev.map { v.value - $0.value } }
-                out.append(BriefMetric(name: "体重", icon: a.icon, value: cur.map { $0.value.oneDecimal } ?? "—", unit: "kg",
+                out.append(BriefMetric(name: BriefMetric.Name.weight, icon: a.icon, value: cur.map { $0.value.oneDecimal } ?? "—", unit: "kg",
                                        delta: d.map { abs($0) < 0.3 ? "持平" : "\($0 > 0 ? "+" : "")\($0.oneDecimal)" }, trend: .none))
             default:
                 continue

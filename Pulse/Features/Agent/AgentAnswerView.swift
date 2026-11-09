@@ -21,15 +21,15 @@ struct AgentAnswerView: View {
             ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
                 switch section {
                 case .verdict(let t):
-                    Text(Self.styled(t, highlight: false)).font(.headline).fixedSize(horizontal: false, vertical: true)
+                    Text(Self.styled(t, highlight: false)).font(Theme.TypeScale.title).fixedSize(horizontal: false, vertical: true)
                     if let f = reply?.figure { AgentFigureView(figure: f, context: context) }
                 case .paragraph(let t):
                     // The figure already shows a paragraph that only lists its numbers.
                     if reply?.figure.map({ AgentAnswerLayout.restates(t, figure: $0) }) != true {
-                        Text(Self.styled(t)).font(.body).fixedSize(horizontal: false, vertical: true)
+                        Text(Self.styled(t)).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
                     }
                 case .note(let t):
-                    Text(Self.styled(t, highlight: false)).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(Self.styled(t, highlight: false)).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 case .list(let title, let style, let items):
                     AnswerList(title: title, style: style, items: items)
                 case .safety(let t):
@@ -71,7 +71,7 @@ struct AgentStatusTag: View {
             Image(systemName: status.tone.icon).foregroundStyle(status.tone.color).imageScale(.small)
             Text(status.label).foregroundStyle(.primary)
         }
-        .font(.subheadline.weight(.semibold))
+        .font(Theme.TypeScale.body.weight(.semibold))
         .padding(.horizontal, Theme.Space.item)
         .padding(.vertical, Theme.Space.tight)
         .background(status.tone.color.opacity(0.12), in: Capsule())
@@ -109,14 +109,14 @@ private struct AnswerList: View {
         VStack(alignment: .leading, spacing: Theme.Space.item) {
             if let title {
                 Label(title, systemImage: style == .findings ? "magnifyingglass" : "checklist")
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                    .font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.secondary)
                     .accessibilityAddTraits(.isHeader)
             }
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 HStack(alignment: .top, spacing: Theme.Space.block) {
                     // Decorative: at accessibility sizes the words get the whole line.
                     if !size.isAccessibilitySize { IconTile(icon: item.icon) }
-                    Text(line(item)).font(.body).fixedSize(horizontal: false, vertical: true)
+                    Text(line(item)).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
                         // Level with the middle of the tile when the line is short.
                         .frame(minHeight: size.isAccessibilitySize ? nil : Theme.Size.iconTile, alignment: .leading)
                     Spacer(minLength: 0)
@@ -166,14 +166,14 @@ private struct FigureTile: View {
         VStack(alignment: .leading, spacing: Theme.Space.tight) {
             HStack(spacing: Theme.Space.iconGap) {
                 if let tone = tile.tone { Image(systemName: tone.icon).foregroundStyle(tone.color).imageScale(.small) }
-                Text(tile.label).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+                Text(tile.label).foregroundStyle(.secondary).lineLimit(1)
             }
-            .font(.caption)
+            .font(Theme.TypeScale.body)
             HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
-                Text(tile.value).font(.title3.weight(.semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
-                if !tile.unit.isEmpty { Text(tile.unit).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                Text(tile.value).font(Theme.TypeScale.title.weight(.semibold)).monospacedDigit().lineLimit(1)
+                if !tile.unit.isEmpty { Text(tile.unit).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1) }
             }
-            if let note = tile.note { Text(note).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8) }
+            if let note = tile.note { Text(note).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(Theme.Space.block)
@@ -210,7 +210,7 @@ private struct RangeBar: View {
                     }
                 }
             }
-            .font(.footnote)
+            .font(Theme.TypeScale.body)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(parts.map { "\($0.label) \(Self.percent($0.share))" }.joined(separator: "，"))

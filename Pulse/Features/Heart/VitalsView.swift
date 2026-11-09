@@ -41,10 +41,10 @@ struct VitalsView: View {
     @AxisContentBuilder private var dateAxis: some AxisContent {
         if size.isAccessibilitySize {
             AxisMarks(values: .automatic(desiredCount: 3)) { _ in
-                AxisGridLine(); AxisTick(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy)
+                AxisGridLine(); AxisTick(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy).font(Theme.TypeScale.body)
             }
         } else {
-            AxisMarks()
+            AxisMarks() { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) }
         }
     }
 
@@ -57,7 +57,7 @@ struct VitalsView: View {
     private func addButton(_ title: String, _ icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label("记录\(title)", systemImage: icon)
-                .font(.subheadline.weight(.medium))
+                .font(Theme.TypeScale.body.weight(.medium))
                 .padding(.vertical, Theme.Space.item)
                 .frame(maxWidth: .infinity, minHeight: Theme.Size.tap)
                 .contentShape(Rectangle())
@@ -90,15 +90,15 @@ struct VitalsView: View {
                             PointMark(x: .value("日期", v.time), y: .value("舒张压", d)).foregroundStyle(by: .value("类型", "舒张压")).symbol(by: .value("类型", "舒张压"))
                         }
                     }
-                }
+                }.pulseChartAxes()
                 .chartForegroundStyleScale(["收缩压": Theme.heartData, "舒张压": Theme.heartData.opacity(0.45)])
                 .chartXAxis { dateAxis }
                 .frame(height: 160)
                 if let m = s.morningSys, let e = s.eveningSys {
-                    Text("早晨平均收缩压 \(Int(m))，晚间 \(Int(e)) mmHg。").font(.footnote).foregroundStyle(.secondary)
+                    Text("早晨平均收缩压 \(Int(m))，晚间 \(Int(e)) mmHg。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
                 if let n = NextHourForecaster.bloodPressure(bp) {
-                    Label("未来 1 小时：" + n.message, systemImage: "clock.arrow.circlepath").font(.footnote).foregroundStyle(.secondary)
+                    Label("未来 1 小时：" + n.message, systemImage: "clock.arrow.circlepath").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
                 Divider()
                 if let f = VitalForecaster.bloodPressure(bp, profile: p) {
@@ -124,19 +124,19 @@ struct VitalsView: View {
                 Card {
                     CardHeader(title: "血糖", subtitle: m.isContinuous ? "CGM 连续监测 · 最近 24 小时" : "指尖血糖 · 近 14 天",
                                icon: "drop.fill", color: Theme.glucose, keepsTrailingBeside: true) {
-                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                        Image(systemName: "chevron.right").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.tertiary)
                     }
                     if let v = last {
                         AdaptiveRow(alignment: .firstTextBaseline) {
                             HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
-                                Text(v.value.oneDecimal).font(.system(.title, design: .rounded).weight(.semibold)).monospacedDigit()
-                                Text("mmol/L").font(.subheadline).foregroundStyle(.secondary)
+                                Text(v.value.oneDecimal).font(Theme.TypeScale.title.weight(.semibold)).monospacedDigit()
+                                Text("mmol/L").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                                 Text(v.time.isSameDay(.app) ? Clock.text(v.time.minutesOfDay) : v.time.formatted(.dateTime.month().day()))
-                                    .font(.footnote).foregroundStyle(.secondary)
+                                    .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                             }
                         } trailing: {
                             StatusLabel(v.value < p.glucoseLow ? .urgent("低于范围") : (v.value > p.glucoseHigh ? .attention("高于范围") : .good("在范围内")))
-                                .font(.footnote)
+                                .font(Theme.TypeScale.body)
                         }
                     }
                     if shown.isEmpty {
@@ -154,27 +154,27 @@ struct VitalsView: View {
                                         .foregroundStyle(Theme.glucose).symbolSize(24)
                                 }
                             }
-                        }
+                        }.pulseChartAxes()
                         .chartYScale(domain: 2.5...max(11, (shown.map(\.value).max() ?? 8) + 1))
                         .chartXAxis {
                             if m.isContinuous {
-                                AxisMarks(values: .stride(by: .hour, count: 6)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()) }
+                                AxisMarks(values: .stride(by: .hour, count: 6)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()).font(Theme.TypeScale.body) }
                             } else {
-                                AxisMarks(values: .stride(by: .day, count: 3)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy) }
+                                AxisMarks(values: .stride(by: .day, count: 3)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy).font(Theme.TypeScale.body) }
                             }
                         }
-                        .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) }
+                        .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
                         .frame(height: 150)
                         .accessibilityLabel(m.isContinuous ? "最近 24 小时连续血糖曲线" : "近 14 天血糖记录")
                         .accessibilityValue("范围 \((shown.map(\.value).min() ?? 0).oneDecimal) 到 \((shown.map(\.value).max() ?? 0).oneDecimal) 毫摩尔每升")
-                        Text("虚线之间为目标范围 \(p.glucoseLow.oneDecimal)–\(p.glucoseHigh.oneDecimal) mmol/L").font(.footnote).foregroundStyle(.secondary)
+                        Text("虚线之间为目标范围 \(p.glucoseLow.oneDecimal)–\(p.glucoseHigh.oneDecimal) mmol/L").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                     if let f = NextHourForecaster.glucose(g, profile: p) {
                         GlucoseHourChart(history: NextHourForecaster.cgm(g).filter { $0.time > f.from.addingTimeInterval(-3 * 3600) },
                                          forecast: f, low: p.glucoseLow, high: p.glucoseHigh)
                         Label("未来 1 小时：" + f.message, systemImage: f.alert != nil ? "exclamationmark.triangle.fill" : "clock.arrow.circlepath")
-                            .font(.footnote).foregroundStyle(f.alert != nil ? Color.primary : Color.secondary)
-                        Text(NextHourForecaster.caveat).font(.footnote).foregroundStyle(.secondary)
+                            .font(Theme.TypeScale.body).foregroundStyle(f.alert != nil ? Color.primary : Color.secondary)
+                        Text(NextHourForecaster.caveat).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                     MetricRow {
                         MetricTile(label: "14 天平均", value: m.mean.map { $0.oneDecimal } ?? "—", unit: "mmol/L", icon: "equal.circle", color: Theme.glucose)
@@ -213,7 +213,7 @@ struct VitalsView: View {
                     MetricTile(label: "呼吸紊乱", value: Stats.mean(dist.map(\.1)).map { $0.oneDecimal } ?? "—", unit: "次/时", icon: "waveform", color: Theme.respiratory)
                 }
                 if !spo2.isEmpty {
-                    Text("最低血氧低于 88% 的夜晚：\(spo2.filter { $0.1 < 88 }.count) 晚").font(.footnote).foregroundStyle(.secondary)
+                    Text("最低血氧低于 88% 的夜晚：\(spo2.filter { $0.1 < 88 }.count) 晚").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
                 if !spo2.isEmpty {
                     Chart {
@@ -225,13 +225,13 @@ struct VitalsView: View {
                                 .foregroundStyle(d.1 < 88 ? Color.red : Theme.respiratory)
                                 .symbol(d.1 < 88 ? .triangle : .circle).symbolSize(d.1 < 88 ? 40 : 14)
                         }
-                    }
+                    }.pulseChartAxes()
                     .chartYScale(domain: 80...100)
                     .chartXAxis { dateAxis }
                     .frame(height: 120)
                 }
                 Text("设备信号与自述线索不等于诊断。多晚偏低时，请在「计划 › 睡眠」中查看睡眠呼吸线索，必要时进行专业睡眠评估。")
-                    .font(.footnote).foregroundStyle(.secondary)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
     }
@@ -241,10 +241,10 @@ struct VitalsView: View {
         return Card {
             CardHeader(title: "最近记录", icon: "list.bullet", color: .secondary) {
                 NavigationLink { VitalsHistoryView() } label: {
-                    Text("全部").font(.subheadline).frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
+                    Text("全部").font(Theme.TypeScale.body).frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
                 }
             }
-            if shown.isEmpty { Text("暂无记录").foregroundStyle(.secondary).font(.subheadline) }
+            if shown.isEmpty { Text("暂无记录").foregroundStyle(.secondary).font(Theme.TypeScale.body) }
             ForEach(Array(shown)) { v in VitalRow(v: v) }
         }
     }
@@ -257,20 +257,20 @@ struct VitalRow: View {
         // At accessibility sizes the source joins the detail line, so the reading keeps the row's width.
         let ax = size.isAccessibilitySize
         HStack(spacing: Theme.Space.iconGap) {
-            Image(systemName: v.kind.icon).font(.subheadline).imageScale(.small).foregroundStyle(.secondary).frame(width: 24)
+            Image(systemName: v.kind.icon).font(Theme.TypeScale.body).imageScale(.small).foregroundStyle(.secondary).frame(width: 24)
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 HStack(spacing: Theme.Space.tight) {
-                    Text(v.kind.label).font(.subheadline)
-                    Text(v.valueText).font(.subheadline.weight(.semibold)).monospacedDigit().fixedSize()
-                    Text(v.kind.unit).font(.caption).foregroundStyle(.secondary)
+                    Text(v.kind.label).font(Theme.TypeScale.body)
+                    Text(v.valueText).font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit().fixedSize()
+                    Text(v.kind.unit).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
                 Text([v.time.formatted(.dateTime.month().day().hour().minute()), v.context.label,
                       v.medsTaken.map { $0 ? "已服药" : "未服药" } ?? "", v.note, ax ? v.source.label : ""]
                     .filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.footnote).foregroundStyle(.secondary).lineLimit(ax ? nil : 2)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(ax ? nil : 2)
             }
             Spacer()
-            if !ax { Text(v.source.label).font(.caption).foregroundStyle(.secondary) }
+            if !ax { Text(v.source.label).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
         }
     }
 }
@@ -307,7 +307,7 @@ private struct ForecastSection: View {
     let message: String
 
     static var notYet: some View {
-        Text("有 4 周以上、每周都有的记录后，就能推算未来几周的趋势。").font(.footnote).foregroundStyle(.secondary)
+        Text("有 4 周以上、每周都有的记录后，就能推算未来几周的趋势。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -320,11 +320,11 @@ private struct ForecastSection: View {
         VStack(alignment: .leading, spacing: Theme.Space.item) {
             AdaptiveRow(alignment: .firstTextBaseline, spacing: Theme.Space.item) {
                 AdaptiveStack(alignment: .firstTextBaseline, spacing: Theme.Space.item, stackedSpacing: Theme.Space.hairline) {
-                    Text("趋势预测").font(.subheadline.weight(.semibold))
-                    Text("到 \(forecast.end.start.formatted(.dateTime.month().day())) 那周").font(.footnote).foregroundStyle(.secondary)
+                    Text("趋势预测").font(Theme.TypeScale.body.weight(.semibold))
+                    Text("到 \(forecast.end.start.formatted(.dateTime.month().day())) 那周").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             } trailing: {
-                direction.font(.footnote)
+                direction.font(Theme.TypeScale.body)
             }
             Chart {
                 if let target {
@@ -343,16 +343,16 @@ private struct ForecastSection: View {
                     LineMark(x: .value("周", w.start), y: .value(what, w.mid), series: .value("线", "预测"))
                         .foregroundStyle(color).lineStyle(StrokeStyle(lineWidth: 2, dash: [4, 3]))
                 }
-            }
+            }.pulseChartAxes()
             .chartYScale(domain: (lo - pad)...(hi + pad))
-            .chartXAxis { AxisMarks(values: .stride(by: .weekOfYear, count: 2)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy) } }
-            .chartYAxis { AxisMarks(position: .trailing) }
+            .chartXAxis { AxisMarks(values: .stride(by: .weekOfYear, count: 2)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy).font(Theme.TypeScale.body) } }
+            .chartYAxis { AxisMarks(position: .trailing) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
             .frame(height: 130)
             .accessibilityLabel("\(what)：过去 \(observed.count) 周与未来 4 周的推算范围")
             .accessibilityValue("4 周后约 \(forecast.end.low.oneDecimal) 到 \(forecast.end.high.oneDecimal)")
-            Text("实线为每周平均，虚线和浅色带为推算的范围。").font(.caption).foregroundStyle(.secondary)
-            Text(message).font(.subheadline).fixedSize(horizontal: false, vertical: true)
-            Text(VitalForecaster.caveat).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("实线为每周平均，虚线和浅色带为推算的范围。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+            Text(message).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
+            Text(VitalForecaster.caveat).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 

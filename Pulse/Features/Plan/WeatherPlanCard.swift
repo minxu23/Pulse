@@ -16,9 +16,16 @@ final class WeatherStore {
     private(set) var sourceName = ""
     /// Why there is no forecast, when there is none.
     private(set) var unavailable: String?
+    static let enabledKey = "weather.enabledByUser"
+    private var lastDemo: Bool?
     private var loadedFor: Date?
 
     func load(demo: Bool, now: Date = .app) async {
+        if lastDemo != demo { days = []; sourceName = ""; loadedFor = nil; lastDemo = demo }
+        guard demo || UserDefaults.standard.bool(forKey: Self.enabledKey) else {
+            unavailable = "开启天气后，可按天气调整户外安排。"
+            return
+        }
         guard loadedFor != now.startOfDay || days.isEmpty else { return }
         loadedFor = now.startOfDay
         if demo {
@@ -118,7 +125,12 @@ struct WeatherPlanCard: View {
         VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("天气", detail: store.sourceName.isEmpty ? nil : store.sourceName)
             if days.isEmpty {
-                Text(store.unavailable ?? "正在获取天气预报…").font(.subheadline).foregroundStyle(.secondary)
+                Button("开启天气与定位") {
+                    UserDefaults.standard.set(true, forKey: WeatherStore.enabledKey)
+                    Task { await store.load(demo: profiles.first?.usesDemoData == true) }
+                }
+                .frame(minHeight: Theme.Size.tap)
+                Text(store.unavailable ?? "正在获取天气预报…").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             } else {
                 // Seven columns; at accessibility sizes one line per day, where a seventh of the row fits one character.
                 let layout = size.isAccessibilitySize
@@ -130,11 +142,11 @@ struct WeatherPlanCard: View {
                             ? AnyLayout(HStackLayout(spacing: Theme.Space.item)) : AnyLayout(VStackLayout(spacing: Theme.Space.tight))
                         cell {
                             Text(d.day.isSameDay(context.now) ? "今天" : Weekday.name(d.day.weekday))
-                                .font(.caption.weight(training ? .semibold : .regular))
+                                .font(Theme.TypeScale.body.weight(training ? .semibold : .regular))
                                 .foregroundStyle(training ? Color.primary : Color.secondary)
                             if size.isAccessibilitySize { Spacer(minLength: Theme.Space.item) }
-                            Image(systemName: d.icon).symbolRenderingMode(.multicolor).font(.title3).frame(height: 26)
-                            Text("\(Int(d.high))°").font(.caption).monospacedDigit()
+                            Image(systemName: d.icon).symbolRenderingMode(.multicolor).font(Theme.TypeScale.title).frame(height: 26)
+                            Text("\(Int(d.high))°").font(Theme.TypeScale.body).monospacedDigit()
                             Circle().fill(advice.affected.contains(d.day.weekday) && d.day < context.now.weekStart.adding(days: 7) ? Color.orange
                                           : (training ? Theme.activity.opacity(0.6) : Color.clear))
                                 .frame(width: 5, height: 5)
@@ -143,7 +155,7 @@ struct WeatherPlanCard: View {
                         .accessibilityElement(children: .combine)
                     }
                 }
-                Text("小圆点：有户外训练的日子；橙色为天气可能有影响。").font(.caption).foregroundStyle(.secondary)
+                Text("小圆点：有户外训练的日子；橙色为天气可能有影响。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 if let p = proposal {
                     Divider()
                     PlanProposalCard(proposal: p)
@@ -153,10 +165,10 @@ struct WeatherPlanCard: View {
                         // The glyph takes the sentence's size (the inline label style makes it a little smaller).
                         Label { Text(n).fixedSize(horizontal: false, vertical: true) }
                             icon: { Image(systemName: "cloud.sun").foregroundStyle(.secondary) }
-                            .font(.subheadline)
+                            .font(Theme.TypeScale.body)
                     }
                 } else {
-                    Text("这周的户外训练日天气都合适，计划不用调整。").font(.subheadline).foregroundStyle(.secondary)
+                    Text("这周的户外训练日天气都合适，计划不用调整。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             }
         }

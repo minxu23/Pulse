@@ -16,6 +16,9 @@ final class VitalReading {
     var medsTaken: Bool? = nil
     var note: String = ""
     var externalID: String? = nil
+    /// The app and device that wrote it to Apple Health (「OMRON connect」, 「HUAWEI WATCH D」).
+    var sourceName: String = ""
+    var deviceName: String = ""
 
     init(time: Date = .app, kind: VitalKind, value: Double, value2: Double? = nil,
          context: MeasureContext = .random, source: DataSource = .manual) {
@@ -196,10 +199,40 @@ final class LabResult {
     var point: LabPoint { LabPoint(date: date, kind: kind, value: value, estimated: estimated) }
 }
 
+/// A report as it was when made (基线报告, a round's summary, 总结报告): later data never changes it.
+@Model
+final class ProgramSnapshot {
+    var id: UUID = UUID()
+    var createdAt: Date = Date()
+    /// "baseline", "round" or "summary".
+    var kind: String = "baseline"
+    var round: Int = 0
+    var packRaw: String = ""
+    var payload: Data = Data()
+
+    init(kind: String, round: Int = 0, pack: String = "", payload: Data, createdAt: Date = .app) {
+        self.kind = kind
+        self.round = round
+        self.packRaw = pack
+        self.payload = payload
+        self.createdAt = createdAt
+    }
+}
+
+extension ProgramSnapshot {
+    /// The frozen reports: the baseline report, each round's result, and the summary report.
+    enum Kind: String { case baseline, round, summary }
+
+    convenience init(_ kind: Kind, round: Int = 0, pack: String = "", payload: Data, createdAt: Date = .app) {
+        self.init(kind: kind.rawValue, round: round, pack: pack, payload: payload, createdAt: createdAt)
+    }
+    var reportKind: Kind? { Kind(rawValue: kind) }
+}
+
 enum PulseSchema {
     static let models: [any PersistentModel.Type] = [
         UserProfile.self, DailyRecord.self, MedicationEntry.self, MealLog.self,
         ActivitySession.self, PlanItem.self, VitalReading.self, HealthEvent.self,
-        CareTask.self, ReviewEntry.self, InsightRecord.self, LabResult.self,
+        CareTask.self, ReviewEntry.self, InsightRecord.self, LabResult.self, ProgramSnapshot.self,
     ]
 }

@@ -17,7 +17,9 @@ struct AgentContextReader<Content: View>: View {
     @Query(sort: \VitalReading.time) private var vitals: [VitalReading]
     @Query(sort: \HealthEvent.createdAt, order: .reverse) private var events: [HealthEvent]
     @Query(sort: \LabResult.date) private var labs: [LabResult]
+    @Query(sort: \ProgramSnapshot.createdAt, order: .reverse) private var snapshots: [ProgramSnapshot]
     @AppStorage(DayClock.earlyStartKey) private var earlyStart: Double = 0
+    var referenceDate: Date? = nil
     @ViewBuilder var content: (AgentContext) -> Content
 
     var body: some View {
@@ -30,12 +32,14 @@ struct AgentContextReader<Content: View>: View {
         let p = profiles.first
         let snap = p?.snapshot(medications: meds) ?? ProfileSnapshot()
         DayClock.current = snap
-        let now = Date.app
+        let now = referenceDate ?? Date.app
+        // A past week (复盘): answers read that week; records and plan changes keep to the real time.
+        let looksBack = referenceDate.map { $0 < Date.app.startOfDay } ?? false
         var c = AgentContext.make(
             profile: snap, name: p?.displayName ?? "你",
-            days: DayBuilder.build(records: records, sessions: sessions),
-            plan: items.map(\.snapshot), workouts: sessions.map(\.point),
-            vitals: vitals.filter { $0.time > now.adding(days: -60) }.map(\.point),
+            days: DayBuilder.build(records: records, sessions: sessions).filter { $0.day <= now.startOfDay },
+            plan: items.map(\.snapshot), workouts: sessions.filter { $0.start <= now }.map(\.point),
+            vitals: vitals.filter { $0.time > now.adding(days: -60) && $0.time <= now }.map(\.point),
             events: events.filter { $0.status.isActive }.map { AgentEvent(title: $0.title, severity: $0.severity, date: $0.relatedDate, guidance: $0.guidance) },
             stopBang: p?.stopBangAnswers ?? [], baselineSetAt: p?.baselineSetAt, raceName: p?.raceName ?? "",
             targetRHR: p?.targetRHR, weather: WeatherStore.shared.days, weatherSource: WeatherStore.shared.sourceName,
@@ -43,7 +47,19 @@ struct AgentContextReader<Content: View>: View {
         c.answerMode = CloudModelSettings.shared.effectiveMode
         c.healthDataConsented = CloudModelSettings.shared.consented
         c.agentName = AgentNameSettings.shared.name
+        if looksBack { c.liveNow = Date.app }
+        if let p { c.program = program(p) }
         return c
+    }
+
+    /// The program for its questions, with the frozen baseline report once a pack runs.
+    private func program(_ p: UserProfile) -> AgentProgram {
+        let frozen = p.programPhase.runsPack
+            ? snapshots.first { $0.reportKind == .baseline }.flatMap { try? JSONDecoder().decode(BaselineResult.self, from: $0.payload) }
+            : nil
+        return AgentProgram(phase: p.programPhase, pack: p.programPack, goal: p.targetGoal, round: p.programRound,
+                            roundStart: p.programRoundStart, weeks: p.programRoundWeeks, baselineStart: p.programBaselineStart,
+                            report: frozen?.report, concerns: frozen?.concerns ?? [])
     }
 }
 
@@ -124,11 +140,13 @@ enum AgentTranscript {
         var safety: String?
     }
 
-    static var url: URL? {
+    static var url: URL? { url(for: UserDefaults.standard.string(forKey: DataStores.modeKey) ?? "own") }
+
+    static func url(for mode: String) -> URL? {
         let args = ProcessInfo.processInfo.arguments
         guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil, !args.contains("-PulseInMemory"),
               let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
-        return dir.appendingPathComponent("agent-chat.json")
+        return dir.appendingPathComponent(mode == "sample" ? "agent-chat-sample.json" : "agent-chat.json")
     }
 
     static func load(from url: URL? = url) -> [AgentMessage] {
@@ -211,6 +229,14 @@ final class AgentConversation {
     private var answering: Task<Void, Never>?
     /// Moves on whenever an answer is abandoned; an abandoned answer never writes into the conversation.
     private var turn = 0
+    private struct StoreConversation {
+        var messages: [AgentMessage]
+        var forms: [String: String]
+        var plans: [UUID: PlanOutcome]
+        var conditions: [UUID: ConditionOutcome]
+        var records: [UUID: RecordOutcome]
+    }
+    private var storeConversations: [String: StoreConversation] = [:]
     private let synth = AVSpeechSynthesizer()
     private let speechDelegate = SpeechDelegate()
 
@@ -255,8 +281,10 @@ final class AgentConversation {
         let mine = turn
         isResponding = true
         defer {
-            if turn == mine { isResponding = false; answering = nil }
-            AgentTranscript.save(messages)
+            if turn == mine {
+                isResponding = false; answering = nil
+                AgentTranscript.save(messages)
+            }
         }
 
         // 「以后叫你小安」: the new name applies at once, and the answer says how to change it back.
@@ -647,7 +675,26 @@ final class AgentConversation {
         speakingID = nil
     }
 
+    func switchStore(from old: String, to new: String) {
+        stopSpeaking()
+        answering?.cancel(); answering = nil; turn += 1; isResponding = false
+        let kept = messages.filter { !$0.streaming }
+        storeConversations[old] = StoreConversation(messages: kept, forms: answeredForms, plans: planOutcomes,
+                                                    conditions: conditionOutcomes, records: recordOutcomes)
+        AgentTranscript.save(kept, to: AgentTranscript.url(for: old))
+        let next = storeConversations[new]
+        messages = next?.messages ?? AgentTranscript.load(from: AgentTranscript.url(for: new))
+        answeredForms = next?.forms ?? [:]; planOutcomes = next?.plans ?? [:]
+        conditionOutcomes = next?.conditions ?? [:]; recordOutcomes = next?.records ?? [:]
+    }
+
+    func forgetStore(_ mode: String) {
+        storeConversations.removeValue(forKey: mode)
+        AgentTranscript.save([], to: AgentTranscript.url(for: mode))
+    }
+
     func clear() {
+        storeConversations.removeValue(forKey: UserDefaults.standard.string(forKey: DataStores.modeKey) ?? "own")
         stopSpeaking()
         answering?.cancel()
         answering = nil

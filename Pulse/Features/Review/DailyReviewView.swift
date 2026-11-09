@@ -31,7 +31,7 @@ struct DailyReviewSection: View {
                 }
                 .disabled(shown <= earliest).accessibilityLabel("上个月")
                 Spacer()
-                Text(shown.formatted(.dateTime.year().month(.wide))).font(.headline)
+                Text(shown.formatted(.dateTime.year().month(.wide))).font(Theme.TypeScale.title)
                 Spacer()
                 Button { month = shown.adding(months: 1) } label: {
                     Image(systemName: "chevron.right").frame(width: Theme.Size.tap, height: Theme.Size.tap).contentShape(Rectangle())
@@ -40,7 +40,7 @@ struct DailyReviewSection: View {
             }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Theme.Space.item), count: 7), spacing: Theme.Space.item) {
                 ForEach(["一", "二", "三", "四", "五", "六", "日"], id: \.self) { w in
-                    Text(w).font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+                    Text(w).font(Theme.TypeScale.body).foregroundStyle(.secondary).frame(maxWidth: .infinity)
                 }
                 ForEach(0..<PlanGenerator.order(shown.weekday), id: \.self) { _ in Color.clear.frame(height: 1) }
                 ForEach(days, id: \.self) { d in
@@ -57,7 +57,7 @@ struct DailyReviewSection: View {
                     }
                 }
             }
-            Text(ReviewPriorities.monthSummary(verdicts.values.map(\.level))).font(.subheadline).foregroundStyle(.secondary)
+            Text(ReviewPriorities.monthSummary(verdicts.values.map(\.level))).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             CalendarLegend()
         }
@@ -78,8 +78,8 @@ private struct DayCell: View {
     var body: some View {
         let level = verdict?.level
         VStack(spacing: Theme.Space.tight) {
-            Text("\(Calendar.pulse.component(.day, from: date))").font(.subheadline.weight(isToday ? .bold : .medium)).monospacedDigit()
-            Image(systemName: level?.icon ?? "minus").font(.caption2.weight(.bold))
+            Text("\(Calendar.pulse.component(.day, from: date))").font(Theme.TypeScale.body.weight(isToday ? .bold : .medium)).monospacedDigit()
+            Image(systemName: level?.icon ?? "minus").font(Theme.TypeScale.body.weight(.bold))
                 .foregroundStyle(level.map(DayLevelStyle.glyph) ?? Color.secondary.opacity(verdict == nil ? 0 : 0.6))
         }
         .frame(maxWidth: .infinity, minHeight: 48)
@@ -130,13 +130,13 @@ private struct CalendarLegend: View {
             ForEach(DayLevel.allCases, id: \.self) { l in
                 HStack(spacing: Theme.Space.iconGap) {
                     RoundedRectangle(cornerRadius: Theme.Radius.mark, style: .continuous).fill(DayLevelStyle.fill(l)).frame(width: 14, height: 14)
-                        .overlay(Image(systemName: l.icon).font(.system(size: 7, weight: .bold)).foregroundStyle(DayLevelStyle.glyph(l)))
-                    Text(l.label).font(.footnote)
+                        .overlay(Image(systemName: l.icon).font(Theme.TypeScale.body.weight(.bold)).foregroundStyle(DayLevelStyle.glyph(l)))
+                    Text(l.label).font(Theme.TypeScale.body)
                 }
             }
             HStack(spacing: Theme.Space.iconGap) {
                 Circle().fill(Color.primary).frame(width: 5, height: 5)
-                Text("有训练").font(.footnote)
+                Text("有训练").font(Theme.TypeScale.body)
             }
         }
         .foregroundStyle(.secondary)
@@ -169,12 +169,12 @@ struct DayReviewPage: View {
             VStack(alignment: .leading, spacing: Theme.Space.block) {
                 if let l = v.level {
                     Label(l.label, systemImage: l.icon)
-                        .font(.subheadline.weight(.semibold))
+                        .font(Theme.TypeScale.body.weight(.semibold))
                         .padding(.horizontal, Theme.Space.item).padding(.vertical, Theme.Space.tight)
                         .background(DayLevelStyle.fill(l), in: Capsule())
                 }
                 Text(ReviewPriorities.dayHeadline(top, isToday: offset == 0))
-                    .font(.title3.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+                    .font(Theme.TypeScale.title.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
                 HStack(alignment: .top, spacing: Theme.Space.block) {
                     stat("准备度", v.readiness?.score.map(String.init) ?? "—", v.readiness?.level.label ?? "没有晨起数据")
                     stat("睡眠", d?.sleepMinutes.map { ($0 / 60).oneDecimal } ?? "—", d?.sleepMinutes == nil ? "没有记录" : "小时")
@@ -213,9 +213,9 @@ struct DayReviewPage: View {
 
     private func stat(_ label: String, _ value: String, _ sub: String) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-            Text(label).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.system(.title3, design: .rounded).weight(.semibold)).monospacedDigit()
-            Text(sub).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+            Text(label).font(Theme.TypeScale.body).foregroundStyle(.secondary)
+            Text(value).font(Theme.TypeScale.title.weight(.semibold)).monospacedDigit()
+            Text(sub).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
@@ -228,11 +228,11 @@ private struct DayLineRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.block) {
-            Image(systemName: line.area.icon).font(.subheadline).foregroundStyle(.secondary).frame(width: Theme.Size.iconTile)
+            Image(systemName: line.area.icon).font(Theme.TypeScale.body).foregroundStyle(.secondary).frame(width: Theme.Size.iconTile)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: Theme.Space.tight) {
-                Text(line.area.label).font(compact ? .subheadline : .subheadline.weight(.semibold))
-                StatusLabel(status, secondaryText: true).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                Text(line.area.label).font(compact ? Theme.TypeScale.body : Theme.TypeScale.body.weight(.semibold))
+                StatusLabel(status, secondaryText: true).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
@@ -258,7 +258,7 @@ private struct DayNoteCard: View {
         VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle(title: isToday ? "今天的笔记" : "这天的笔记") {
                 if record.reviewedAt != nil {
-                    StatusLabel(text: "已回顾", icon: "checkmark.seal.fill", color: .green).font(.subheadline.weight(.semibold))
+                    StatusLabel(text: "已回顾", icon: "checkmark.seal.fill", color: .green).font(Theme.TypeScale.body.weight(.semibold))
                 }
             }
             TextField(isToday ? "今天感觉如何？有什么影响了你的状态？" : "那天发生了什么？补记一下也有用", text: $record.dayNote, axis: .vertical)
@@ -295,15 +295,15 @@ struct PrioritiesCard: View {
                 Button { editing = true } label: {
                     Text("调整").frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
                 }
-                .font(.subheadline)
+                .font(Theme.TypeScale.body)
             }
             ForEach(Array(pr.enumerated()), id: \.element.id) { i, p in
                 HStack(alignment: .firstTextBaseline, spacing: Theme.Space.block) {
-                    Text("\(i + 1)").font(.footnote.weight(.bold)).monospacedDigit()
+                    Text("\(i + 1)").font(Theme.TypeScale.body.weight(.bold)).monospacedDigit()
                         .frame(width: 24, height: 24).background(Theme.subtle, in: Circle())
                     VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                        Text(p.area.label).font(.subheadline.weight(.semibold))
-                        Text(p.reason).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Text(p.area.label).font(Theme.TypeScale.body.weight(.semibold))
+                        Text(p.reason).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
                 }
@@ -311,15 +311,15 @@ struct PrioritiesCard: View {
             }
             if let h = hint, let profile = profiles.first {
                 HStack(alignment: .firstTextBaseline) {
-                    StatusLabel(.attention("最近\(h.area.label)需要留意：\(h.reason)")).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                    StatusLabel(.attention("最近\(h.area.label)需要留意：\(h.reason)")).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: Theme.Space.item)
                     Button("加入") { profile.reviewPriorities = Array(mine.prefix(2)) + [h.area] + mine.dropFirst(2) }
-                        .buttonStyle(.bordered).font(.subheadline)
+                        .buttonStyle(.bordered).font(Theme.TypeScale.body)
                 }
             }
             Text(mine.isEmpty ? "按你的病情、目标和最近的数据自动排列，数据变了顺序也会跟着变。复盘的数据、建议和问题按这个顺序排。"
                               : "按你设定的顺序。复盘的数据、建议和问题按这个顺序排。")
-                .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .cardSurface()
         .sheet(isPresented: $editing) {

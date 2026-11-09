@@ -63,7 +63,7 @@ struct CloudModelSettingsView: View {
                             LabeledContent("模型") {
                                 HStack(spacing: Theme.Space.iconGap) {
                                     Text(OpenRouterModels.name(for: settings.model) ?? settings.model).lineLimit(1)
-                                    Image(systemName: "chevron.up.chevron.down").font(.footnote)
+                                    Image(systemName: "chevron.up.chevron.down").font(Theme.TypeScale.body)
                                 }
                                 .foregroundStyle(Theme.accent)
                             }
@@ -71,7 +71,7 @@ struct CloudModelSettingsView: View {
                         .foregroundStyle(.primary)
                         LabeledContent("模型 ID") {
                             TextField("anthropic/claude-sonnet-5.5", text: $settings.model)
-                                .multilineTextAlignment(.trailing).font(.footnote)
+                                .multilineTextAlignment(.trailing).font(Theme.TypeScale.body)
                                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                         }
                     } else {
@@ -98,11 +98,11 @@ struct CloudModelSettingsView: View {
                     switch settings.keySource {
                     case .keychain:
                         LabeledContent("API 密钥", value: "已保存在钥匙串 · \(settings.keyHint ?? "")")
-                        if let keyNote { StatusLabel(.good(keyNote)).font(.subheadline) }
+                        if let keyNote { StatusLabel(.good(keyNote)).font(Theme.TypeScale.body) }
                         Button("删除密钥", role: .destructive) { settings.deleteKey(); test = .idle; sample = .idle; keyNote = nil }
                     case .launch(let source):
                         LabeledContent("API 密钥", value: "来自\(source)")
-                        Text("由启动脚本传入，只在本次运行中使用，没有写入钥匙串或文件。").font(.footnote).foregroundStyle(.secondary)
+                        Text("由启动脚本传入，只在本次运行中使用，没有写入钥匙串或文件。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                         Button("保存到钥匙串，下次也使用") { settings.saveLaunchKeyToKeychain() }
                     case .none:
                         HStack(spacing: Theme.Space.item) {
@@ -139,7 +139,7 @@ struct CloudModelSettingsView: View {
                                 .buttonStyle(.borderless)
                                 .disabled(pendingKey.isEmpty)
                         }
-                        if let keyError { StatusLabel(.attention(keyError)).font(.subheadline) }
+                        if let keyError { StatusLabel(.attention(keyError)).font(Theme.TypeScale.body) }
                     }
                 } header: { Text("API 密钥") } footer: {
                     VStack(alignment: .leading, spacing: Theme.Space.item) {
@@ -181,7 +181,7 @@ struct CloudModelSettingsView: View {
                     Toggle("同意把健康数据发到云端", isOn: $settings.consented)
                     DisclosureGroup("查看会发送的数据摘要", isExpanded: $showDigest) {
                         Text(HealthAgent.digest(ctx, anonymous: true))
-                            .font(.footnote).foregroundStyle(.secondary)
+                            .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                             .textSelection(.enabled)
                             .padding(.vertical, Theme.Space.tight)
                     }
@@ -202,7 +202,7 @@ struct CloudModelSettingsView: View {
                     }
                     .disabled(!(settings.consented && settings.lastTestOK && settings.isConfigured) || sample == .running)
                     if !sampleText.isEmpty {
-                        Text(sampleText).font(.subheadline).textSelection(.enabled).padding(.vertical, Theme.Space.tight)
+                        Text(sampleText).font(Theme.TypeScale.body).textSelection(.enabled).padding(.vertical, Theme.Space.tight)
                     }
                     if case .failed = sample { result(sample) }
                 } header: { Text("试一试") } footer: {
@@ -261,14 +261,14 @@ struct CloudModelSettingsView: View {
         // Not .disabled: that would grey out the hint saying what the mode still needs.
         return Button { if ok { settings.mode = m } } label: {
             HStack(alignment: .top, spacing: Theme.Space.block) {
-                Image(systemName: m.icon).font(.body).frame(width: 24).foregroundStyle(ok ? Theme.accent : Color.secondary)
+                Image(systemName: m.icon).font(Theme.TypeScale.body).frame(width: 24).foregroundStyle(ok ? Theme.accent : Color.secondary)
                 VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                    Text(m.label).font(.body.weight(.medium)).foregroundStyle(ok ? Color.primary : Color.secondary)
-                    Text(m.detail).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    if let need = requirement(m) { StatusLabel(.attention(need)).font(.subheadline) }
+                    Text(m.label).font(Theme.TypeScale.body.weight(.medium)).foregroundStyle(ok ? Color.primary : Color.secondary)
+                    Text(m.detail).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    if let need = requirement(m) { StatusLabel(.attention(need)).font(Theme.TypeScale.body) }
                 }
                 Spacer(minLength: Theme.Space.item)
-                if settings.mode == m { Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(Theme.accent) }
+                if settings.mode == m { Image(systemName: "checkmark").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(Theme.accent) }
             }
             .padding(.vertical, Theme.Space.tight)
             .frame(minHeight: Theme.Size.tap)
@@ -291,8 +291,8 @@ struct CloudModelSettingsView: View {
     @ViewBuilder
     private func result(_ state: TestState) -> some View {
         switch state {
-        case .ok(let t): StatusLabel(.good(t)).font(.subheadline)
-        case .failed(let t): StatusLabel(.urgent(t)).font(.subheadline)
+        case .ok(let t): StatusLabel(.good(t)).font(Theme.TypeScale.body)
+        case .failed(let t): StatusLabel(.urgent(t)).font(Theme.TypeScale.body)
         default: EmptyView()
         }
     }
@@ -338,7 +338,7 @@ struct OpenRouterModelBrowser: View {
     var body: some View {
         CalmNavigationStack {
             List {
-                if let error { StatusLabel(.urgent(error)).font(.subheadline) }
+                if let error { StatusLabel(.urgent(error)).font(Theme.TypeScale.body) }
                 if models.isEmpty && error == nil {
                     HStack { ProgressView(); Text("正在获取模型列表…").foregroundStyle(.secondary) }
                 }
@@ -348,7 +348,7 @@ struct OpenRouterModelBrowser: View {
                         dismiss()
                     } label: {
                         HStack {
-                            Text(id).font(.subheadline).foregroundStyle(.primary)
+                            Text(id).font(Theme.TypeScale.body).foregroundStyle(.primary)
                             Spacer()
                             if id == selection { Image(systemName: "checkmark").foregroundStyle(Theme.accent) }
                         }

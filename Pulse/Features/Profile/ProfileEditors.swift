@@ -8,14 +8,17 @@ struct BasicsSection: View {
     var body: some View {
         Section("基础信息") {
             TextField("怎么称呼你", text: $p.nickname)
-            Picker("出生年份", selection: $p.birthYear) {
-                ForEach((1930...2012).reversed(), id: \.self) { Text(String($0)).tag($0) }
+            HStack {
+                Text("出生年份")
+                Spacer()
+                TextField("未填写", text: Binding(get: { p.birthYear == 0 ? "" : String(p.birthYear) }, set: { p.birthYear = Int($0) ?? 0 }))
+                    .keyboardType(.numberPad).multilineTextAlignment(.trailing)
             }
             Picker("性别", selection: Binding(get: { p.sex }, set: { p.sex = $0 })) {
                 ForEach(Sex.allCases) { Text($0.label).tag($0) }
             }
-            Stepper("身高 \(Int(p.heightCm)) cm", value: $p.heightCm, in: 130...220, step: 1)
-            Stepper("体重 \(p.weightKg.oneDecimal) kg", value: $p.weightKg, in: 30...200, step: 0.5)
+            NumberField("身高（cm）", value: $p.heightCm)
+            NumberField("体重（kg）", value: $p.weightKg)
             HStack {
                 Text("颈围（可选）")
                 Spacer()
@@ -26,10 +29,49 @@ struct BasicsSection: View {
     }
 }
 
+/// A number typed in: the text stays as typed (「65.」 keeps its point on the way to 65.5), and the value
+/// follows whenever the text reads as a number; empty is 0 (not filled in).
+struct NumberField: View {
+    let title: String
+    @Binding var value: Double
+    @State private var text: String
+
+    init(_ title: String, value: Binding<Double>) {
+        self.title = title
+        _value = value
+        _text = State(initialValue: value.wrappedValue > 0 ? value.wrappedValue.shortDecimal : "")
+    }
+
+    var body: some View {
+        HStack {
+            Text(title)
+            TextField("未填写", text: $text)
+                .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+        }
+        .onChange(of: text) { _, t in value = Self.parse(t) ?? 0 }
+        // Filled in from elsewhere (Apple Health): the field shows the new value.
+        .onChange(of: value) { _, v in if (Self.parse(text) ?? 0) != v { text = v > 0 ? v.shortDecimal : "" } }
+    }
+
+    /// 「65.5」, 「65.」 and 「65,5」 (a comma keypad) all read as numbers.
+    static func parse(_ t: String) -> Double? {
+        Double(t.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
+    }
+}
+
 struct ConditionsSection: View {
     @Bindable var p: UserProfile
     var body: some View {
         Section {
+            Button {
+                p.conditions = []
+                p.otherConditions = ""
+                p.extraConditionsRaw = []
+                p.healthBackgroundReviewed = true
+            } label: {
+                Label("没有上述情况", systemImage: p.healthBackgroundReviewed && p.conditions.isEmpty && p.extraConditionsRaw.isEmpty && p.otherConditions.isEmpty ? "checkmark.circle.fill" : "circle")
+            }
+            .buttonStyle(.plain).frame(minHeight: Theme.Size.tap)
             FlowLayout(spacing: Theme.Space.item) {
                 ForEach(HealthCondition.allCases) { c in
                     ToggleChip(text: c.label, isOn: Binding(
@@ -38,6 +80,7 @@ struct ConditionsSection: View {
                             var s = p.conditions
                             if on { s.insert(c) } else { s.remove(c) }
                             p.conditions = s
+                            p.healthBackgroundReviewed = true
                             if c == .sleepApnea && on { p.apneaStatus = .diagnosed }
                             if c == .ckd && on { p.nutrientTracking = true }
                         }))
@@ -46,14 +89,14 @@ struct ConditionsSection: View {
             .padding(.vertical, Theme.Space.tight)
             if p.conditions.contains(where: \.watchesFluid) && !p.fluidLimit {
                 Text("医生要求限制饮水时，在「恢复目标」里打开「限水」，Pulse 就不再提醒多喝水。")
-                    .font(.footnote).foregroundStyle(.secondary)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
             ForEach(p.extraConditionsRaw, id: \.self) { raw in
                 let x = ConditionLibrary.resolve(raw)
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                         Text(x.name)
-                        Text(x.known ? x.summary : "资料库未收录，只记了名字").font(.footnote).foregroundStyle(.secondary)
+                        Text(x.known ? x.summary : "资料库未收录，只记了名字").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                     Spacer()
                     Button(role: .destructive) { p.extraConditionsRaw.removeAll { $0 == raw } } label: {
@@ -68,6 +111,11 @@ struct ConditionsSection: View {
             }
             TextField("其他情况（可选）", text: $p.otherConditions)
             TextField("身体限制，如膝盖不适、腰痛（可选）", text: $p.limitations)
+            Button("暂不填写") { p.healthBackgroundReviewed = false }
+                .frame(minHeight: Theme.Size.tap)
+            if !p.healthBackgroundReviewed && p.conditions.isEmpty && p.otherConditions.isEmpty && p.extraConditionsRaw.isEmpty {
+                Text("健康状况尚未确认。").foregroundStyle(.secondary)
+            }
         } header: {
             Text("健康状况")
         } footer: {
@@ -177,15 +225,15 @@ struct MedicationsSection: View {
             ForEach(meds) { m in
                 VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                     HStack {
-                        Text(m.name).font(.body.weight(.medium))
+                        Text(m.name).font(Theme.TypeScale.body.weight(.medium))
                         if !m.isActive { Chip(text: "已停用", color: .gray) }
                         Spacer()
-                        Text(m.category.label).font(.caption).foregroundStyle(.secondary)
+                        Text(m.category.label).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                     Text("\(m.dose.isEmpty ? "" : m.dose + " · ")\(m.startDate.formatted(date: .numeric, time: .omitted)) 起 · \(m.category.hrEffect.label)")
-                        .font(.footnote).foregroundStyle(.secondary)
+                        .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     if kidneys && m.isActive && KidneyMeds.isNSAID(m.name) {
-                        StatusLabel(.attention("这类止痛药可能伤肾，长期吃先问肾内科医生或药师")).font(.subheadline)
+                        StatusLabel(.attention("这类止痛药可能伤肾，长期吃先问肾内科医生或药师")).font(Theme.TypeScale.body)
                     }
                 }
                 .swipeActions {
@@ -256,7 +304,7 @@ struct ExerciseBaseSection: View {
                 p.weeklyTargetMinutes = max(60, min($0.startingWeeklyMinutes, Int(Double(p.weeklyTimeBudget) * 0.8)))
             })) {
                 ForEach(ActivityLevel.allCases) { l in
-                    VStack(alignment: .leading, spacing: Theme.Space.hairline) { Text(l.label); Text(l.detail).font(.footnote) }.tag(l)
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) { Text(l.label); Text(l.detail).font(Theme.TypeScale.body) }.tag(l)
                 }
             }
             .pickerStyle(.navigationLink)
@@ -272,7 +320,7 @@ struct LifeConstraintsSection: View {
     var body: some View {
         Section {
             VStack(alignment: .leading, spacing: Theme.Space.item) {
-                Text("哪几天可以安排运动").font(.subheadline)
+                Text("哪几天可以安排运动").font(Theme.TypeScale.body)
                 WeekdayPicker(selection: $p.availableWeekdays)
             }
             .padding(.vertical, Theme.Space.tight)
@@ -302,7 +350,7 @@ struct WeekdayPicker: View {
                     if on { selection.removeAll { $0 == wd } } else { selection.append(wd) }
                 } label: {
                     Text(Weekday.short(wd))
-                        .font(.subheadline.weight(on ? .semibold : .regular))
+                        .font(Theme.TypeScale.body.weight(on ? .semibold : .regular))
                         .frame(maxWidth: .infinity, minHeight: Theme.Size.tap)
                         .foregroundStyle(on ? Color.white : Color.primary)
                         .background(on ? Color.accentColor : Theme.subtle, in: Circle())
@@ -317,30 +365,31 @@ struct WeekdayPicker: View {
 struct GoalsSection: View {
     @Bindable var p: UserProfile
     var body: some View {
+        Section("使用方向") { UsageIntentSelector(selection: $p.usageIntent) }
         Section {
-            FlowLayout(spacing: Theme.Space.item) {
-                ForEach(GoalDirection.allCases) { g in
-                    ToggleChip(text: g.label, icon: g.icon, isOn: Binding(
-                        get: { p.goals.contains(g) },
-                        set: { on in var s = p.goals; if on { s.insert(g) } else { s.remove(g) }; p.goals = s }))
-                }
-            }
-            .padding(.vertical, Theme.Space.tight)
-            TextField("用一句话描述你的目标（可选）", text: $p.goalNote, axis: .vertical)
-            Toggle("设定静息心率目标", isOn: Binding(get: { p.targetRHR != nil }, set: { on in
-                p.targetRHR = on ? ((p.baselineRHR ?? 70) - 4).rounded() : nil
-            }))
-            if let target = p.targetRHR {
-                Stepper("目标约 \(target.noDecimal) bpm", value: Binding(get: { target }, set: { p.targetRHR = $0 }), in: 40...90, step: 1)
-            }
-            Toggle("设定目标日期", isOn: Binding(get: { p.targetDate != nil }, set: { p.targetDate = $0 ? .app.adding(days: 120) : nil }))
-            if let d = p.targetDate {
-                DatePicker("目标日期", selection: Binding(get: { d }, set: { p.targetDate = $0 }), in: Date.app..., displayedComponents: .date)
-            }
-        } header: {
-            Text("改善方向")
+            TextField("补充说明（可选）", text: $p.goalNote, axis: .vertical)
         } footer: {
-            Text("静息心率的健康范围因人而异，并非越低越好。Pulse 关注的是适合你的、可持续的改善。")
+            Text("选择记录身体状况时，不设置改善目标。具体方案和指标在基线评估后确认。")
+        }
+    }
+}
+
+/// The five directions (记录 or one of the packs), one of them chosen.
+struct UsageIntentSelector: View {
+    @Binding var selection: UsageIntent
+    var body: some View {
+        ForEach(UsageIntent.allCases) { intent in
+            Button { selection = intent } label: {
+                HStack(spacing: Theme.Space.block) {
+                    Text(intent.label).foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: selection == intent ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(selection == intent ? Color.accentColor : Color.secondary)
+                }
+                .font(Theme.TypeScale.body).frame(minHeight: Theme.Size.tap).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(selection == intent ? .isSelected : [])
         }
     }
 }

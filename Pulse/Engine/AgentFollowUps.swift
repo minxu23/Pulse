@@ -182,6 +182,8 @@ enum AgentFollowUps {
             } else {
                 list = ["我的数据会上传吗？", "你的建议依据是什么？"]
             }
+        case .program:
+            list = r.followUps
         case .condition, .greeting, .daySummary, .unknown, .emergency:
             list = []
         }

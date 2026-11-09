@@ -40,17 +40,17 @@ struct LabRecheckCard: View {
         return HStack(alignment: .top, spacing: Theme.Space.block) {
             IconTile(icon: "testtube.2", color: (days ?? 1) <= 0 ? .orange : .secondary)
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                Text(item.title).font(.subheadline.weight(.semibold))
+                Text(item.title).font(Theme.TypeScale.body.weight(.semibold))
                 Text(item.last.map { "上次 \($0.formatted(.dateTime.month().day())) · \(item.interval)" } ?? "记下最近一次的结果后，Pulse 帮你算下次的时间")
-                    .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 if !item.tests.hasPrefix(item.name) {
-                    Text(item.tests).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(item.tests).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: Theme.Space.item)
             VStack(alignment: .trailing, spacing: Theme.Space.hairline) {
-                if let due { Text(due.formatted(.dateTime.month().day())).font(.subheadline.weight(.semibold)).monospacedDigit() }
-                if !tag.isEmpty { Text(tag).font(.footnote).foregroundStyle(color) }
+                if let due { Text(due.formatted(.dateTime.month().day())).font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit() }
+                if !tag.isEmpty { Text(tag).font(Theme.TypeScale.body).foregroundStyle(color) }
             }
         }
         .frame(minHeight: Theme.Size.tap)
@@ -82,7 +82,7 @@ private struct RecheckDateSheet: View {
                     Text("\(item.interval)（\(item.basis)）").foregroundStyle(.secondary)
                     if let last = item.last { LabeledContent("上次", value: last.formatted(.dateTime.year().month().day())) }
                 }
-                .font(.subheadline)
+                .font(Theme.TypeScale.body)
                 Section {
                     DatePicker("复查日期", selection: $date, in: Date.app.startOfDay..., displayedComponents: .date)
                 } footer: {

@@ -58,14 +58,14 @@ struct GlucoseProfileView: View {
                 Image(systemName: p.level.glyph.icon).imageScale(.small).foregroundStyle(p.level.glyph.color).accessibilityHidden(true)
                 Text(p.title).fixedSize(horizontal: false, vertical: true)
             }
-            .font(.title3.weight(.semibold))
-            Text(p.summary).font(.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            .font(Theme.TypeScale.title.weight(.semibold))
+            Text(p.summary).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if !p.tests.isEmpty {
                 Text("\(Text("建议检查：").fontWeight(.semibold).foregroundStyle(.primary))\(p.tests)")
-                    .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Divider().padding(.top, Theme.Space.tight)
-            Text(p.by).font(.footnote).foregroundStyle(.secondary)
+            Text(p.by).font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
         .cardSurface()
         .accessibilityElement(children: .combine)
@@ -77,8 +77,8 @@ struct GlucoseProfileView: View {
             ForEach(Array(p.indicators.enumerated()), id: \.offset) { i, x in
                 HStack(alignment: .firstTextBaseline, spacing: Theme.Space.block) {
                     VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                        Text(x.name).font(.subheadline)
-                        Text(x.reference).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Text(x.name).font(Theme.TypeScale.body)
+                        Text(x.reference).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: Theme.Space.item)
                     statusValue(x)
@@ -92,11 +92,11 @@ struct GlucoseProfileView: View {
     }
 
     @ViewBuilder private func statusValue(_ x: GlucoseProfile.Indicator) -> some View {
-        let value = Text(x.value).font(.subheadline.weight(.semibold)).monospacedDigit()
+        let value = Text(x.value).font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit()
         switch x.status {
-        case .good: StatusLabel(text: x.value, icon: "checkmark.circle.fill", color: .green).font(.subheadline.weight(.semibold)).monospacedDigit()
-        case .attention: StatusLabel(text: x.value, icon: "exclamationmark.circle.fill", color: .orange).font(.subheadline.weight(.semibold)).monospacedDigit()
-        case .concern: StatusLabel(text: x.value, icon: "exclamationmark.triangle.fill", color: .red).font(.subheadline.weight(.semibold)).monospacedDigit()
+        case .good: StatusLabel(text: x.value, icon: "checkmark.circle.fill", color: .green).font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit()
+        case .attention: StatusLabel(text: x.value, icon: "exclamationmark.circle.fill", color: .orange).font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit()
+        case .concern: StatusLabel(text: x.value, icon: "exclamationmark.triangle.fill", color: .red).font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit()
         case .info: value
         }
     }
@@ -108,12 +108,12 @@ struct GlucoseProfileView: View {
             ForEach(Array(p.signs.enumerated()), id: \.offset) { i, s in
                 HStack(alignment: .firstTextBaseline, spacing: Theme.Space.iconGap) {
                     Image(systemName: s.present ? (s.strong ? "exclamationmark.triangle.fill" : "exclamationmark.circle.fill") : "checkmark.circle.fill")
-                        .font(.subheadline).imageScale(.small)
+                        .font(Theme.TypeScale.body).imageScale(.small)
                         .foregroundStyle(s.present ? (s.strong ? Color.red : Color.orange) : Color.green)
                         .frame(width: glyphColumn)
                     VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                        Text(s.present ? s.title : s.absent).font(.subheadline.weight(s.present ? .semibold : .regular))
-                        Text(s.evidence).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Text(s.present ? s.title : s.absent).font(Theme.TypeScale.body.weight(s.present ? .semibold : .regular))
+                        Text(s.evidence).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .padding(.vertical, Theme.Space.item)
@@ -122,7 +122,7 @@ struct GlucoseProfileView: View {
             }
             Text(p.hasDiabetes ? "这些迹象可以和医生一起看；是否调整治疗由医生决定。"
                                : "CGM 只能看到迹象。胰岛素抵抗要通过空腹血糖和胰岛素（HOMA-IR）或口服糖耐量试验来确认。")
-                .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.top, Theme.Space.tight)
+                .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.top, Theme.Space.tight)
         }
         .cardSurface()
     }
@@ -140,22 +140,22 @@ struct GlucoseProfileView: View {
                     }
                 }
                 RuleMark(y: .value("饭前", 0)).foregroundStyle(Color.secondary.opacity(0.4))
-            }
+            }.pulseChartAxes()
             .chartForegroundStyleScale(domain: p.meals.map(\.kind.label), range: p.meals.map { colors[$0.kind] ?? .gray })
-            .chartXAxis { AxisMarks(values: [0, 60, 120, 180]) { v in AxisGridLine(); AxisValueLabel { Text("\(v.as(Int.self) ?? 0) 分") } } }
-            .chartYAxis { AxisMarks(position: .trailing) }
+            .chartXAxis { AxisMarks(values: [0, 60, 120, 180]) { v in AxisGridLine(); AxisValueLabel { Text("\(v.as(Int.self) ?? 0) 分") }.font(Theme.TypeScale.body) } }
+            .chartYAxis { AxisMarks(position: .trailing) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
             .frame(height: 150)
             .accessibilityLabel("各餐饭后 3 小时的平均血糖升高曲线")
             ForEach(p.meals) { m in
                 HStack(spacing: Theme.Space.item) {
                     HStack(spacing: Theme.Space.iconGap) {
                         Circle().fill(colors[m.kind] ?? .gray).frame(width: 8, height: 8).accessibilityHidden(true)
-                        Text(m.kind.label).font(.subheadline.weight(.semibold))
+                        Text(m.kind.label).font(Theme.TypeScale.body.weight(.semibold))
                     }
                     Text("+\(m.rise.oneDecimal) · \(m.peakMinutes) 分钟达峰 · " + (m.backMinutes.map { "\(RuleGlucoseModel.duration($0))回落" } ?? "3 小时内未回落"))
-                        .font(.footnote).foregroundStyle(.secondary).monospacedDigit()
+                        .font(Theme.TypeScale.body).foregroundStyle(.secondary).monospacedDigit()
                     Spacer(minLength: 0)
-                    Text("\(m.count) 餐").font(.footnote).foregroundStyle(.secondary)
+                    Text("\(m.count) 餐").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
                 .accessibilityElement(children: .combine)
             }
@@ -177,7 +177,7 @@ struct GlucoseProfileView: View {
             .onChange(of: kind) { _, _ in carbs = nil }
             if let t = typical {
                 Stepper(value: Binding(get: { carbs ?? t }, set: { carbs = $0 }), in: 10...200, step: 10) {
-                    Text("这一餐约 \(Int(carbs ?? t)) g 碳水").font(.subheadline)
+                    Text("这一餐约 \(Int(carbs ?? t)) g 碳水").font(Theme.TypeScale.body)
                 }
             }
             if let pr = prediction {
@@ -189,18 +189,18 @@ struct GlucoseProfileView: View {
                         LineMark(x: .value("分钟", pt.minutes), y: .value("mmol/L", pt.mid))
                             .foregroundStyle(Theme.glucose).lineStyle(StrokeStyle(lineWidth: 2, dash: [4, 3])).interpolationMethod(.monotone)
                     }
-                }
-                .chartXAxis { AxisMarks(values: [0, 60, 120, 180]) { v in AxisGridLine(); AxisValueLabel { Text("\(v.as(Int.self) ?? 0) 分") } } }
-                .chartYAxis { AxisMarks(position: .trailing) }
+                }.pulseChartAxes()
+                .chartXAxis { AxisMarks(values: [0, 60, 120, 180]) { v in AxisGridLine(); AxisValueLabel { Text("\(v.as(Int.self) ?? 0) 分") }.font(Theme.TypeScale.body) } }
+                .chartYAxis { AxisMarks(position: .trailing) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
                 .chartYScale(domain: max(2, (pr.points.map(\.low).min() ?? 4) - 1)...max(line + 1, (pr.points.map(\.high).max() ?? 10) + 0.5))
                 .frame(height: 140)
                 .accessibilityLabel("\(kind.label)饭后 3 小时血糖预测")
                 .accessibilityValue("峰值约 \(pr.peak.low.oneDecimal) 到 \(pr.peak.high.oneDecimal)")
-                Text("虚线为预测，浅色带为可能的范围；灰色虚线为 \(line.oneDecimal) mmol/L。").font(.caption).foregroundStyle(.secondary)
-                Text(pr.message).font(.subheadline).fixedSize(horizontal: false, vertical: true)
-                Text(MealPrediction.caveat).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text("虚线为预测，浅色带为可能的范围；灰色虚线为 \(line.oneDecimal) mmol/L。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                Text(pr.message).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
+                Text(MealPrediction.caveat).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             } else {
-                Text("记录几次\(kind.label)的进餐时间后，就能按你自己的饭后反应来预测。").font(.subheadline).foregroundStyle(.secondary)
+                Text("记录几次\(kind.label)的进餐时间后，就能按你自己的饭后反应来预测。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
         .cardSurface()
@@ -222,12 +222,12 @@ struct GlucoseProfileEntry: View {
                 HStack(spacing: Theme.Space.block) {
                     IconTile(icon: "chart.xyaxis.line", color: Theme.glucose)
                     VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                        Text("血糖代谢画像").font(.headline)
+                        Text("血糖代谢画像").font(Theme.TypeScale.title)
                         StatusLabel(text: p.title, icon: p.level.glyph.icon, color: p.level.glyph.color, secondaryText: true)
-                            .font(.subheadline).lineLimit(2)
+                            .font(Theme.TypeScale.body).lineLimit(2)
                     }
                     Spacer(minLength: Theme.Space.tight)
-                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                    Image(systemName: "chevron.right").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.tertiary)
                 }
                 .cardSurface()
                 .contentShape(Rectangle())

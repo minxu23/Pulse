@@ -10,16 +10,17 @@ final class UserProfile {
 
     // Basics
     var nickname: String = ""
-    var birthYear: Int = 1988
+    var birthYear: Int = 0
     var sexRaw: String = Sex.unspecified.rawValue
-    var heightCm: Double = 170
-    var weightKg: Double = 68
+    var heightCm: Double = 0
+    var weightKg: Double = 0
     var neckCm: Double? = nil
 
     // Exercise base & health background
     var activityLevelRaw: String = ActivityLevel.light.rawValue
     var weeklyExerciseMinutes: Int = 60
     var conditionsRaw: [String] = []
+    var healthBackgroundReviewed: Bool = false
     var otherConditions: String = ""
     /// Conditions recorded from the Health Agent conversation (`ConditionLibrary` ids, or a name it
     /// has no entry for).
@@ -40,7 +41,8 @@ final class UserProfile {
     var nightShiftEnd: Int = 8 * 60
 
     // Goals
-    var goalsRaw: [String] = [GoalDirection.lowerRHR.rawValue, GoalDirection.energy.rawValue]
+    var goalsRaw: [String] = []
+    var usageIntentRaw: String = ""
     var goalNote: String = ""
     var targetDate: Date? = nil
     var weeklyTimeBudget: Int = 180
@@ -82,6 +84,37 @@ final class UserProfile {
     /// 复盘的优先事项 in the user's own order; empty = Pulse's automatic order.
     var reviewPrioritiesRaw: [String] = []
     var stepsTarget: Int = 8000
+    /// Sports the user likes, with their level ("tennis:regular"); see `SportPreference`.
+    var favoriteSportsRaw: [String] = []
+    /// Baseline questionnaire: smoking, early heart disease in the family, PAR-Q+ answers.
+    var smoker: Bool? = nil
+    var familyHistoryCVD: Bool? = nil
+    var parqAnswers: [Bool] = []
+    var parqDate: Date? = nil
+    /// Owns a blood-pressure monitor (nil = not asked; readings arriving also count).
+    var hasBPMonitor: Bool? = nil
+
+    // 三阶段健康计划: 基线期 → 改善期 (4-week rounds) → 总结期
+    var programPhaseRaw: String = ""
+    var programBaselineStart: Date? = nil
+    var programPackRaw: String = ""
+    var programTargetRaw: String = ""
+    var programRound: Int = 0
+    var programRoundStart: Date? = nil
+    var programRoundWeeks: Int = 4
+    /// The main target's value at the start of the round, and the round's goal.
+    var programTargetBaseline: Double? = nil
+    var programTargetGoal: Double? = nil
+    var programQuestionsDone: Bool = false
+    /// `ProgramPlanInput` as JSON while a pack is running.
+    var programPlanData: Data? = nil
+    /// Danger signs (raw `RedFlag.Kind`) a doctor has seen and allowed starting the program with. Only for starting
+    /// the program: the care limits on intensity keep to `clinicianCleared`.
+    var programClearedFlags: [String] = []
+    /// The optional strength self-test of 基线期: push-ups to exhaustion, or 30-second chair stands.
+    var strengthPushups: Int? = nil
+    var strengthChairStands: Int? = nil
+    var strengthTestDate: Date? = nil
 
     // Optional professional modules
     var modulesRaw: [String] = []
@@ -156,6 +189,10 @@ extension UserProfile {
         get { reviewPrioritiesRaw.compactMap(PriorityArea.init(rawValue:)) }
         set { reviewPrioritiesRaw = newValue.map(\.rawValue) }
     }
+    var favoriteSports: [SportPreference] {
+        get { favoriteSportsRaw.compactMap(SportPreference.init(raw:)) }
+        set { favoriteSportsRaw = newValue.map(\.raw) }
+    }
     var modules: Set<ProModule> {
         get { Set(modulesRaw.compactMap(ProModule.init(rawValue:))) }
         set { modulesRaw = newValue.map(\.rawValue).sorted() }
@@ -176,8 +213,8 @@ extension UserProfile {
         get { ApneaTreatment(rawValue: apneaTreatmentRaw) ?? .none }
         set { apneaTreatmentRaw = newValue.rawValue }
     }
-    var age: Int { max(0, Calendar.current.component(.year, from: .app) - birthYear) }
-    var bmi: Double { weightKg / pow(heightCm / 100, 2) }
+    var age: Int { hasAge ? max(0, Calendar(identifier: .gregorian).component(.year, from: .app) - birthYear) : 0 }
+    var bmi: Double { hasBodySize ? weightKg / pow(heightCm / 100, 2) : 0 }
     var displayName: String { nickname.isEmpty ? "你" : nickname }
 
     func hasModule(_ module: ProModule) -> Bool { modulesRaw.contains(module.rawValue) }

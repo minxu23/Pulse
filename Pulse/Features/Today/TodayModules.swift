@@ -129,12 +129,12 @@ struct TodayModuleCard: View {
         return ModuleCard(title: race.name.isEmpty ? "专项运动" : race.name, icon: "flag.checkered", color: Theme.activity,
                        subtitle: w.weeksToRace > 0 ? "距比赛 \(w.weeksToRace) 周 · \(w.phase.label)" : w.phase.label) {
                 HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
-                    Text(w.weeklyKm.noDecimal).font(.system(.title, design: .rounded).weight(.semibold)).monospacedDigit()
-                    Text("公里 · 本周跑量").font(.subheadline).foregroundStyle(.secondary)
+                    Text(w.weeklyKm.noDecimal).font(Theme.TypeScale.title.weight(.semibold)).monospacedDigit()
+                    Text("公里 · 本周跑量").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     Spacer(minLength: Theme.Space.item)
-                    Text("最长 \(w.longRunKm.noDecimal) 公里").font(.subheadline).foregroundStyle(.secondary)
+                    Text("最长 \(w.longRunKm.noDecimal) 公里").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
-                Text(w.phase.focus).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text(w.phase.focus).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             } prompt: { EmptyView() } destination: { MarathonView() }
     }
 
@@ -159,28 +159,28 @@ struct ModuleTile: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
                 Image(systemName: icon)
-                    .font(.headline).foregroundStyle(.white)
+                    .font(Theme.TypeScale.title).foregroundStyle(.white)
                     .frame(width: Theme.Size.tileIcon, height: Theme.Size.tileIcon)
                     .background(color.gradient, in: RoundedRectangle(cornerRadius: Theme.Radius.tile(Theme.Size.tileIcon), style: .continuous))
                 Spacer()
                 if let flag {
-                    StatusLabel(text: flag.text, icon: "exclamationmark.circle.fill", color: flag.color).font(.caption.weight(.semibold))
+                    StatusLabel(text: flag.text, icon: "exclamationmark.circle.fill", color: flag.color).font(Theme.TypeScale.body.weight(.semibold))
                 }
             }
             Spacer(minLength: Theme.Space.block)
-            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+            Text(title).font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.primary)
             HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
-                Text(metric).font(.system(.title2, design: .rounded).weight(.bold)).monospacedDigit()
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                Text(unit).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(metric).font(Theme.TypeScale.title.weight(.bold)).monospacedDigit()
+                    .lineLimit(1)
+                Text(unit).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1)
                 if let r = rate {
                     Image(systemName: abs(r) < 0.03 ? "arrow.right" : (r > 0 ? (r >= 0.1 ? "arrow.up" : "arrow.up.right") : (r <= -0.1 ? "arrow.down" : "arrow.down.right")))
-                        .font(.caption.weight(.bold)).foregroundStyle(.secondary)
+                        .font(Theme.TypeScale.body.weight(.bold)).foregroundStyle(.secondary)
                         .accessibilityLabel(abs(r) < 0.03 ? "平稳" : (r > 0 ? "上升" : "下降"))
                 }
             }
             .padding(.top, Theme.Space.hairline)
-            Text(caption).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+            Text(caption).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1)
                 .padding(.top, Theme.Space.hairline)
         }
         .padding(Theme.Space.cardPadding)
@@ -212,8 +212,8 @@ struct GlucoseOutlookCard: View {
                     Image(systemName: o.forecast.alert != nil ? "exclamationmark.triangle.fill" : "clock.arrow.circlepath")
                         .foregroundStyle(o.forecast.alert != nil ? Color.orange : Color.secondary)
                 }
-                .font(.subheadline)
-                Text(NextHourForecaster.caveat).font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                .font(Theme.TypeScale.body)
+                Text(NextHourForecaster.caveat).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             .cardSurface()
         }
@@ -239,9 +239,9 @@ struct AbnormalRecallCard: View {
                 VStack(alignment: .leading, spacing: Theme.Space.block) {
                     StatusLabel(text: "\(TodayModuleCard.when(r.time)) \(a.title) \(a.valueText)", icon: "exclamationmark.circle.fill",
                                 color: a.severe ? .red : .orange)
-                        .font(.headline)
+                        .font(Theme.TypeScale.title)
                     Text(a.firstLine ?? "回想一下之前发生了什么，记下来，下次更容易找到规律。")
-                        .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: Theme.Space.item) {
                         Button("记下可能的原因") { noting = r }.buttonStyle(.bordered)
                         Button { agentQuestion = a.question(at: r.time, causes: [], text: "") } label: {
@@ -250,13 +250,13 @@ struct AbnormalRecallCard: View {
                         .buttonStyle(.borderless)
                         Spacer(minLength: 0)
                     }
-                    .font(.subheadline.weight(.semibold))
+                    .font(Theme.TypeScale.body.weight(.semibold))
                 }
                 .cardSurface()
             } else if let r = AbnormalRecall.noted(readings, profile: p, now: now) {
                 // The user's own note, of any length: a two-line preview.
                 Label("\(TodayModuleCard.when(r.time)) 已记下：\(r.note)", systemImage: "note.text")
-                    .font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                    .font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, Theme.Space.tight)
             }
         }
@@ -301,10 +301,10 @@ private struct ModuleCard<Content: View, Prompt: View, Destination: View>: View 
                             Image(systemName: icon).imageScale(.small).foregroundStyle(color)
                             Text(title)
                         }
-                        .font(.headline)
-                        Text(subtitle).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                        .font(Theme.TypeScale.title)
+                        Text(subtitle).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1)
                         Spacer(minLength: Theme.Space.tight)
-                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                        Image(systemName: "chevron.right").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.tertiary)
                     }
                     content
                 }
@@ -341,10 +341,10 @@ struct GlucoseHourChart: View {
                     .foregroundStyle(Theme.glucose).lineStyle(StrokeStyle(lineWidth: 2, dash: [4, 3]))
             }
             RuleMark(x: .value("现在", forecast.from)).foregroundStyle(Color.secondary.opacity(0.4)).lineStyle(StrokeStyle(lineWidth: 1))
-        }
+        }.pulseChartAxes()
         .chartYScale(domain: max(2, (values.min() ?? 4) - 0.5)...((values.max() ?? 10) + 0.5))
-        .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 1)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()) } }
-        .chartYAxis { AxisMarks(position: .trailing, values: [low, high]) }
+        .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 1)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()).font(Theme.TypeScale.body) } }
+        .chartYAxis { AxisMarks(position: .trailing, values: [low, high]) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
         .frame(height: 110)
         .accessibilityLabel("最近 3 小时血糖和未来 1 小时的推算范围")
         .accessibilityValue("1 小时后约 \(forecast.end.low.oneDecimal) 到 \(forecast.end.high.oneDecimal) 毫摩尔每升")
@@ -368,9 +368,9 @@ struct AbnormalNoteForm: View {
             Section {
                 StatusLabel(text: "\(TodayModuleCard.when(reading.time)) \(abnormal.title) \(abnormal.valueText)", icon: "exclamationmark.circle.fill",
                             color: abnormal.severe ? .red : .orange)
-                    .font(.headline)
+                    .font(Theme.TypeScale.title)
                 if let first = abnormal.firstLine {
-                    Text(first).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                    Text(first).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
                 }
             }
             Section {
@@ -380,7 +380,7 @@ struct AbnormalNoteForm: View {
                         if on { picked.removeAll { $0 == c } } else { picked.append(c) }
                     } label: {
                         HStack(spacing: Theme.Space.block) {
-                            Image(systemName: on ? "checkmark.circle.fill" : "circle").font(.title3)
+                            Image(systemName: on ? "checkmark.circle.fill" : "circle").font(Theme.TypeScale.title)
                                 .foregroundStyle(on ? Theme.accent : Color.secondary.opacity(0.5))
                             Text(c).foregroundStyle(.primary)
                             Spacer(minLength: 0)

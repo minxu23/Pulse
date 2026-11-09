@@ -18,6 +18,9 @@ enum BackgroundCheck {
         try? BGTaskScheduler.shared.submit(r)
     }
 
+    /// On your own records only: Health is never read into a sample user's data.
+    @MainActor static func runOwn() async { await run(DataStores.shared.ownContainer()) }
+
     @MainActor static func run(_ container: ModelContainer) async {
         schedule()
         let ctx = container.mainContext
