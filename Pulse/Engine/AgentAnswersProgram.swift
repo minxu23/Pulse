@@ -22,9 +22,10 @@ extension HealthAgent {
 
     static func program(_ c: AgentContext, question q: String) -> AgentReply {
         guard let x = c.program, x.phase != .none else {
-            let text = "你还没有开始三阶段健康计划。可以在「计划」里开始基线评估：先照常记录一周，生成健康画像和同龄排名，再按结果选一个改善方案。"
+            let first = "你还没有开始三阶段健康计划。"
+            let text = first + "\n可以在「计划」里开始基线评估：先照常记录一周，生成健康画像和同龄排名，再按结果选一个改善方案。"
             return AgentReply(text: text, sources: ["三阶段计划"], followUps: ["今天适合运动吗？"], destination: .plan,
-                              intent: .program, conclusion: text, verbatim: true)
+                              intent: .program, conclusion: first, verbatim: true)
         }
         let r: AgentReply
         if ["排名", "靠后", "落后", "垫底", "比同龄"].contains(where: q.contains) { r = ranks(c, x) }
@@ -90,15 +91,30 @@ extension HealthAgent {
     }
 
     /// This week of the round: each behaviour goal with its numbers, the main target against its noise, next week.
+    /// On the week's first day nothing is past yet, so the answer is about last week (or says the round has just begun).
     static func weekProgress(_ c: AgentContext, _ x: AgentProgram) -> AgentReply {
         guard let program = c.profile.program else { return whereNow(c, x) }
+        let today = DayClock.logicalToday(c.now, c.profile)
+        let lastWeek = today == today.weekStart
+        let ws = lastWeek ? today.weekStart.adding(days: -7) : today.weekStart
+        if lastWeek, ws < program.roundStart.weekStart {
+            let text = "这一轮今天才开始，还没有可以判断的记录。\n今天的安排在「计划」里；每周日在「复盘」里看这周做得怎么样。"
+            return AgentReply(text: text, sources: ["三阶段计划"], destination: .plan, intent: .program,
+                              conclusion: "这一轮今天才开始，还没有可以判断的记录。", verbatim: true)
+        }
         let input = ProgramEvaluator.Input(program: program, profile: c.profile, days: c.days, workouts: c.workouts, vitals: c.vitals,
                                            plan: c.plan, baseline: x.goal?.baseline, goal: x.goal?.goal)
-        let w = ProgramEvaluator.week(input, weekStart: c.now.weekStart, now: c.now)
-        let first = w.excused ? "这周有生病或出差的日子，不计入判定。" : w.met ? "这周的方案目前做到了。" : "这周的方案还差一些。"
-        let checks = w.checks.map { "• \($0.title)：\($0.detail)\($0.met ? "" : "（还差）")" }.joined(separator: "\n")
-        let text = [first, "第 \(min(w.week, w.weeks))/\(w.weeks) 周：\n" + checks, w.targetLine, "下周：" + w.next].joined(separator: "\n")
-        return AgentReply(text: text, sources: ["三阶段计划", "本周记录"], destination: .plan, intent: .program, conclusion: first, verbatim: true)
+        let w = ProgramEvaluator.week(input, weekStart: ws, now: lastWeek ? today : c.now)
+        let which = lastWeek ? "上周" : "这周"
+        var lines = [w.excused ? "\(which)有生病或出差的日子，不计入判定。" : w.met ? (lastWeek ? "上周的方案做到了。" : "这周的方案目前做到了。") : "\(which)的方案还差一些。"]
+        if lastWeek { lines.append("这周今天才开始，下面是上周的情况。") }
+        lines.append("第 \(min(w.week, w.weeks))/\(w.weeks) 周：\n" + w.checks.map { "• \($0.title)：\($0.detail)\($0.met ? "" : "（还差）")" }.joined(separator: "\n"))
+        lines.append(w.targetLine)
+        // The next-week line is written from inside the week it judges: shift it back a week for last week.
+        lines.append(lastWeek ? w.next.replacingOccurrences(of: "这周", with: "上周").replacingOccurrences(of: "下周", with: "这周")
+                     : "照目前的完成情况，" + w.next)
+        return AgentReply(text: lines.joined(separator: "\n"), sources: ["三阶段计划", lastWeek ? "上周记录" : "本周记录"], destination: .plan,
+                          intent: .program, conclusion: lines[0], verbatim: true)
     }
 
     /// The ranks in the bottom half of peers, each with its possible causes as the report gives them.
@@ -123,14 +139,20 @@ extension HealthAgent {
             return AgentReply(text: text, sources: ["基线报告"], destination: .plan, intent: .program, conclusion: text, verbatim: true)
         }
         var lines: [String] = []
+        var explained = false
         for m in low.prefix(3) {
             var line = "• \(m.title) \(m.valueText)：在同龄同性别里\(m.rank!.approx)。"
             if let causes = concerns.first(where: { $0.metric == m.kind })?.causes.prefix(2), !causes.isEmpty {
                 line += "可能和这些有关：" + causes.map(\.text).joined(separator: "；") + "。"
+                explained = true
             }
             lines.append(line)
         }
-        let first = "排名靠后的有 \(low.count) 项，下面是可能的原因，不是诊断。"
+        // Causes are only worked out for what the report flags; ranks just below the middle get none.
+        let mild = low.allSatisfy { !$0.rank!.band.isLow }
+        let first = explained ? "排名靠后的有 \(low.count) 项，下面是可能的原因，不是诊断。"
+            : mild ? "有 \(low.count) 项在同龄人的后半段，都还不算偏低。" : "排名靠后的有 \(low.count) 项，记录里暂时没找到能解释的原因。"
+        if !explained, mild { lines.append("基线报告只为偏低或需要关注的指标分析原因。") }
         let note = "排名参考的人群和手表的误差写在基线报告里，估算的指标可能偏差一档。"
         return AgentReply(text: ([first] + lines + [note]).joined(separator: "\n"), sources: ["基线报告"], destination: .plan,
                           intent: .program, conclusion: first, verbatim: true)

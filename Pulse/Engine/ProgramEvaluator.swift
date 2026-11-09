@@ -106,9 +106,10 @@ enum ProgramEvaluator {
         // Training: done counts 1, partial ½, for days already past.
         let items = x.plan.filter { $0.day >= ws && $0.day < end && $0.kind.isTraining }
         let done = items.reduce(0.0) { $0 + ($1.status == .done ? 1 : $1.status == .partial ? 0.5 : 0) }
-        let rate = items.isEmpty ? 1 : done / Double(items.count)
+        // Nil while no session has been due yet: nothing to judge next week by.
+        let rate: Double? = items.isEmpty ? nil : done / Double(items.count)
         checks.append(BehaviorCheck(title: "训练", detail: items.isEmpty ? "这几天没有安排训练" : "完成 \(done.shortDecimal) / \(items.count) 次",
-                                    met: items.isEmpty || rate >= 0.75))
+                                    met: (rate ?? 1) >= 0.75))
 
         // Steps against the week's target.
         if let goal = PackPlanner.stepsTarget(x.program, age: x.profile.age, week: wk) {
@@ -127,14 +128,14 @@ enum ProgramEvaluator {
             }
         case (.cardio, .homeBP):
             let bpDays = Set(x.vitals.filter { $0.kind == .bloodPressure && $0.time >= ws && $0.time < end }.map { $0.time.startOfDay }).count
-            let need = min(3, max(1, elapsed - 1))
+            let need = elapsed == 0 ? 0 : min(3, max(1, elapsed - 1))
             checks.append(BehaviorCheck(title: "测血压", detail: "测了 \(bpDays) 天，每周至少 3 天", met: bpDays >= need))
         case (.cardio, .clinicBP):
             let n = x.vitals.filter { $0.kind == .bloodPressure && $0.time >= ws && $0.time < end }.count
-            checks.append(BehaviorCheck(title: "测血压", detail: "测了 \(n) 次，每周至少 2 次", met: n >= min(2, max(1, elapsed / 3))))
+            checks.append(BehaviorCheck(title: "测血压", detail: "测了 \(n) 次，每周至少 2 次", met: n >= (elapsed == 0 ? 0 : min(2, max(1, elapsed / 3)))))
         case (.metabolic, _):
             let walks = days.filter { d in afterDinnerWalk(d, x.workouts) }.count
-            let need = min(5, max(1, elapsed - 1))
+            let need = elapsed == 0 ? 0 : min(5, max(1, elapsed - 1))
             checks.append(BehaviorCheck(title: "晚饭后散步", detail: "走了 \(walks) 天，目标每周 5 天", met: walks >= need))
         default:
             break
@@ -175,8 +176,9 @@ enum ProgramEvaluator {
         return s + "。"
     }
 
-    static func next(rate: Double, excused: Bool, _ p: ProgramPlanInput, week: Int) -> String {
+    static func next(rate: Double?, excused: Bool, _ p: ProgramPlanInput, week: Int) -> String {
         if excused { return p.pack == .event ? "这周生病或出差的日子多，不计入判定，下周按比赛日期的计划继续。" : "这周生病或出差的日子多，不计入判定，这一轮顺延一周（每轮最多顺延 2 周），下周照原计划。" }
+        guard let rate else { return p.pack == .event ? "还没有到期的训练，下周按比赛日期的计划继续。" : "还没有到期的训练，下周照原计划。" }
         if rate >= 0.85 {
             return p.pack == .fitness && week < 3 ? "这周完成得好：下周小幅加量，并按计划加一次间歇。" : "这周完成得好：下周小幅加量（约 10%）。"
         }

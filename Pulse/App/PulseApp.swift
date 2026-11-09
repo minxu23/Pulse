@@ -92,6 +92,11 @@ struct RootView: View {
                 AgentConversation.shared.clear()
             }
             #if DEBUG
+            // -PulseNoVO2: no cardio-fitness estimates, as for someone who hasn't walked outdoors with the watch yet.
+            if args.contains("-PulseNoVO2") {
+                for r in (try? ctx.fetch(FetchDescriptor<DailyRecord>())) ?? [] { r.vo2Max = nil }
+                try? ctx.save()
+            }
             // Screenshot helper: put the sample user N weeks into a pack (-PulseProgram cardio|fitness|metabolic|event|auto,
             // -PulseProgramWeek N), with the baseline taken from the two weeks before the round began.
             // -PulseProgram baseline [-PulseBaselineDay N]: the sample user in 基线期, N days in (the report is

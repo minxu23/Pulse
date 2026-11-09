@@ -263,7 +263,7 @@ struct SpecFindingsTests {
         #expect(week.intent == .program && week.text.contains("第 1 轮第 2/4 周"), "\(week.text)")
         #expect(week.text.contains("主靶点静息心率") && week.text.contains("目标 ≤ 70"))
         let done = HealthAgent.reply(to: "这周方案完成得怎么样？", context: c)
-        #expect(done.text.contains("训练：") && done.text.contains("下周："), "\(done.text)")
+        #expect(done.text.contains("训练：") && done.text.contains("照目前的完成情况"), "\(done.text)")
         let rank = HealthAgent.reply(to: "我的排名为什么靠后？", context: c)
         #expect(rank.intent == .program)
         c.program = nil
