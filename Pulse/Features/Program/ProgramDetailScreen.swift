@@ -115,15 +115,15 @@ struct ProgramDetailScreen: View {
                 // The label sits on the side of the line with more room.
                 let late = r.series.first.map { start.timeIntervalSince($0.day) > (r.series.last?.day ?? start).timeIntervalSince(start) } ?? false
                 RuleMark(x: .value("本轮开始", start)).foregroundStyle(Color.gray).lineStyle(StrokeStyle(dash: [4, 4]))
-                    .annotation(position: .top, alignment: late ? .trailing : .leading, overflowResolution: Self.inside) { Text("本轮开始").font(Theme.TypeScale.body) }
+                    .annotation(position: .top, alignment: late ? .trailing : .leading, overflowResolution: Self.inside) { Self.label("本轮开始") }
             }
             if let b = t.baseline {
                 RuleMark(y: .value("基线", b)).foregroundStyle(Color.gray).lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                    .annotation(position: .top, alignment: .leading, overflowResolution: Self.inside) { Text("基线").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
+                    .annotation(position: .top, alignment: .leading, overflowResolution: Self.inside) { Self.label("基线", .secondary) }
             }
             if let g = t.goal {
                 RuleMark(y: .value("目标", g)).foregroundStyle(Theme.good)
-                    .annotation(position: .top, alignment: .trailing, overflowResolution: Self.inside) { Text("目标").font(Theme.TypeScale.body).foregroundStyle(.primary) }
+                    .annotation(position: .top, alignment: .trailing, overflowResolution: Self.inside) { Self.label("目标") }
             }
         }.pulseChartAxes()
         .chartYScale(domain: .automatic(includesZero: false))
@@ -132,6 +132,12 @@ struct ProgramDetailScreen: View {
 
     /// Chart labels stay within the plot, clear of the rows above it and of the axis labels.
     static let inside = AnnotationOverflowResolution(x: .fit(to: .plot), y: .fit(to: .chart))
+
+    /// A chart label on the card's own colour, so a line running through it passes behind the words.
+    static func label(_ text: String, _ style: HierarchicalShapeStyle = .primary) -> some View {
+        Text(text).font(Theme.TypeScale.body).foregroundStyle(style)
+            .padding(.horizontal, 2).background(Theme.card, in: .rect(cornerRadius: 2))
+    }
 
     /// Why this goal: what four weeks can change, and how much the number wobbles on its own.
     static func why(_ t: TargetMetric) -> String {

@@ -118,7 +118,7 @@ struct BaselineProgressLine: View {
                 .buttonStyle(.plain)
             } else if let s = status {
                 Button { tab = .plan } label: {
-                    NavRowLabel(icon: "calendar", title: s.baselineLine, detail: "不用刻意多练，摸底周的安排在「计划」里")
+                    NavRowLabel(icon: "calendar", title: s.baselineTitle, detail: s.baselineDetail)
                 }
                 .buttonStyle(.plain)
             } else {

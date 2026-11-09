@@ -111,10 +111,15 @@ struct ProgramStatus: Equatable {
         BaselineCompleteness(items: missing).stillToDo(daysLeft: max(0, ProgramFlow.baselineDays - baselineDays))
     }
 
-    /// 「基线期第 3/7 天 · 还差：心肺能力估算」 (the 「现在」 card on 今日).
-    var baselineLine: String {
+    /// 「基线期第 3/7 天 · 照常生活就好」, or only the day while something is still to do (the 「现在」 card on 今日).
+    var baselineTitle: String {
         let day = "基线期第 \(min(baselineDays + 1, ProgramFlow.baselineDays))/\(ProgramFlow.baselineDays) 天"
-        return stillToDo.isEmpty ? day + " · 照常生活就好" : day + " · 还差：" + stillToDo.map(\.label).joined(separator: "、")
+        return stillToDo.isEmpty ? day + " · 照常生活就好" : day
+    }
+
+    /// The line under it: what is still to do, and where the week's plan is.
+    var baselineDetail: String {
+        (stillToDo.isEmpty ? "不用刻意多练" : "还差：" + stillToDo.map(\.label).joined(separator: "、")) + "，摸底周的安排在「计划」里"
     }
 }
 

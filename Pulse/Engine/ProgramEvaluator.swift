@@ -128,14 +128,14 @@ enum ProgramEvaluator {
             }
         case (.cardio, .homeBP):
             let bpDays = Set(x.vitals.filter { $0.kind == .bloodPressure && $0.time >= ws && $0.time < end }.map { $0.time.startOfDay }).count
-            let need = elapsed == 0 ? 0 : min(3, max(1, elapsed - 1))
+            let need = due(3, elapsed: elapsed)
             checks.append(BehaviorCheck(title: "测血压", detail: "测了 \(bpDays) 天，每周至少 3 天", met: bpDays >= need))
         case (.cardio, .clinicBP):
             let n = x.vitals.filter { $0.kind == .bloodPressure && $0.time >= ws && $0.time < end }.count
-            checks.append(BehaviorCheck(title: "测血压", detail: "测了 \(n) 次，每周至少 2 次", met: n >= (elapsed == 0 ? 0 : min(2, max(1, elapsed / 3)))))
+            checks.append(BehaviorCheck(title: "测血压", detail: "测了 \(n) 次，每周至少 2 次", met: n >= due(2, elapsed: elapsed)))
         case (.metabolic, _):
             let walks = days.filter { d in afterDinnerWalk(d, x.workouts) }.count
-            let need = elapsed == 0 ? 0 : min(5, max(1, elapsed - 1))
+            let need = due(5, elapsed: elapsed)
             checks.append(BehaviorCheck(title: "晚饭后散步", detail: "走了 \(walks) 天，目标每周 5 天", met: walks >= need))
         default:
             break
@@ -150,6 +150,10 @@ enum ProgramEvaluator {
                                  targetLine: targetLine(x.program.target, reading, change: change, beyond: beyond, goal: x.goal),
                                  next: next(rate: rate, excused: excused, x.program, week: wk))
     }
+
+    /// How many of a weekly goal are due after `elapsed` full days: the share of the week so far, rounded down,
+    /// so midweek asks only for what the days so far could hold (3 a week: 1 by Thursday, all 3 by the week's end).
+    static func due(_ perWeek: Int, elapsed: Int) -> Int { perWeek * min(max(elapsed, 0), 7) / 7 }
 
     /// An evening walk: a walk session that starts 18:00–21:30, or 1,000+ steps between 19:00 and 21:00.
     static func afterDinnerWalk(_ d: DayData, _ workouts: [WorkoutPoint]) -> Bool {

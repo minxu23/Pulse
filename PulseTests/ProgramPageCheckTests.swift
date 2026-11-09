@@ -58,6 +58,18 @@ struct ProgramPageCheckTests {
         #expect(w.next.contains("还没有到期的训练") && !w.next.contains("完成得好"), "\(w.next)")
     }
 
+    @Test func midweekAsksOnlyForTheShareOfTheWeekSoFar() {
+        #expect([0, 2, 3, 4, 5, 7].map { ProgramEvaluator.due(3, elapsed: $0) } == [0, 0, 1, 1, 2, 3])
+        #expect([3, 4, 7].map { ProgramEvaluator.due(2, elapsed: $0) } == [0, 1, 2])
+        #expect(ProgramEvaluator.due(5, elapsed: 7) == 5, "the whole week still asks for all of it")
+        let x = ProgramEvaluator.Input(program: input(.homeBP), profile: profile(), days: days(from: monday.adding(days: -14), count: 17),
+                                       workouts: [], vitals: [], plan: sessions(weeks: 1), baseline: 140, goal: 135)
+        let wednesday = ProgramEvaluator.week(x, weekStart: monday, now: monday.adding(days: 2).adding(minutes: 630))
+        #expect(wednesday.checks.first { $0.title == "测血压" }?.met == true, "no reading is due before Thursday")
+        let sunday = ProgramEvaluator.week(x, weekStart: monday, now: monday.adding(days: 7))
+        #expect(sunday.checks.first { $0.title == "测血压" }?.met == false)
+    }
+
     @Test func onMondayTheAgentTalksAboutLastWeek() {
         let first = HealthAgent.reply(to: "这周方案完成得怎么样？", context: context(now: monday.adding(minutes: 630)))
         #expect(first.text.hasPrefix("这一轮今天才开始"), "\(first.text)")
