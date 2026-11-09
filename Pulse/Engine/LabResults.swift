@@ -123,9 +123,9 @@ struct LabStatus: Equatable {
 enum LabAnalyzer {
     static let rangeNote = "各医院的参考范围略有不同，以化验单上的为准。"
 
-    /// eGFR from serum creatinine (μmol/L) by CKD-EPI 2021; nil without a sex or for under-18s.
-    static func ckdEPI(creatinine umol: Double, age: Int, sex: Sex) -> Double? {
-        guard sex != .unspecified, umol > 0, age >= 18 else { return nil }
+    /// eGFR from serum creatinine (μmol/L) by CKD-EPI 2021; nil without an age or a sex, or for under-18s.
+    static func ckdEPI(creatinine umol: Double, age: Int?, sex: Sex) -> Double? {
+        guard sex != .unspecified, umol > 0, let age, age >= 18 else { return nil }
         let scr = umol / 88.4
         let female = sex == .female
         let k = female ? 0.7 : 0.9, a = female ? -0.241 : -0.302

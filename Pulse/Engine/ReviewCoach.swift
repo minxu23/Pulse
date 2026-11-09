@@ -45,7 +45,7 @@ struct BriefMetric: Identifiable, Equatable {
     /// The names the review looks metrics up by, in one place for the code that makes them and the code that reads them.
     enum Name {
         static let training = "训练完成", activity = "活动", rhr = "静息心率", homeBP = "家庭血压"
-        static let timeInRange = "血糖达标", weight = "体重", steps = "日均步数"
+        static let timeInRange = "血糖达标", weight = "体重", steps = "日均步数", sleep = "平均睡眠"
     }
     var id: String { name }
     let name: String
@@ -166,7 +166,7 @@ enum ReviewCoach {
                                    delta: c.total > 0 ? rate.delta.map { $0 == "持平" ? $0 : $0 + "%" } : nil, trend: c.total > 0 ? rate.trend : .none)
         let metrics = [
             metric(BriefMetric.Name.rhr, "heart.fill", c.rhr, p.rhr, unit: "bpm", lowerIsBetter: true, threshold: 1),
-            metric("平均睡眠", "bed.double.fill", c.sleepHours, p.sleepHours, unit: "小时", decimals: 1, threshold: 0.2),
+            metric(BriefMetric.Name.sleep, "bed.double.fill", c.sleepHours, p.sleepHours, unit: "小时", decimals: 1, threshold: 0.2),
             metric(BriefMetric.Name.activity, "figure.walk", c.activeMinutes, p.activeMinutes, unit: "分钟", threshold: max(15, p.activeMinutes * 0.1)),
             sessions,
             metric("醒后精力", "bolt.fill", c.energy, p.energy, unit: "/ 5", decimals: 1, threshold: 0.2),

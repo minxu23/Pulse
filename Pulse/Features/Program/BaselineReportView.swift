@@ -22,7 +22,7 @@ struct BaselineReportView: View {
             ForEach(r.cards) { AbilityCardView(card: $0) }
 
             DisclosureGroup("行为习惯与运动记录") {
-                HabitsCard(habits: r.habits, age: profile.age)
+                HabitsCard(habits: r.habits)
             }
             .cardSurface()
 
@@ -187,7 +187,6 @@ struct RankBar: View {
 
 private struct HabitsCard: View {
     let habits: HabitProfile
-    let age: Int
 
     var body: some View {
         let h = habits
@@ -233,6 +232,7 @@ private struct HabitsCard: View {
 
     @ViewBuilder private func lifestyle(_ h: HabitProfile) -> some View {
         if let bed = h.bedtimeMean { FactRow(label: "平均入睡", value: CauseInference.clock(bed)) }
+        if let wake = h.wakeMean { FactRow(label: "平均醒来", value: CauseInference.clock(wake)) }
         if let shift = h.weekendShift, abs(shift) >= 30 { FactRow(label: "周末比平时", value: shift > 0 ? "晚睡约 \(Int(shift.rounded())) 分钟" : "早睡约 \(Int(-shift.rounded())) 分钟") }
         FactRow(label: "饮酒", value: h.alcoholPerWeek > 0 ? "每周约 \(h.alcoholPerWeek.shortDecimal) 份" : "没有记录")
         if h.lateCaffeineDays > 0 { FactRow(label: "下午以后喝咖啡或茶", value: "\(h.lateCaffeineDays) 天") }

@@ -89,7 +89,7 @@ struct ProfileView: View {
                             }
                         })) {
                             Label {
-                                setting("异常提醒", "每隔几小时在后台看一次健康 App 的新数据，需要联系医生时提醒你。不能代替急救。")
+                                setting("异常提醒", "健康 App 有新的血压、血糖或体重时在后台查看，其他数据每隔几小时看一次，需要联系医生时提醒你。手机锁着时要等解锁后才能读取。不能代替急救。")
                             } icon: { tileIcon("exclamationmark.triangle", .orange) }
                         }
                         if remindersDenied {
@@ -305,7 +305,8 @@ struct DataSourcesView: View {
             Section {
                 Toggle("使用健康 App 数据", isOn: Binding(get: { profile.useHealthKit }, set: { on in
                     profile.useHealthKit = on
-                    if on { Task { try? await hk.requestAuthorization(); await hk.sync(into: ctx) } }
+                    if on { Task { try? await hk.requestAuthorization(); await hk.sync(into: ctx); hk.watchForReadings() } }
+                    else { hk.watchForReadings() }
                 }))
                 .disabled(!hk.isAvailable || profile.usesDemoData)
                 if profile.useHealthKit {

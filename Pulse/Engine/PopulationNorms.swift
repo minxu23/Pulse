@@ -209,7 +209,7 @@ enum PopulationNorms {
 
     /// Daily steps against the dose–response evidence: risk keeps falling to ~7,000 steps and levels off at
     /// 8,000–10,000 under 60 and 6,000–8,000 from 60 (Paluch 2022; Ding 2025).
-    static func stepBand(_ steps: Double, age: Int) -> StepBand {
+    static func stepBand(_ steps: Double, age: Int?) -> StepBand {
         if steps >= 12_500 { return .high }
         if steps >= Double(stepPlateau(age: age).lowerBound) { return .good }
         if steps >= 7000 { return .fair }
@@ -217,8 +217,8 @@ enum PopulationNorms {
         return .sedentary
     }
 
-    /// Where the step–mortality curve levels off for this age.
-    static func stepPlateau(age: Int) -> ClosedRange<Int> { age >= 60 ? 6000...8000 : 8000...10_000 }
+    /// Where the step–mortality curve levels off for this age (the under-60 range when the age is unknown).
+    static func stepPlateau(age: Int?) -> ClosedRange<Int> { (age ?? 0) >= 60 ? 6000...8000 : 8000...10_000 }
 
     enum BMIClass: String {
         case under, normal, over, obese

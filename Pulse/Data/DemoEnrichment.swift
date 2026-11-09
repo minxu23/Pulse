@@ -16,7 +16,8 @@ enum DemoEnrichment {
         let sessions = (try? ctx.fetch(FetchDescriptor<ActivitySession>(sortBy: [SortDescriptor(\.start)]))) ?? []
         let weights = ((try? ctx.fetch(FetchDescriptor<VitalReading>())) ?? []).filter { $0.kind == .weight }
         let today = now.startOfDay
-        let hrMax = 208 - 0.7 * Double(p.age)
+        let age = Double(p.age ?? 40)   // sample users always have a birth year
+        let hrMax = 208 - 0.7 * age
         let sessionsByDay = Dictionary(grouping: sessions, by: \.day)
 
         for r in records where r.day >= today.adding(days: -60) {
@@ -35,7 +36,7 @@ enum DemoEnrichment {
             guard let avg = s.avgHR, s.minutes >= 5 else { continue }
             s.hrSeries = series(minutes: Int(s.minutes), avg: avg, rest: recentRHR, type: s.type, hard: s.isHard, rng: &rng)
             if avg >= 0.6 * hrMax {
-                let r = (30 - 0.4 * (recentRHR - 60) - 0.1 * Double(p.age - 40) + rng.normal(0, 3)).rounded()
+                let r = (30 - 0.4 * (recentRHR - 60) - 0.1 * (age - 40) + rng.normal(0, 3)).rounded()
                 s.hrRecovery = min(48, max(9, r))
                 recoveryByDay[s.day, default: []].append(s.hrRecovery!)
             }
@@ -48,7 +49,7 @@ enum DemoEnrichment {
         for w in weights.sorted(by: { $0.time < $1.time }) {
             guard let r = byDay[w.time.startOfDay] else { continue }
             let bmi = w.value / pow(p.heightCm / 100, 2)
-            let fat = (1.2 * bmi + 0.23 * Double(p.age) - 10.8 * male - 5.4 + rng.normal(0, 0.6)).rounded(to: 0.1)
+            let fat = (1.2 * bmi + 0.23 * age - 10.8 * male - 5.4 + rng.normal(0, 0.6)).rounded(to: 0.1)
             r.bodyFatPct = min(55, max(5, fat))
             r.leanMassKg = (w.value * (1 - r.bodyFatPct! / 100)).rounded(to: 0.1)
         }
@@ -161,10 +162,11 @@ enum DemoEnrichment {
         }
         // Without diabetes: the meals the user logs, higher rises with more weight, more years and less movement.
         let bmi = p.bmi
-        var k = 0.032 + (bmi >= 28 ? 0.016 : bmi >= 24 ? 0.008 : 0) + (p.age >= 60 ? 0.005 : 0)
+        let age = Double(p.age ?? 40)   // sample users always have a birth year
+        var k = 0.032 + (bmi >= 28 ? 0.016 : bmi >= 24 ? 0.008 : 0) + (age >= 60 ? 0.005 : 0)
         if p.activityLevel == .sedentary { k += 0.004 }
         let meals = (spec?.meals ?? []).map { (hour: Double($0.minute) / 60, peak: min(4.6, $0.carbs * k)) }
-        let baseline = min(5.9, max(4.7, 4.9 + (bmi - 22) * 0.05 + Double(p.age - 40) * 0.008))
+        let baseline = min(5.9, max(4.7, 4.9 + (bmi - 22) * 0.05 + (age - 40) * 0.008))
         let apnea = p.conditions.contains(.sleepApnea) || bmi >= 28
         return CGMShape(baseline: baseline, meals: meals, dawn: apnea ? 0.6 : 0.3, variability: 0.25,
                         exerciseDrop: 0.5, peakHours: 0.8, floor: 4.0, ceiling: 11.5)

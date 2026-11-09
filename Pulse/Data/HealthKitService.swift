@@ -86,48 +86,60 @@ final class HealthKitService {
 
     // MARK: Sync
 
-    // MARK: Updates while the app is open
+    // MARK: New readings, also in the background
 
     private var observers: [HKObserverQuery] = []
-    private weak var observedContext: ModelContext?
-    private var pendingSync: Task<Void, Never>?
+    private var handling: Task<Void, Never>?
 
     /// The types whose new samples should show at once: blood pressure (the main target for many), glucose,
-    /// weight and VO2max (Docs 9). Background delivery would need another entitlement, so this runs while the
-    /// app is open; returning to it syncs anyway.
-    private var watchedTypes: [HKSampleType] {
-        [.bloodPressureSystolic, .bloodGlucose, .bodyMass, .vo2Max].map { HKQuantityType($0) }
+    /// weight and VO2max (Docs 9). HealthKit wakes Pulse for them even when it is closed: blood pressure and
+    /// weight as soon as they land, glucose (a CGM writes every few minutes) and VO2max at most hourly.
+    private var watchedTypes: [(HKSampleType, HKUpdateFrequency)] {
+        [(HKQuantityType(.bloodPressureSystolic), .immediate), (HKQuantityType(.bodyMass), .immediate),
+         (HKQuantityType(.bloodGlucose), .hourly), (HKQuantityType(.vo2Max), .hourly)]
     }
 
-    /// Starts watching Apple Health for new readings and syncs the last days into `ctx` when one arrives;
-    /// nil (sample data, Health off) stops it.
-    func observeUpdates(into ctx: ModelContext?) {
-        observedContext = ctx
-        guard ctx != nil, isAvailable else {
+    /// Watches Apple Health while your own records use it (set up, with 使用健康 App 数据 on), and stops
+    /// otherwise. Called at launch, which is also how HealthKit starts Pulse in the background for a new
+    /// reading, and whenever the app comes back or the switch changes.
+    func watchForReadings() {
+        let p = DataHub.profile(in: DataStores.shared.ownContainer().mainContext)
+        let on = isAvailable && p?.onboardingDone == true && p?.useHealthKit == true
+            && ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+        guard on else {
             observers.forEach(store.stop)
             observers = []
+            if isAvailable { store.disableAllBackgroundDelivery { _, _ in } }
             return
         }
         guard observers.isEmpty else { return }
-        for type in watchedTypes {
-            let q = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] _, done, error in
-                done()
-                guard error == nil else { return }
-                Task { @MainActor in self?.syncSoon() }
+        for (type, frequency) in watchedTypes {
+            let q = HKObserverQuery(sampleType: type, predicate: nil) { _, done, error in
+                guard error == nil else { return done() }
+                // HealthKit keeps Pulse awake until `done`: the sync and any notice finish first.
+                let finish = Completion(done)
+                Task { @MainActor in
+                    await HealthKitService.shared.readingsArrived()
+                    finish.call()
+                }
             }
             store.execute(q)
             observers.append(q)
+            store.enableBackgroundDelivery(for: type, frequency: frequency) { _, _ in }
         }
     }
 
-    /// One sync for a burst of updates (a monitor writes systolic, diastolic and pulse together).
-    private func syncSoon() {
-        pendingSync?.cancel()
-        pendingSync = Task { @MainActor [weak self] in
+    /// One sync for a burst of updates (a monitor writes systolic, diastolic and pulse together): later
+    /// updates wait for the one already under way.
+    private func readingsArrived() async {
+        if let handling { return await handling.value }
+        let t = Task { @MainActor in
             try? await Task.sleep(for: .seconds(2))
-            guard !Task.isCancelled, let self, let ctx = self.observedContext else { return }
-            await self.sync(into: ctx, days: 3)
+            await BackgroundCheck.readingsArrived()
         }
+        handling = t
+        await t.value
+        handling = nil
     }
 
     func sync(into ctx: ModelContext, days: Int = 60) async {
@@ -620,4 +632,11 @@ struct HealthInventoryItem: Identifiable, Codable, Equatable {
     var latest: Date?
     var sources: [String]
     var note: String?
+}
+
+/// HealthKit's "done" handed to the main actor, which calls it once the work is finished.
+private final class Completion: @unchecked Sendable {
+    private let done: () -> Void
+    init(_ done: @escaping () -> Void) { self.done = done }
+    func call() { done() }
 }

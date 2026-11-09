@@ -35,6 +35,7 @@ enum ReviewPresentation {
         case .homeBP, .clinicBP: N.homeBP
         case .cgmTIR: N.timeInRange
         case .weight: N.weight
+        case .sleepDuration: N.sleep
         default: nil
         }
         let stepDelta = steps.flatMap { current in previousSteps.map { previous in

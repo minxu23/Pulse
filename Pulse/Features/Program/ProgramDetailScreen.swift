@@ -59,9 +59,7 @@ struct ProgramDetailScreen: View {
                 if let avg = r.average { FactRow(label: "4 周平均收缩压", value: TargetTracker.text(target, avg)) }
                 if target == .weeklyRunKm, let planned = r.plannedKm { FactRow(label: "本周", value: "\((r.runKm ?? 0).shortDecimal) / \(planned.shortDecimal) 公里") }
                 if r.series.count >= 2 { chart(r, goal: goal) }
-                Text((target == .weeklyRunKm ? "本周跑步 \(r.count) 次 · 最近一次：" : "读数 \(r.count) 条 · 最近记录：")
-                     + (r.latest?.formatted(date: .abbreviated, time: .shortened) ?? "暂无"))
-                    .font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                Text(Self.countLine(r)).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 if target.isBloodPressure {
                     Text("当前值同时显示收缩压和舒张压；本轮按收缩压目标评价。图表展示每日收缩压均值。" + (target == .homeBP ? "主数值为最近七天均值。" : "主数值为最近一次读数；第 4 周结束时用最后两周读数的平均和基线比，每周都要有读数。"))
                         .foregroundStyle(.secondary)
@@ -81,6 +79,12 @@ struct ProgramDetailScreen: View {
                     Text("本轮尚未开始。以下步数为日常记录，不计入本轮完成率。").foregroundStyle(.secondary)
                 } else {
                     FactRow(label: "训练", value: "完成 \(done) / \(thisWeek.count) 次")
+                    // 睡眠改善: this week's times, the ones the weekly check counts against.
+                    if pack == .sleep, let x = p.programPlan {
+                        let t = PackPlanner.sleepSchedule(a.profile, x, week: min(week, p.programRoundWeeks))
+                        FactRow(label: "这周起床", value: Clock.text(t.wake) + (target == .sleepDuration ? "" : " 前后"))
+                        FactRow(label: "这周上床", value: Clock.text(t.bed) + (target == .sleepDuration ? " 前" : " 前后"))
+                    }
                 }
                 if let steps { FactRow(label: "日均步数", value: "\(Int(steps.rounded())) 步 · 目标 \(p.stepsTarget)") }
                 Text("每周日在「复盘」里看这周做得怎么样，下周的计划会按完成情况调整。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
@@ -139,6 +143,19 @@ struct ProgramDetailScreen: View {
             .padding(.horizontal, 2).background(Theme.card, in: .rect(cornerRadius: 2))
     }
 
+    /// How many readings there are and when the last one was.
+    static func countLine(_ r: TargetReading) -> String {
+        switch r.target {
+        case .weeklyRunKm:
+            return "本周跑步 \(r.count) 次 · 最近一次：" + (r.latest?.formatted(date: .abbreviated, time: .shortened) ?? "暂无")
+        case .sleepDuration, .sleepRegularity:
+            // A night is stored under the morning it ends on; people name it by the evening before.
+            return "近 7 晚有 \(r.count) 晚的记录 · 最近一晚：" + (r.latest.map { $0.adding(days: -1).formatted(.dateTime.month().day()) + "夜里" } ?? "暂无")
+        default:
+            return "读数 \(r.count) 条 · 最近记录：" + (r.latest?.formatted(date: .abbreviated, time: .shortened) ?? "暂无")
+        }
+    }
+
     /// Why this goal: what four weeks can change, and how much the number wobbles on its own.
     static func why(_ t: TargetMetric) -> String {
         switch t {
@@ -151,6 +168,8 @@ struct ProgramDetailScreen: View {
         case .postMealGlucose: "健康成人大多数时间都在 7.8 以下。饭后走一走、晚饭别太晚，通常很快就能看到变化。"
         case .fastingGlucose: "空腹血糖每天会有波动，看一周的平均。"
         case .weeklyRunKm: "每周完成计划跑量的 90% 以上就算做到。加长距离时，单次最长的一跑不超过过去 30 天最长那次的 110%，这比「每周加 10%」更能预测受伤；赛前两周减量 41–60%，强度和频率不变。"
+        case .sleepDuration: "起床时间固定、上床时间一点点提前，几周里每晚多睡二三十分钟比较常见。每晚睡多久本身就会差上一个小时，所以看 7 晚的平均，变化超过 45 分钟才算超出平时的波动；第 4 周结束时看最后两周的平均。"
+        case .sleepRegularity: "入睡时间每天差得越多，心血管风险越高，差到 1.5 小时以上时风险约翻倍。只用几晚算出的波动本身也不太准，所以看整周。"
         }
     }
 }

@@ -277,7 +277,8 @@ struct RaceInfo: Equatable {
 }
 
 struct ProfileSnapshot: Equatable {
-    var age: Int = 38
+    /// nil when the birth year was left out (`UserProfile.hasAge`).
+    var age: Int? = 38
     var sex: Sex = .unspecified
     var bmi: Double = 23
     var heightCm: Double = 170
@@ -338,6 +339,8 @@ struct ProfileSnapshot: Equatable {
     var thresholdHR: Int?
     var apneaStatus: ApneaStatus = .unknown
     var apneaTreatment: ApneaTreatment = .none
+    /// The STOP-BANG self-check score (0–8); nil until all 8 questions are answered.
+    var stopBangScore: Int? = nil
     var cpapTargetHours: Double = 4
     var glucoseLow: Double = 3.9
     var glucoseHigh: Double = 10.0
@@ -382,14 +385,16 @@ struct ProfileSnapshot: Equatable {
     func hypoRiskMeds(at date: Date = .app) -> Bool {
         medications.contains { $0.category.hypoglycemiaRisk && $0.isActive(on: date) }
     }
-    /// Birth year can be left out: without it no heart-rate number is worked out from age. The snapshot's age is
-    /// 0 exactly when `UserProfile.hasAge` (a valid birth year) is false, so the two always agree.
-    var ageKnown: Bool { age > 0 }
+    /// Birth year can be left out: without it no heart-rate number is worked out from age.
+    var ageKnown: Bool { age != nil }
+    /// At least this old; an unknown age is not.
+    func isAtLeast(age years: Int) -> Bool { age.map { $0 >= years } ?? false }
     /// 「45 岁」 or 「年龄未填写」, for summaries and exports.
-    var ageText: String { ageKnown ? "\(age) 岁" : "年龄未填写" }
+    var ageText: String { age.map { "\($0) 岁" } ?? "年龄未填写" }
     /// 「BMI 23.4」 or 「身高体重未填写」.
     var bodySizeText: String { bmi > 0 ? "BMI \(bmi.oneDecimal)" : "身高体重未填写" }
-    var estimatedMaxHR: Double { 208 - 0.7 * Double(age) }
+    /// 208 − 0.7 × age (Tanaka); nil without an age.
+    var estimatedMaxHR: Double? { age.map { 208 - 0.7 * Double($0) } }
 }
 
 /// A plain view of a planned session used by the adjustment and review engines.

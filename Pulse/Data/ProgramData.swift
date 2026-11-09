@@ -228,7 +228,8 @@ enum ProgramFlow {
         ProgramPlanInput(pack: pack, target: target, round: round, roundStart: start, weeks: 4, sports: r.habits.sports,
                          baselineSteps: r.habits.stepsMean, baselineMinutes: r.habits.guidelineMinutes,
                          vo2Band: r.metric(.vo2max)?.rank?.band.rawValue, usualWeekdays: r.habits.usualWeekdays,
-                         mainSlot: r.habits.mainSlot, slowRecovery: r.metric(.hrRecovery)?.verdict == .attention)
+                         mainSlot: r.habits.mainSlot, slowRecovery: r.metric(.hrRecovery)?.verdict == .attention,
+                         bedtime: r.habits.bedtimeMean, wakeTime: r.habits.wakeMean, sleepHours: r.metric(.sleepDuration)?.value)
     }
 
     static func preview(_ pack: ProgramPack, result: BaselineResult, profile: ProfileSnapshot, now: Date = .app) -> WeekPlan {
@@ -326,6 +327,8 @@ enum ProgramFlow {
         case .vo2max: if let v = r.metric(.vo2max)?.value { return v.rounded(to: 0.1) }
         case .restingHR: if let v = r.metric(.rhr)?.value { return v.rounded() }
         case .homeBP: if let v = r.metric(.bloodPressure)?.value { return v.rounded() }
+        case .sleepDuration: if let v = r.metric(.sleepDuration)?.value { return v.rounded(to: 0.1) }
+        case .sleepRegularity: if let v = r.metric(.sleepRegularity)?.value { return v.rounded() }
         default: break
         }
         let x = DataHub.baselineInput(in: ctx, window: r.window, now: now)

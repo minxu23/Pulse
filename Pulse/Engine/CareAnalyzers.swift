@@ -106,7 +106,7 @@ enum SleepAnalyzer {
         [false, false, false,
          p.conditions.contains(.hypertension),
          p.bmi > 35,
-         p.age > 50,
+         p.age.map { $0 > 50 } ?? false,
          (p.neckCm ?? 0) > 40,
          p.sex == .male]
     }

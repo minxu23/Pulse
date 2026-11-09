@@ -63,6 +63,8 @@ enum ProgramEvaluator {
         case .postMealGlucose: 2
         case .fastingGlucose: 0.5
         case .weeklyRunKm: 10    // share of the planned distance, in percentage points
+        case .sleepDuration: 0.75 // hours: nights scatter by ~77 min (Messman 2022), so one week against the baseline needs ~45 min
+        case .sleepRegularity: 20 // minutes: an SD from 7 nights is itself uncertain by about a quarter
         }
     }
 
@@ -140,6 +142,19 @@ enum ProgramEvaluator {
             let walks = days.filter { d in afterDinnerWalk(d, x.workouts) }.count
             let need = due(5, elapsed: elapsed)
             checks.append(BehaviorCheck(title: "晚饭后散步", detail: "走了 \(walks) 天，目标每周 5 天", met: walks >= need))
+        case (.sleep, let t):
+            // The night that ends on a day's morning; bedtimes in minutes after midnight, past 24 h after midnight.
+            let (bed, wake) = PackPlanner.sleepSchedule(x.profile, x.program, week: wk)
+            let need = due(5, elapsed: elapsed)
+            let woke = days.filter { d in d.sleepEnd.map { abs($0.minutesOfDay - wake) <= 30 } ?? false }.count
+            let slept = days.filter { d in
+                guard let s = d.sleepStart else { return false }
+                let m = Clock.nightOffset(s.minutesOfDay) + 12 * 60
+                return t == .sleepDuration ? m <= bed + 30 : abs(m - bed) <= 30
+            }.count
+            checks.append(BehaviorCheck(title: "按时起床", detail: "\(woke) 天在 \(Clock.text(wake)) 前后半小时内醒来，目标每周 5 天", met: woke >= need))
+            checks.append(BehaviorCheck(title: "按时上床", detail: t == .sleepDuration ? "\(slept) 晚在 \(Clock.text(bed + 30)) 前睡着，目标每周 5 晚"
+                                            : "\(slept) 晚在 \(Clock.text(bed)) 前后半小时内睡着，目标每周 5 晚", met: slept >= need))
         default:
             break
         }
@@ -222,7 +237,11 @@ enum ProgramEvaluator {
         let reading = TargetTracker.reading(t, days: x.days, vitals: x.vitals, workouts: x.workouts, end: end, profile: x.profile)
         // Clinic and pharmacy readings scatter: the mean of weeks 3–4, with readings in every week counted (Docs 3.1).
         let lastTwo = bp.filter { $0.time >= end.adding(days: -14) }
-        let value = t == .clinicBP ? Stats.mean(lastTwo.map(\.value)) : reading.value
+        // Sleep: the nights of weeks 3–4, since one week of nights is still noisy (Messman 2022).
+        let lastNights = x.days.filter { $0.day >= end.adding(days: -14) && $0.day < end }.compactMap(\.sleepMinutes)
+        let value = t == .clinicBP ? Stats.mean(lastTwo.map(\.value))
+            : t == .sleepDuration ? (lastNights.count >= 7 ? Stats.mean(lastNights).map { $0 / 60 } : nil)
+            : reading.value
         let reached = TargetTracker.reached(t, value: value, goal: x.goal)
         let enoughReadings: Bool = {
             switch t {
@@ -247,7 +266,8 @@ enum ProgramEvaluator {
         } else if met >= needWeeks {
             out = ProgramRoundResult(outcome: .slowResponse, round: r, weeksMet: met, weeksCounted: counted.count, baseline: x.baseline, value: value, goal: x.goal,
                                      headline: "计划做到了，\(t.title)还没到目标", detail: numbers + "很多指标需要 8–12 周才完全显现。",
-                                     next: "第 \(r + 1) 轮保持同样的习惯，适度加强训练（比如多一次间歇或延长有氧），目标不变。")
+                                     next: x.program.pack == .sleep ? "第 \(r + 1) 轮保持同样的作息，起床时间不变，上床时间再提前 15 分钟（睡够 7 小时为止），目标不变。"
+                                        : "第 \(r + 1) 轮保持同样的习惯，适度加强训练（比如多一次间歇或延长有氧），目标不变。")
         } else {
             out = ProgramRoundResult(outcome: .lowAdherence, round: r, weeksMet: met, weeksCounted: counted.count, baseline: x.baseline, value: value, goal: x.goal,
                                      headline: "这一轮计划做到的不多", detail: numbers,
@@ -255,7 +275,7 @@ enum ProgramEvaluator {
         }
         // The third round in a row without the goal (Docs 6).
         if x.missedBefore >= 2 {
-            let doctor = t.isBloodPressure || [.cgmTIR, .postMealGlucose, .fastingGlucose].contains(t)
+            let doctor = t.isBloodPressure || [.cgmTIR, .postMealGlucose, .fastingGlucose, .sleepDuration, .sleepRegularity].contains(t)
             out.next += "已经连续 3 轮没达到目标：建议重新做一次基线评估，或者调整目标" + (doctor ? "；也建议带着这几轮的记录去看医生。" : "。")
             out.suggestsReassessment = true
         }
@@ -264,7 +284,7 @@ enum ProgramEvaluator {
 
     /// 「这几周最难坚持的是步数（2 周）」: the behaviour named most often in the round's weekly reviews.
     static func hardestLine(_ x: Input) -> String {
-        let names = ["训练", "步数", "测血压", "晚饭后散步", "间歇和复测"]
+        let names = ["训练", "步数", "测血压", "晚饭后散步", "间歇和复测", "按时起床", "按时上床"]
         let counts = names.map { n in (n, x.hardest.filter { $0.contains(n) }.count) }.filter { $0.1 > 0 }
         guard let top = counts.max(by: { $0.1 < $1.1 }) else { return "" }
         return "复盘里说最难坚持的是\(top.0)（\(top.1) 周）。"

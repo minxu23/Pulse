@@ -213,7 +213,8 @@ extension UserProfile {
         get { ApneaTreatment(rawValue: apneaTreatmentRaw) ?? .none }
         set { apneaTreatmentRaw = newValue.rawValue }
     }
-    var age: Int { hasAge ? max(0, Calendar(identifier: .gregorian).component(.year, from: .app) - birthYear) : 0 }
+    /// nil when the birth year was left out (stored as 0).
+    var age: Int? { hasAge ? max(0, Calendar(identifier: .gregorian).component(.year, from: .app) - birthYear) : nil }
     var bmi: Double { hasBodySize ? weightKg / pow(heightCm / 100, 2) : 0 }
     var displayName: String { nickname.isEmpty ? "你" : nickname }
 

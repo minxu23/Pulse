@@ -32,6 +32,7 @@ enum WeeklyAgentReview {
         case .vo2max, .weeklyRunKm: .activity
         case .weight: .weight
         case .cgmTIR, .postMealGlucose, .fastingGlucose: .glucose
+        case .sleepDuration, .sleepRegularity: .sleep
         }
         return [ReviewPriority(area: area, reason: "本轮主靶点：" + target.title, mine: false)] + original.filter { $0.area != area }
     }

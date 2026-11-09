@@ -8,6 +8,7 @@ extension UserProfile {
     func snapshot(medications: [MedicationEntry]) -> ProfileSnapshot {
         var s = ProfileSnapshot()
         s.age = age
+        s.stopBangScore = stopBangAnswers.count == 8 ? stopBangAnswers.filter { $0 }.count : nil
         s.sex = sex
         s.bmi = bmi
         s.heightCm = heightCm

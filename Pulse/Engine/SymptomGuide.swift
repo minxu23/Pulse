@@ -314,7 +314,7 @@ enum SymptomGuide {
         if p.hasDiabetes, (c.glucose.tar ?? 0) > 0.25 { seen.append("血糖偏高的时间比较多，血糖高会让尿变多") }
         if p.conditions.contains(.ckd) { seen.append("你有慢性肾病，肾脏浓缩尿的能力下降时夜里尿会变多") }
         if c.medications.contains(where: { $0.name.contains("呋塞米") || $0.name.contains("利尿") || $0.name.contains("氢氯噻嗪") }) { seen.append("利尿剂下午或晚上吃，夜里尿会多，吃药时间问医生能不能调") }
-        if p.sex == .male, p.age >= 50 { seen.append("50 岁以上的男性，前列腺增大也常让人起夜") }
+        if p.sex == .male, p.isAtLeast(age: 50) { seen.append("50 岁以上的男性，前列腺增大也常让人起夜") }
         var tips = ["睡前 2 小时少喝水，晚上不喝茶、咖啡和酒", "记 2–3 天起夜几次、每次大概多少，看医生时带上"]
         if p.fluidLimited { tips[0] = "一天的水按医生定的上限，尽量放在白天喝" }
         return answer(first, [

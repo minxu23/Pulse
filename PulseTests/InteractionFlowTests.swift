@@ -41,7 +41,7 @@ struct InteractionFlowTests {
 
     @Test func unknownBasicsDoNotGeneratePeerRanksOrBMI() {
         let end = Date().startOfDay
-        var p = ProfileSnapshot(); p.age = 0; p.sex = .unspecified; p.heightCm = 0; p.bmi = 0
+        var p = ProfileSnapshot(); p.age = nil; p.sex = .unspecified; p.heightCm = 0; p.bmi = 0
         let days = (1...7).map { i in
             var d = DayData(day: end.adding(days: -i)); d.rhr = 65; d.vo2Max = 38; d.bodyFatPct = 25; d.steps = i == 1 ? 0 : 7000
             return d

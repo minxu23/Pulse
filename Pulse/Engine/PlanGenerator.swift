@@ -240,8 +240,7 @@ enum PlanGenerator {
             default: range = (0.95 * lthr, 1.02 * lthr)
             }
         } else {
-            guard p.ageKnown else { return intensity.talkTest + "。填写出生年份后，这里会给出参考心率；现在以主观感受为准。" }
-            let mx = p.estimatedMaxHR
+            guard let mx = p.estimatedMaxHR else { return intensity.talkTest + "。填写出生年份后，这里会给出参考心率；现在以主观感受为准。" }
             switch intensity {
             case .easy: range = (0.60 * mx, 0.70 * mx)
             case .moderate: range = (0.70 * mx, 0.80 * mx)

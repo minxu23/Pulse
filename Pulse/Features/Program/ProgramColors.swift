@@ -10,6 +10,7 @@ extension TargetMetric {
         case .vo2max, .weeklyRunKm: Theme.activity
         case .cgmTIR, .postMealGlucose, .fastingGlucose: Theme.glucose
         case .weight: Theme.body
+        case .sleepDuration, .sleepRegularity: Theme.sleep
         }
     }
 }
@@ -20,6 +21,7 @@ extension ProgramPack {
         case .fitness, .event: Theme.activity
         case .cardio: Theme.heartData
         case .metabolic: Theme.glucose
+        case .sleep: Theme.sleep
         }
     }
 }

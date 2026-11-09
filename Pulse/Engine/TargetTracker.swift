@@ -28,8 +28,8 @@ struct TargetReading: Equatable {
         guard let v = value else { return "—" }
         switch target {
         case .homeBP, .clinicBP: return "\(Int(v.rounded()))/\(value2.map { String(Int($0.rounded())) } ?? "—")"
-        case .vo2max, .weight, .fastingGlucose, .postMealGlucose: return v.shortDecimal
-        case .restingHR, .cgmTIR, .weeklyRunKm: return String(Int(v.rounded()))
+        case .vo2max, .weight, .fastingGlucose, .postMealGlucose, .sleepDuration: return v.shortDecimal
+        case .restingHR, .cgmTIR, .weeklyRunKm, .sleepRegularity: return String(Int(v.rounded()))
         }
     }
 
@@ -45,6 +45,8 @@ struct TargetReading: Equatable {
         case .postMealGlucose: "高于 7.8 的时间 · 7 天"
         case .weight: "体重 · 7 日均值"
         case .fastingGlucose: "空腹血糖 · 7 天"
+        case .sleepDuration: "睡眠时长 · 7 晚平均"
+        case .sleepRegularity: "入睡时间波动 · 7 晚"
         }
     }
 
@@ -56,6 +58,8 @@ struct TargetReading: Equatable {
         case .cgmTIR, .postMealGlucose, .weeklyRunKm: "%"
         case .weight: "kg"
         case .fastingGlucose: "mmol/L"
+        case .sleepDuration: "小时"
+        case .sleepRegularity: "分钟"
         }
     }
 }
@@ -138,8 +142,34 @@ enum TargetTracker {
         case .fastingGlucose:
             let f = vitals.filter { $0.kind == .glucose && ($0.context == .fasting || $0.context == .morning) && $0.time >= week && $0.time < end }
             r.value = Stats.mean(f.map(\.value)); r.count = f.count
+        case .sleepDuration:
+            // A night belongs to the morning it ends on. Three nights at least: one night scatters by an hour.
+            let nights = days.filter { $0.sleepMinutes != nil && inRange($0.day, from: week) }
+            r.count = nights.count
+            if nights.count >= 3 { r.value = Stats.mean(nights.compactMap(\.sleepMinutes)).map { $0 / 60 } }
+            r.latest = days.last { $0.sleepMinutes != nil && $0.day < end }?.day
+            r.series = days.filter { $0.sleepMinutes != nil && inRange($0.day, from: end.adding(days: -42)) }
+                .map { TargetPoint(day: $0.day, value: $0.sleepMinutes! / 60) }
+        case .sleepRegularity:
+            let nights = days.filter { $0.sleepStart != nil && inRange($0.day, from: week) }
+            r.count = nights.count
+            r.value = bedtimeSD(nights)
+            r.latest = days.last { $0.sleepStart != nil && $0.day < end }?.day
+            // Whole weeks, one point each: a spread needs a week of nights.
+            let ws = end.adding(days: -1).weekStart
+            let first = end >= ws.adding(days: 7) ? 0 : 1
+            for i in first..<first + 6 {
+                let s = ws.adding(days: -7 * i)
+                if let sd = bedtimeSD(days.filter { $0.day >= s && $0.day < s.adding(days: 7) }) { r.series.insert(TargetPoint(day: s, value: sd), at: 0) }
+            }
         }
         return r
+    }
+
+    /// How much the time of falling asleep varies, as the SD in minutes; four nights at least.
+    static func bedtimeSD(_ days: [DayData]) -> Double? {
+        let starts = days.compactMap(\.sleepStart).map { Double(Clock.nightOffset($0.minutesOfDay)) }
+        return starts.count >= 4 ? Stats.sd(starts) : nil
     }
 
     /// The round's goal from the baseline value (Docs 3.1): what four weeks can move beyond the noise.
@@ -166,12 +196,18 @@ enum TargetTracker {
             return (b >= 70 ? b : min(b + 5, 70)).rounded()
         case .postMealGlucose:
             // A third less, down to what healthy adults show; already there: stay there, never a goal above the baseline.
-            let usual = p.age >= 60 ? 8.6 : 3.9
+            let usual = p.isAtLeast(age: 60) ? 8.6 : 3.9
             return floorTenth(min(b, max(usual, b * 0.67)))
         case .fastingGlucose:
             return floorTenth(min(b, max(p.hasDiabetes ? 6.5 : 5.6, b - 0.5)))
         case .weeklyRunKm:
             return 90
+        case .sleepDuration:
+            // Half an hour more, up to 7 hours; 7 or more already: stay there.
+            return (b >= 7 ? b : min(7, b + 0.5)).rounded(to: 0.1)
+        case .sleepRegularity:
+            // 20 minutes less spread, down to 30 (a steady schedule); 30 or less already: stay there.
+            return (b <= 30 ? b : max(30, b - 20)).rounded()
         }
     }
 
@@ -227,7 +263,7 @@ enum TargetTracker {
 
     static func text(_ t: TargetMetric, _ v: Double) -> String {
         switch t {
-        case .homeBP, .clinicBP, .restingHR, .cgmTIR, .weeklyRunKm: String(Int(v.rounded()))
+        case .homeBP, .clinicBP, .restingHR, .cgmTIR, .weeklyRunKm, .sleepRegularity: String(Int(v.rounded()))
         default: v.shortDecimal
         }
     }

@@ -138,11 +138,7 @@ enum HRZones {
                 HRZone(index: 4, name: "阈值", low: b[3], high: b[4] - 1, purpose: "阈值跑、巡航间歇"),
                 HRZone(index: 5, name: "高强度", low: b[4], high: b[5], purpose: "短间歇，专项期少量使用"),
             ]
-        } else if !p.ageKnown {
-            basis = "填写出生年份后，按年龄估算心率区间；现在以主观感受为准"
-            out = []
-        } else {
-            let mx = p.estimatedMaxHR
+        } else if let mx = p.estimatedMaxHR {
             basis = "以估算最大心率 \(Int(mx)) bpm 为参照（208 − 0.7 × 年龄，个体差异较大）"
             let b = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0].map { Int(($0 * mx).rounded()) }
             out = [
@@ -152,6 +148,9 @@ enum HRZones {
                 HRZone(index: 4, name: "阈值", low: b[3], high: b[4] - 1, purpose: "较高强度，需要良好恢复"),
                 HRZone(index: 5, name: "高强度", low: b[4], high: b[5], purpose: "短时冲刺，有基础后少量使用"),
             ]
+        } else {
+            basis = "填写出生年份后，按年龄估算心率区间；现在以主观感受为准"
+            out = []
         }
         if let cap = p.hrCap {
             out = out.map { z in var z = z; z.aboveCap = z.low > cap; return z }

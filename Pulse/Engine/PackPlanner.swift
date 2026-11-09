@@ -23,6 +23,11 @@ struct ProgramPlanInput: Codable, Equatable {
     var mainSlot: TimeSlot? = nil
     /// Heart rate recovered slowly after hard exercise at baseline: aerobic only for the first two weeks.
     var slowRecovery: Bool? = nil
+    /// 睡眠改善: the usual time of falling asleep and of waking at baseline (minutes after midnight; a bedtime
+    /// after midnight is past 24 h), and the hours asleep a night.
+    var bedtime: Double? = nil
+    var wakeTime: Double? = nil
+    var sleepHours: Double? = nil
 
     /// 1-based week of the round for a week starting `ws`; the week before it starts counts as week 1.
     func week(_ ws: Date) -> Int { max(1, ws.daysSince(roundStart.weekStart) / 7 + 1) }
@@ -62,7 +67,7 @@ enum PackPlanner {
         // A slow heart-rate recovery: two weeks of aerobic base first (Docs 4).
         let aerobicOnly = x.slowRecovery == true && core <= 2 && !maintaining
         let beginner = p.level.rank <= ActivityLevel.light.rank || (x.vo2Band ?? 2) <= RankBand.bottom25.rawValue
-        let style: IntervalStyle = p.age >= 65 ? .gentle : beginner ? .beginner : .standard
+        let style: IntervalStyle = p.isAtLeast(age: 65) ? .gentle : beginner ? .beginner : .standard
         let noIntervals = capped || aerobicOnly
 
         // The user's own ball game on the day they play it.
@@ -100,6 +105,8 @@ enum PackPlanner {
             if core >= 3, !noIntervals, !beginner { addIntervals(&plan, count: max(0, 1 - vigorousFromSport), style: style, p) }
             plan.notes.insert("改善血糖和体重：每天晚饭后走 10–15 分钟，每周 2–3 次力量训练（隔天做），每周 150 分钟以上中等强度运动。", at: 0)
             if p.hasDiabetes { plan.notes.append("用胰岛素或磺脲类药物时，运动前看一眼血糖；低于 5.6 先吃点碳水，随身带糖。饭后约 1 小时再运动，低血糖的风险小一些。") }
+        case .sleep:
+            sleepNotes(&plan, p, x, week: wk)
         case .event:
             break
         }
@@ -108,6 +115,36 @@ enum PackPlanner {
         if let slot = x.mainSlot { atUsualTime(&plan, slot) }
         if maintaining { maintenance(&plan) }
         return withBase(plan, p, x, ws)
+    }
+
+    /// 睡眠改善: this week's times. The wake time stays where it was at baseline (to the quarter hour); with too
+    /// little sleep, bedtime comes 15 minutes earlier each week until the nights reach 7 hours (Docs 3.7).
+    /// Bedtime is in minutes after midnight, past 24 h for a bedtime after midnight.
+    static func sleepSchedule(_ p: ProfileSnapshot, _ x: ProgramPlanInput, week wk: Int) -> (bed: Int, wake: Int) {
+        func quarter(_ m: Double) -> Int { Int((m / 15).rounded()) * 15 }
+        let wake = x.wakeTime.map(quarter) ?? p.wakeMinutes
+        var bed = x.bedtime.map(quarter) ?? (p.bedtimeMinutes < 12 * 60 ? p.bedtimeMinutes + 24 * 60 : p.bedtimeMinutes)
+        if x.target == .sleepDuration, let h = x.sleepHours, h < 7 {
+            let short = Int(((7 - h) * 4).rounded(.up)) * 15
+            bed -= min(15 * wk, short)
+        }
+        return (bed, wake)
+    }
+
+    /// 睡眠改善 (Docs 3.7): a fixed wake time, bedtime earlier week by week for too little sleep, and the habits
+    /// that matter most for falling asleep. Training stays as it is: regular exercise helps sleep too.
+    static func sleepNotes(_ plan: inout WeekPlan, _ p: ProfileSnapshot, _ x: ProgramPlanInput, week wk: Int) {
+        let (bed, wake) = sleepSchedule(p, x, week: wk)
+        let b = Clock.text(bed), w = Clock.text(wake)
+        let core = x.target == .sleepDuration
+            ? "这一轮睡够：每天 \(w) 起床，周末也不晚于平时 1 小时；这周 \(b) 前上床，之后每周提前 15 分钟，直到每晚睡够 7 小时。"
+            : "这一轮睡得规律：每天 \(w) 前后半小时内起床，周末也一样；上床时间固定在 \(b) 前后半小时。"
+        // Stimulus control; people prone to falls get up more carefully at night (AASM 2021).
+        let fall = p.isAtLeast(age: 65) || p.jointIssues ? "夜里起来时先坐一会儿、开一盏小灯再走。" : ""
+        plan.notes.insert(core + "躺下 20 分钟还睡不着，就起来做点放松的事，困了再回床。" + fall, at: 0)
+        plan.notes.append("下午 \(p.caffeineCutoffHour) 点后不喝咖啡和功能饮料；晚上尽量不喝酒，两杯以上就会让后半夜睡得浅；白天小睡不超过 30 分钟；起床后尽快到户外或窗边接触亮光；晚上把灯调暗，睡前 1 小时放下工作和手机。")
+        if x.mainSlot == .evening || x.mainSlot == .night { plan.notes.append("晚上运动没关系，高强度的在睡前 1 小时以前结束。") }
+        plan.notes.append("每周至少 3 个晚上很难入睡、夜里醒来很难再睡或醒得太早，持续 3 个月以上，可能是失眠：这时先别再提前上床，在床上躺得越久越难睡；首选的治疗是失眠认知行为治疗（CBT-I），请去睡眠门诊。打鼾很响、有人看到你睡着时憋气，也请先看医生。")
     }
 
     /// The days to train on: the weekdays the user exercised on at baseline first, as many as they have days for
@@ -187,7 +224,7 @@ enum PackPlanner {
     // MARK: Base layer
 
     /// The week's step target: a rise of about 1000 a week from the baseline, up to where the benefit levels off.
-    static func stepsTarget(_ x: ProgramPlanInput, age: Int, week wk: Int) -> Int? {
+    static func stepsTarget(_ x: ProgramPlanInput, age: Int?, week wk: Int) -> Int? {
         guard let b = x.baselineSteps else { return nil }
         let base = Int((b / 500).rounded()) * 500
         let plateau = PopulationNorms.stepPlateau(age: age).lowerBound
@@ -206,7 +243,7 @@ enum PackPlanner {
             }
         }
         var base = "基础习惯：" + (steps.map { "每天 \($0) 步左右，" } ?? "") + "坐 30–60 分钟起身活动 2–3 分钟，每晚睡够 7 小时，每周 2 次力量。"
-        if p.age >= 65 { base += "每周 3 次平衡练习（单脚站、脚跟脚尖走）。" }
+        if p.isAtLeast(age: 65) { base += "每周 3 次平衡练习（单脚站、脚跟脚尖走）。" }
         plan.notes.insert(base, at: min(1, plan.notes.count))
         plan.notes.insert(p.programPhase == .summary ? "总结期 · 维持：\(x.pack.title)" : "第 \(x.round) 轮 · 第 \(wk) / \(x.weeks) 周：\(x.pack.title)", at: 0)
         return plan
@@ -268,7 +305,7 @@ enum PackPlanner {
     /// Wall squats (isometric) after three sessions: 4 × 2 minutes, 2 minutes' rest, breathing normally. Hand-grip
     /// holds instead for sore knees and for higher-risk hearts (blood pressure rises less with them).
     static func addWallSquats(_ plan: inout WeekPlan, _ p: ProfileSnapshot) {
-        let knee = p.jointIssues || p.age >= 65
+        let knee = p.jointIssues || p.isAtLeast(age: 65)
             || !p.conditions.isDisjoint(with: [.coronaryDisease, .heartFailure, .arrhythmia])
         let add = knee
             ? "结束后做静力握拳：用力握住一个软球或毛巾卷（约三成力气）2 分钟，换手，共 4 组。不憋气。"

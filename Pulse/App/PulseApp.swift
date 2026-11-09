@@ -12,6 +12,8 @@ struct PulseApp: App {
         // ，。 and other glyph forms) while strings from the app bundle stayed Simplified, so pages
         // looked like two fonts. Takes effect before the first text is drawn.
         UserDefaults.standard.set(["zh-Hans"], forKey: "AppleLanguages")
+        // HealthKit starts Pulse in the background for a new reading: the watch has to be set up at launch.
+        HealthKitService.shared.watchForReadings()
     }
 
     var body: some Scene {
@@ -173,7 +175,7 @@ struct RootView: View {
             Task { await HealthKitService.shared.sync(into: ctx, days: 14) }
         }
         // New readings (blood pressure first) show on 今日 as soon as Apple Health has them.
-        HealthKitService.shared.observeUpdates(into: p.useHealthKit && !p.usesDemoData ? ctx : nil)
+        HealthKitService.shared.watchForReadings()
     }
 }
 

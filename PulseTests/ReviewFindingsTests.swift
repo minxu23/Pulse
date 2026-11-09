@@ -68,7 +68,7 @@ struct ReviewFindingsTests {
 
     @Test func unknownAgeGivesNoHeartRateNumbers() {
         var p = ProfileSnapshot()
-        p.age = 0
+        p.age = nil
         #expect(!PlanGenerator.guidance(.hard, p).contains("bpm"))
         #expect(PlanGenerator.guidance(.hard, p).contains("出生年份"))
         #expect(HRZones.zones(profile: p).zones.isEmpty)

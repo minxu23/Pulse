@@ -174,6 +174,8 @@ struct HabitProfile: Equatable, Codable {
     /// Bedtime in minutes after midnight (can exceed 24 h for after-midnight bedtimes).
     var bedtimeMean: Double?
     var bedtimeSD: Double?
+    /// Wake time in minutes after midnight (nil in reports saved before).
+    var wakeMean: Double? = nil
     /// How much later bedtime is on Friday and Saturday nights (minutes).
     var weekendShift: Double?
 
@@ -246,7 +248,7 @@ enum BaselineAssessment {
         var cards = [heart(x, days: days, workouts: recentWorkouts, habits: habits), fitness(x, days: days, habits: habits),
                      metabolic(x, days: days), sleep(x, days: days)]
         // Never rank against a fabricated age/sex, or treat unknown body measurements as low BMI.
-        if p.age <= 0 || p.sex == .unspecified {
+        if !p.ageKnown || p.sex == .unspecified {
             for i in cards.indices {
                 for j in cards[i].metrics.indices {
                     let kind = cards[i].metrics[j].kind
@@ -315,14 +317,15 @@ enum BaselineAssessment {
 
         // Heart-rate zones: resting from the baseline, maximum from the formula unless sessions went higher.
         h.restingHR = Stats.median(days.compactMap(\.rhr)) ?? p.baselineRHR ?? 65
-        let formula = 208 - 0.7 * Double(p.age)
+        let formula = p.estimatedMaxHR
         let observed = workouts.compactMap { w -> Double? in
             let s = w.hrSeries.sorted()
             return s.count >= 3 ? Double(s[s.count - 2]) : w.maxHR
         }.max()
-        if let o = observed, o > formula, o < formula + 15 { h.hrMax = o; h.hrMaxMeasured = true } else { h.hrMax = formula }
+        // Without an age there is no formula and the zones are not used (zonesReliable).
+        if let formula, let o = observed, o > formula, o < formula + 15 { h.hrMax = o; h.hrMaxMeasured = true } else { h.hrMax = formula ?? 0 }
         let slowing: Set<MedicationCategory> = [.betaBlocker, .rateLimitingCCB, .antiarrhythmic]
-        h.zonesReliable = p.age > 0 && !p.medications.contains { slowing.contains($0.category) && ($0.end ?? .distantFuture) > x.window.start }
+        h.zonesReliable = p.ageKnown && !p.medications.contains { slowing.contains($0.category) && ($0.end ?? .distantFuture) > x.window.start }
 
         // Minutes by intensity, per week.
         let weeks = Double(max(1, x.window.end.daysSince(habitStart))) / 7
@@ -389,6 +392,7 @@ enum BaselineAssessment {
         h.bedtimeMean = Stats.mean(beds.map(\.0))
         h.bedtimeSD = beds.count >= 3 ? Stats.sd(beds.map(\.0)) : nil
         if let we = Stats.mean(beds.filter(\.1).map(\.0)), let wd = Stats.mean(beds.filter { !$0.1 }.map(\.0)) { h.weekendShift = we - wd }
+        h.wakeMean = Stats.mean(days.compactMap { $0.sleepEnd.map { Double($0.minutesOfDay) } })
         return h
     }
 
@@ -426,12 +430,16 @@ enum BaselineAssessment {
 
     // MARK: Abilities
 
+    /// The age a peer rank is worked out for. Without a known age `assess` takes the ranks off again, so a
+    /// rank against a made-up age is never shown.
+    private static func rankAge(_ p: ProfileSnapshot) -> Int { p.age ?? 40 }
+
     static func heart(_ x: BaselineInput, days: [DayData], workouts: [WorkoutPoint], habits h: HabitProfile) -> AbilityCard {
         let p = x.profile
         var m: [BaselineMetric] = []
 
         if let rhr = Stats.median(days.compactMap(\.rhr)) {
-            let r = PopulationNorms.restingHR.rank(rhr, age: p.age, sex: p.sex)
+            let r = PopulationNorms.restingHR.rank(rhr, age: rankAge(p), sex: p.sex)
             let verdict: Verdict = rhr > 100 ? .urgent : r.band.isLow ? .attention : r.band == .lowerMid ? .fair : .good
             m.append(BaselineMetric(kind: .rhr, title: "静息心率", value: rhr, valueText: "\(Int(rhr.rounded())) 次/分",
                                     quality: .measured, rank: r, verdict: verdict,
@@ -513,7 +521,7 @@ enum BaselineAssessment {
             stale = x.window.end.daysSince(last.day)
         }
         if let vo2 = Stats.mean(estimates) {
-            let r = PopulationNorms.vo2max.rank(vo2, age: p.age, sex: p.sex)
+            let r = PopulationNorms.vo2max.rank(vo2, age: rankAge(p), sex: p.sex)
             let age = PopulationNorms.fitnessAge(vo2: vo2, sex: p.sex)
             var note = r.reference.note
             if estimates.count < 3 { note += stale.map { "最近一次估算在 \($0) 天前。" } ?? "这周只有 \(estimates.count) 次估算，多做几次户外快走会更准。" }
@@ -573,7 +581,7 @@ enum BaselineAssessment {
         var fats = days.compactMap(\.bodyFatPct)
         if fats.isEmpty, let last = x.days.last(where: { $0.day >= back30 && $0.day < x.window.end && $0.bodyFatPct != nil })?.bodyFatPct { fats = [last] }
         if let fat = Stats.mean(fats) {
-            let r = PopulationNorms.bodyFat.rank(fat, age: p.age, sex: p.sex)
+            let r = PopulationNorms.bodyFat.rank(fat, age: rankAge(p), sex: p.sex)
             m.append(BaselineMetric(kind: .bodyFat, title: "体脂率", value: fat, valueText: "\(fat.shortDecimal)%", quality: .estimated,
                                     rank: r, verdict: r.goodness < 25 ? .attention : r.goodness < 50 ? .fair : .good,
                                     detail: "在同龄同性别里\(r.approx)（体脂越低排名越靠前）", note: r.reference.note))
@@ -614,7 +622,7 @@ enum BaselineAssessment {
             }
             // Healthy adults: about 2% of the time above 7.8 (IQR up to 3.9%, 8.6% from 60; Shah 2019); the upper
             // limits in healthy Chinese adults are a 24-h mean of 6.6 and 17% above 7.8 (Zhou 2009).
-            let usual = p.age >= 60 ? 8.6 : 3.9
+            let usual = p.isAtLeast(age: 60) ? 8.6 : 3.9
             let verdict: Verdict = over78 >= 17 || mean >= 6.6 ? .attention : over78 > usual ? .fair : .good
             return BaselineMetric(kind: .glucose, title: "餐后血糖", value: over78, valueText: "\(over78.shortDecimal)%", quality: .measured,
                                   verdict: verdict,
@@ -665,21 +673,21 @@ enum BaselineAssessment {
         guard let t = p.strengthTest else { return nil }
         let when = "自测于 \(t.date.formatted(.dateTime.month().day()))"
         func metric(_ value: Int, _ text: String, _ table: NormTable?) -> BaselineMetric {
-            guard let table, p.ageKnown else {
+            guard let table, let age = p.age else {
                 return BaselineMetric(kind: .strength, title: "肌肉力量", value: Double(value), valueText: text, quality: .measured,
                                       detail: p.ageKnown ? "这个年龄没有可靠的人群数据，以后和自己比" : "补充年龄后提供同龄评价；当前仅展示记录",
                                       note: when)
             }
-            let r = table.rank(Double(value), age: p.age, sex: p.sex)
+            let r = table.rank(Double(value), age: age, sex: p.sex)
             return BaselineMetric(kind: .strength, title: "肌肉力量", value: Double(value), valueText: text, quality: .measured, rank: r,
                                   verdict: r.band.isLow ? .attention : r.band == .lowerMid ? .fair : .good,
                                   detail: "在同龄同性别里\(r.approx)", note: "\(when)。" + r.reference.note)
         }
-        if let n = t.chairStands, p.age >= 60 || t.pushups == nil {
-            return metric(n, "30 秒坐站 \(n) 次", p.age >= 60 ? PopulationNorms.chairStands : nil)
+        if let n = t.chairStands, p.isAtLeast(age: 60) || t.pushups == nil {
+            return metric(n, "30 秒坐站 \(n) 次", p.isAtLeast(age: 60) ? PopulationNorms.chairStands : nil)
         }
         if let n = t.pushups {
-            return metric(n, "俯卧撑 \(n) 个", p.age < 70 ? PopulationNorms.pushups : nil)
+            return metric(n, "俯卧撑 \(n) 个", p.isAtLeast(age: 70) ? nil : PopulationNorms.pushups)
         }
         return nil
     }

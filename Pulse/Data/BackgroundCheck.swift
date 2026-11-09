@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import BackgroundTasks
+import UIKit
 
 /// 异常提醒 in the background: iOS wakes Pulse now and then (it decides when, usually every few
 /// hours), Pulse reads what came in through Apple Health, runs the same alert rules as when the app
@@ -37,6 +38,25 @@ enum BackgroundCheck {
         }
         // Awaited: iOS suspends Pulse as soon as this run returns.
         await CareReminders.syncNow(in: ctx)
+    }
+
+    /// A new reading in Apple Health (HealthKit wakes Pulse for blood pressure, glucose, weight and VO2max):
+    /// it is read into your own records at once and, with 异常提醒 on and Pulse not on screen, an event that
+    /// calls for the doctor is notified. Health can't be read while the phone is locked; then the next check
+    /// or opening Pulse reads it.
+    @MainActor static func readingsArrived() async {
+        let ctx = DataStores.shared.ownContainer().mainContext
+        guard let p = DataHub.profile(in: ctx), p.onboardingDone, p.useHealthKit else { return }
+        let new = await newEvents(in: ctx) {
+            await HealthKitService.shared.sync(into: ctx, days: 3)
+            DataHub.refreshAlerts(in: ctx)
+            try? ctx.save()
+        }
+        // On screen, 今日 shows it.
+        guard CareReminders.eventsEnabled, UIApplication.shared.applicationState != .active else { return }
+        await CareReminders.notifyNow(CareReminders.notices(new.map {
+            CareReminders.Event(id: $0.id.uuidString, title: $0.title, detail: $0.detail, severity: $0.severity)
+        }))
     }
 
     /// The events `check` added or made more serious. The Health sync itself stores events, so what
