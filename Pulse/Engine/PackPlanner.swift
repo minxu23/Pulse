@@ -28,6 +28,8 @@ struct ProgramPlanInput: Codable, Equatable {
     var bedtime: Double? = nil
     var wakeTime: Double? = nil
     var sleepHours: Double? = nil
+    /// Baseline blood pressure at 160/100 or above (or a single reading at 180/110): no intervals this round (ESC 2020).
+    var highBP: Bool? = nil
 
     /// 1-based week of the round for a week starting `ws`; the week before it starts counts as week 1.
     func week(_ ws: Date) -> Int { max(1, ws.daysSince(roundStart.weekStart) / 7 + 1) }
@@ -63,7 +65,7 @@ enum PackPlanner {
         var plan = PlanGenerator.generalWeek(profile: q, weekStart: ws)
         // The general week's opening line is about resting heart rate; each pack says what it is about instead.
         if x.target != .restingHR { plan.notes.removeAll { $0.contains("改善静息心率最核心") } }
-        let capped = p.cardiacLimited || p.intensityCapped || p.conditions.contains(.pregnancy) || p.conditions.contains(.heartFailure)
+        let capped = p.cardiacLimited || p.intensityCapped || p.conditions.contains(.pregnancy) || p.conditions.contains(.heartFailure) || x.highBP == true
         // A slow heart-rate recovery: two weeks of aerobic base first (Docs 4).
         let aerobicOnly = x.slowRecovery == true && core <= 2 && !maintaining
         let beginner = p.level.rank <= ActivityLevel.light.rank || (x.vo2Band ?? 2) <= RankBand.bottom25.rawValue
@@ -87,7 +89,10 @@ enum PackPlanner {
             // Week 1 builds the base; intervals from week 2 (one, then two when there are four or more days).
             let wanted = noIntervals ? 0 : core == 1 ? 0 : (core >= 3 && trainingDays(plan) >= 4 ? 2 : 1)
             addIntervals(&plan, count: max(0, wanted - vigorousFromSport), style: style, p)
-            if capped { plan.notes.insert("你的情况暂不安排高强度间歇：先用中等强度把有氧基础打牢，医生确认后再加。", at: 0) }
+            if capped {
+                plan.notes.insert(x.highBP == true ? "基线期血压平均在 160/100 以上：血压控制好之前不安排高强度间歇，先用中等强度把有氧基础打牢。"
+                                  : "你的情况暂不安排高强度间歇：先用中等强度把有氧基础打牢，医生确认后再加。", at: 0)
+            }
             outdoors(&plan, count: 2)
             if wk == x.weeks && !maintaining { addRetest(&plan, p) }
             plan.notes.insert("这一轮看最大摄氧量：大部分训练保持能说话的强度，少量训练让心跳明显加快。手表只在户外平路快走、跑步或徒步后才更新最大摄氧量，骑车、游泳和球类不会，所以每周至少 2 次户外快走或慢跑。", at: 0)
@@ -124,7 +129,8 @@ enum PackPlanner {
         func quarter(_ m: Double) -> Int { Int((m / 15).rounded()) * 15 }
         let wake = x.wakeTime.map(quarter) ?? p.wakeMinutes
         var bed = x.bedtime.map(quarter) ?? (p.bedtimeMinutes < 12 * 60 ? p.bedtimeMinutes + 24 * 60 : p.bedtimeMinutes)
-        if x.target == .sleepDuration, let h = x.sleepHours, h < 7 {
+        // Insomnia said later in the round: no more earlier bedtimes (the pack would not start with it).
+        if x.target == .sleepDuration, !p.insomnia, let h = x.sleepHours, h < 7 {
             let short = Int(((7 - h) * 4).rounded(.up)) * 15
             bed -= min(15 * wk, short)
         }

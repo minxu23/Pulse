@@ -76,7 +76,9 @@ struct SleepCareView: View {
     private func tipsCard(_ s: SleepSummary, _ a: Analytics) -> some View {
         var tips: [String] = []
         if (s.bedtimeSD ?? 0) > 45 { tips.append("入睡时间波动较大：先固定起床时间（包括周末），再逐步把上床时间稳定下来。") }
-        if let avg = s.avgMinutes, avg < a.profile.sleepNeedMinutes - 30 { tips.append("平均睡眠少于目标：可以每周把上床时间提前 15 分钟，直到睡够。") }
+        if let avg = s.avgMinutes, avg < a.profile.sleepNeedMinutes - 30 {
+            tips.append(a.profile.insomnia ? ProfileSnapshot.insomniaAdvice : "平均睡眠少于目标：可以每周把上床时间提前 15 分钟，直到睡够。")
+        }
         let late = a.days.suffix(14).filter { $0.lateCaffeine(cutoff: a.profile.caffeineCutoffHour) }.count
         if late >= 3 { tips.append("近两周有 \(late) 天在 \(a.profile.caffeineCutoffHour) 点后摄入咖啡因，可能影响入睡。") }
         let alcohol = a.days.suffix(14).filter(\.hadAlcohol).count

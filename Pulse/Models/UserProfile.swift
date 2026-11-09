@@ -89,6 +89,8 @@ final class UserProfile {
     /// Baseline questionnaire: smoking, early heart disease in the family, PAR-Q+ answers.
     var smoker: Bool? = nil
     var familyHistoryCVD: Bool? = nil
+    /// 基础信息: trouble falling or staying asleep, or waking too early, 3+ nights a week for 3+ months (ICSD-3 chronic insomnia).
+    var insomniaSymptoms: Bool? = nil
     var parqAnswers: [Bool] = []
     var parqDate: Date? = nil
     /// Owns a blood-pressure monitor (nil = not asked; readings arriving also count).

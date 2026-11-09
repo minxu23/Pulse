@@ -536,7 +536,7 @@ enum HealthAgent {
         if let h = c.adherence("plan"), h.verdict != .sustained, h.verdict != .noData {
             add("calendar", "让计划更容易完成", c.planFit.first?.detail ?? "缩短单次时长，或在忙碌时使用精简版。", .plan)
         }
-        if c.dimension("sleep")?.status != .improved, (c.sleep.avgMinutes ?? 999) < c.profile.sleepNeedMinutes - 15 {
+        if c.dimension("sleep")?.status != .improved, (c.sleep.avgMinutes ?? 999) < c.profile.sleepNeedMinutes - 15, !c.profile.insomnia {
             add("moon.stars.fill", "每周提前 15 分钟上床", "目标 \(Clock.text(c.profile.bedtimeMinutes)) 上床，固定起床时间。", .sleep)
         }
         if c.marathonActive, let race = c.race, race.weeksToRace >= 0 {
@@ -1037,7 +1037,7 @@ enum HealthAgent {
         }
         var tips: [String] = []
         if (s.bedtimeSD ?? 0) > 45 { tips.append("入睡时间波动较大：先固定起床时间（包括周末），再稳定上床时间。") }
-        if avg < c.profile.sleepNeedMinutes - 30 { tips.append("平均睡眠少于目标：每周把上床时间提前 15 分钟，直到睡够。") }
+        if avg < c.profile.sleepNeedMinutes - 30 { tips.append(c.profile.insomnia ? ProfileSnapshot.insomniaAdvice : "平均睡眠少于目标：每周把上床时间提前 15 分钟，直到睡够。") }
         if let a = c.association("caffeine-sleep"), a.unfavorable { tips.append(a.sentence + "可以把咖啡因截止时间提前。") }
         if tips.isEmpty { tips.append("作息基本稳定，继续保持固定的起床时间。") }
         let effects = ["shortsleep-rhr", "shortsleep-energy"].compactMap { c.association($0) }.filter(\.unfavorable).map(\.sentence)

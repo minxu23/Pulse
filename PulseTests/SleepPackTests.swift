@@ -80,6 +80,10 @@ struct SleepPackTests {
         var suspected = profile()
         suspected.apneaStatus = .suspected
         #expect(ProgramPacks.blocker(.sleep, r, suspected)?.contains("医生") == true)
+        var insomnia = profile()
+        insomnia.insomnia = true
+        #expect(ProgramPacks.blocker(.sleep, r, insomnia)?.contains("CBT-I") == true, "more time in bed works against insomnia treatment")
+        #expect(PackPlanner.sleepSchedule(insomnia, input(.sleepDuration), week: 3).bed == 24 * 60 + 30, "and no earlier bedtimes")
         var stopBang = profile()
         stopBang.stopBangScore = 4
         #expect(ProgramPacks.blocker(.sleep, r, stopBang) == nil, "3–4 alone needs more signs")
@@ -167,6 +171,48 @@ struct SleepPackTests {
         let r = ProgramEvaluator.round(e, now: today.adding(days: 28).adding(minutes: 600))
         #expect(r?.value == 6.8, "\(String(describing: r))")
         #expect(r?.outcome == .achieved)
+    }
+
+    @Test func thePacksTimesAreTheSleepTargetsWhileItRuns() {
+        let u = UserProfile()
+        u.bedtimeMinutes = 23 * 60
+        u.wakeMinutes = 7 * 60
+        u.programPhase = .improve
+        u.programPlan = input(.sleepDuration)
+        let s = u.snapshot(medications: [])
+        let t = PackPlanner.sleepSchedule(s, input(.sleepDuration), week: input(.sleepDuration).roundWeek(DayClock.logicalToday(.app).weekStart))
+        #expect(s.bedtimeMinutes == t.bed % (24 * 60) && s.wakeMinutes == 6 * 60 + 45, "睡眠, 复盘 and the Agent follow the pack")
+        #expect(u.bedtimeMinutes == 23 * 60, "the saved target is left for after the program")
+    }
+
+    // MARK: Safety rules from the doctor's checklist
+
+    @Test func bloodPressureOver160HoldsBackHardSessions() {
+        var p = profile()
+        p.clinicianCleared = true
+        let now = today.adding(minutes: 9 * 60)
+        let bp = (1...6).map { VitalPoint(time: now.adding(days: -$0), kind: .bloodPressure, value: 165, value2: 98, context: .morning) }
+        let c = AgentContext.make(profile: p, name: "", days: [], plan: [], workouts: [], vitals: bp, events: [], stopBang: [],
+                                  baselineSetAt: nil, raceName: "", now: now)
+        let r = TrainingCheck.reply("今天能跑间歇吗", context: c)
+        #expect(r.text.hasPrefix("不建议") && r.text.contains("165/98"), "\(r.text)")
+        // A pack started with baseline blood pressure that high plans no intervals.
+        var x = input(.vo2max)
+        x.pack = .fitness; x.highBP = true
+        var q = p
+        q.programPhase = .improve; q.program = x
+        let plan = PackPlanner.week(profile: q, input: x, weekStart: today.adding(days: 7))
+        #expect(!plan.sessions.contains { $0.kind == .quality }, "no intervals")
+        #expect(plan.notes.contains { $0.contains("160/100") })
+    }
+
+    @Test func retinopathyIsInTheLibraryAndCapsIntensity() {
+        let x = ConditionLibrary.entry(id: ConditionLibrary.retinopathyID)
+        #expect(x?.moderateOnly == true && x?.noImpact == true)
+        var p = profile()
+        p.conditions = [.diabetesT2]
+        p.include(x!)
+        #expect(p.intensityCapped && p.intensityCaps.contains { $0.contains("视网膜") })
     }
 
     // MARK: Age left out

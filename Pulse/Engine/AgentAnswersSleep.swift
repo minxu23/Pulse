@@ -65,7 +65,7 @@ extension HealthAgent {
         if ask == .need { parts.append("你\(period)\(amount)。") }
         if thisWeek, nights.count > 1 { parts.append("这周目前记录了 \(nights.count) 晚。") }
         if lastNight, !enough, !close { parts.append("一晚睡少，当天把强度放轻就好，今晚按平时时间上床，不用一次补很久。") }
-        var tips = enough || close ? ["起床时间固定，周末也一样"] : ["每周把上床时间提前 15 分钟，直到睡够", "起床时间固定，周末也一样"]
+        var tips = enough || close ? ["起床时间固定，周末也一样"] : [p.insomnia ? ProfileSnapshot.insomniaAdvice : "每周把上床时间提前 15 分钟，直到睡够", "起床时间固定，周末也一样"]
         if p.shift != nil, !enough, !close { tips[1] = "休息日可以多睡一会儿，但起床时间别比上班日晚太多" }
         parts.append(bullets(tips))
         var r = AgentReply(text: lines(parts), sources: ["睡眠记录"], followUps: ["我的睡眠怎么样？"], destination: .sleep, intent: .sleep, conclusion: first)

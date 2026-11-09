@@ -229,7 +229,8 @@ enum ProgramFlow {
                          baselineSteps: r.habits.stepsMean, baselineMinutes: r.habits.guidelineMinutes,
                          vo2Band: r.metric(.vo2max)?.rank?.band.rawValue, usualWeekdays: r.habits.usualWeekdays,
                          mainSlot: r.habits.mainSlot, slowRecovery: r.metric(.hrRecovery)?.verdict == .attention,
-                         bedtime: r.habits.bedtimeMean, wakeTime: r.habits.wakeMean, sleepHours: r.metric(.sleepDuration)?.value)
+                         bedtime: r.habits.bedtimeMean, wakeTime: r.habits.wakeMean, sleepHours: r.metric(.sleepDuration)?.value,
+                         highBP: r.metric(.bloodPressure)?.verdict == .urgent)
     }
 
     static func preview(_ pack: ProgramPack, result: BaselineResult, profile: ProfileSnapshot, now: Date = .app) -> WeekPlan {

@@ -173,7 +173,7 @@ enum InsightEngine {
             let rate = Double(ok) / Double(nights.count)
             out.append(.init(id: "bedtime", name: "按时入睡", icon: "bed.double", rate: rate,
                              detail: "\(ok) / \(nights.count) 晚在 \(Clock.text(p.bedtimeMinutes)) ±45 分钟内入睡",
-                             suggestion: rate < 0.6 ? "可以先把目标就寝时间调整为更现实的时间，再每周提前 15 分钟。" : "作息比较规律，继续保持。"))
+                             suggestion: rate < 0.6 ? (p.insomnia ? "可以先把目标就寝时间调整为更现实的时间，固定起床时间更要紧。" : "可以先把目标就寝时间调整为更现实的时间，再每周提前 15 分钟。") : "作息比较规律，继续保持。"))
         }
 
         let sleeps = window.compactMap(\.sleepMinutes)

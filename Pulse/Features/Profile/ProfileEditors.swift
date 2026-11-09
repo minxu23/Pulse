@@ -87,6 +87,16 @@ struct ConditionsSection: View {
                 }
             }
             .padding(.vertical, Theme.Space.tight)
+            // Diabetes: the eye problem that changes how hard Pulse lets you train (ADA 2026).
+            if p.conditions.contains(where: \.isDiabetes) {
+                let id = ConditionLibrary.retinopathyID
+                ToggleChip(text: "视网膜病变（增殖期或重度）", isOn: Binding(
+                    get: { p.extraConditionsRaw.contains(id) },
+                    set: { on in
+                        if on { if !p.extraConditionsRaw.contains(id) { p.extraConditionsRaw.append(id) } } else { p.extraConditionsRaw.removeAll { $0 == id } }
+                        p.healthBackgroundReviewed = true
+                    }))
+            }
             if p.conditions.contains(where: \.watchesFluid) && !p.fluidLimit {
                 Text("医生要求限制饮水时，在「恢复目标」里打开「限水」，Pulse 就不再提醒多喝水。")
                     .font(Theme.TypeScale.body).foregroundStyle(.secondary)

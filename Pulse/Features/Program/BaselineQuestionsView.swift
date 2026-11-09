@@ -56,6 +56,14 @@ struct BaselineQuestionsView: View {
             }
 
             Section {
+                optionalAnswer("每周至少 3 晚很难入睡、夜里醒来很难再睡或醒得太早，已经 3 个月以上", value: $profile.insomniaSymptoms)
+            } header: {
+                Text("睡眠")
+            } footer: {
+                Text("选「是」时，Pulse 不会让你提前上床（在床上躺得越久越难睡），会建议去睡眠门诊：首选的治疗是失眠认知行为治疗（CBT-I）。")
+            }
+
+            Section {
                 countRow("俯卧撑（个）", value: $pushups)
                 countRow("30 秒坐站（次）", value: $chairStands)
             } header: {

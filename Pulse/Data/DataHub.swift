@@ -9,6 +9,7 @@ extension UserProfile {
         var s = ProfileSnapshot()
         s.age = age
         s.stopBangScore = stopBangAnswers.count == 8 ? stopBangAnswers.filter { $0 }.count : nil
+        s.insomnia = insomniaSymptoms == true
         s.sex = sex
         s.bmi = bmi
         s.heightCm = heightCm
@@ -44,6 +45,14 @@ extension UserProfile {
         s.sleepNeedMinutes = sleepNeedHours * 60
         s.bedtimeMinutes = bedtimeMinutes
         s.wakeMinutes = wakeMinutes
+        // 睡眠改善: this week's times from the pack are the sleep targets everywhere (睡眠, 复盘, Health Agent);
+        // the saved ones are left as they are for after the program.
+        if let x = s.program, x.pack == .sleep, x.bedtime != nil, x.wakeTime != nil {
+            let wk = programPhase == .summary ? max(1, x.weeks) : x.roundWeek(DayClock.logicalToday(.app).weekStart)
+            let t = PackPlanner.sleepSchedule(s, x, week: wk)
+            s.bedtimeMinutes = t.bed % (24 * 60)
+            s.wakeMinutes = t.wake
+        }
         s.shift = shiftSchedule
         s.caffeineCutoffHour = caffeineCutoffHour
         s.weeklyAlcoholLimit = weeklyAlcoholLimit

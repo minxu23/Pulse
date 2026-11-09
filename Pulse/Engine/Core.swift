@@ -339,6 +339,8 @@ struct ProfileSnapshot: Equatable {
     var thresholdHR: Int?
     var apneaStatus: ApneaStatus = .unknown
     var apneaTreatment: ApneaTreatment = .none
+    /// Said yes to the chronic-insomnia question: no earlier bedtimes, a sleep clinic and CBT-I instead.
+    var insomnia = false
     /// The STOP-BANG self-check score (0–8); nil until all 8 questions are answered.
     var stopBangScore: Int? = nil
     var cpapTargetHours: Double = 4
@@ -395,6 +397,8 @@ struct ProfileSnapshot: Equatable {
     var bodySizeText: String { bmi > 0 ? "BMI \(bmi.oneDecimal)" : "身高体重未填写" }
     /// 208 − 0.7 × age (Tanaka); nil without an age.
     var estimatedMaxHR: Double? { age.map { 208 - 0.7 * Double($0) } }
+    /// What to say in place of 「提前上床」 with insomnia: more time in bed works against CBT-I (AASM 2021).
+    static let insomniaAdvice = "你回答过失眠的症状：先别提前上床，在床上躺得越久越难睡；首选的治疗是失眠认知行为治疗（CBT-I），可以去睡眠门诊。"
 }
 
 /// A plain view of a planned session used by the adjustment and review engines.

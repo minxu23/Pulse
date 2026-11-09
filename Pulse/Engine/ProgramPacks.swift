@@ -218,6 +218,8 @@ enum ProgramPacks {
             return nil
         case .sleep:
             // A fixed schedule is the core of the pack; shifts set their own (倒班 has its sleep advice).
+            // More time in bed works against CBT-I, the first treatment for insomnia (AASM 2021; Riemann 2023).
+            if p.insomnia { return "你回答了失眠的症状：首选的治疗是失眠认知行为治疗（CBT-I），请先去睡眠门诊；这个方案靠提前上床多睡，对失眠反而不利" }
             if p.shift != nil { return "你在倒班，作息跟着排班走：这个方案按固定作息设计，倒班的睡眠安排在「我的 › 倒班 / 轮班作息」里" }
             // Breathing problems at night need a doctor first: more time in bed doesn't fix them (Docs 3.7).
             let untreated = p.apneaTreatment == .none

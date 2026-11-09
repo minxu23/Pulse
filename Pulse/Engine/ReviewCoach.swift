@@ -359,19 +359,20 @@ enum ReviewCoach {
                                      action: .startExperiment(key: key, note: note), adoptLabel: "开始验证"))
         }
 
-        // 3. A bedtime target that is rarely met → a realistic one first.
-        if let h = c.adherence("bedtime"), h.verdict == .struggling || h.verdict == .partial,
+        // 3. A bedtime target that is rarely met → a realistic one first. 睡眠改善 sets the times week by week itself.
+        if !(p.program?.pack == .sleep && p.programPhase.runsPack),
+           let h = c.adherence("bedtime"), h.verdict == .struggling || h.verdict == .partial,
            let avg = c.sleep.avgBedtime, Clock.nightOffset(avg) - Clock.nightOffset(p.bedtimeMinutes) >= 30 {
             let target = (p.bedtimeMinutes + min(45, Clock.nightOffset(avg) - Clock.nightOffset(p.bedtimeMinutes)) / 15 * 15) % 1440
             out.append(CoachProposal(id: "bed-\(target)", icon: "moon.stars.fill",
                                      title: "把目标上床时间调整为 \(Clock.text(target))",
                                      rationale: (h.kept.map { "最近 \($0.of) 个晚上，只有 \($0.ok) 晚在 \(Clock.text(p.bedtimeMinutes)) 前后睡下。" } ?? "按时上床的晚上还不多。")
-                                         + "先定一个够得着的时间，做到了再每周提前 15 分钟。",
+                                         + (p.insomnia ? "先定一个够得着的时间；你回答过失眠的症状，先别再往前提，固定起床时间更要紧。" : "先定一个够得着的时间，做到了再每周提前 15 分钟。"),
                                      action: .setBedtime(target), adoptLabel: "调整为 \(Clock.text(target))"))
         }
 
-        // 4. A step target that is rarely reached.
-        if let h = c.adherence("steps"), (h.rate ?? 1) < 0.4 {
+        // 4. A step target that is rarely reached. A running pack sets the step target week by week itself.
+        if p.program == nil, let h = c.adherence("steps"), (h.rate ?? 1) < 0.4 {
             let recent = Stats.mean(c.days.suffix(28).compactMap(\.steps).map(Double.init)) ?? Double(p.stepsTarget)
             let target = max(4000, Int((recent + 1000) / 500) * 500)
             if target < p.stepsTarget {

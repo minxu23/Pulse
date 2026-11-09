@@ -89,8 +89,23 @@ enum ConditionLibrary {
               summary: "贫血时心率会偏高、运动更容易累，强度循序渐进。"),
     ]
 
+    /// Proliferative or severe non-proliferative diabetic retinopathy: offered beside diabetes in 健康状况.
+    static let retinopathyID = "retinopathy"
+
     /// Conditions without built-in care, with what Pulse changes for them.
     static let entries: [ConditionInfo] = [
+        // ADA 2026: vigorous aerobic or resistance exercise may be contraindicated (vitreous haemorrhage, retinal detachment).
+        .init(id: retinopathyID, name: "糖尿病视网膜病变（增殖期或重度）",
+              aliases: ["增殖期糖尿病视网膜病变", "增殖性糖尿病视网膜病变", "增殖期视网膜病变", "增殖性视网膜病变", "增殖期糖网", "重度非增殖期视网膜病变",
+                        "糖尿病视网膜病变", "糖尿病性视网膜病变", "糖网病", "糖网", "视网膜病变"],
+              summary: "增殖期或重度的视网膜病变，剧烈运动、大重量和憋气用力可能诱发眼底出血或视网膜脱离；轻度的运动限制按眼科医生的意见。",
+              exercise: ["不做剧烈运动、间歇和大重量力量训练，用力时不憋气。",
+                         "避开跳跃、撞击，以及倒立、头低于心脏的动作。",
+                         "快走、固定单车、游泳（不跳水）这类中低强度运动可以做。"],
+              daily: ["按眼科医生的安排定期查眼底；做过激光或眼内注射后，什么时候能恢复运动问眼科医生。",
+                      "血糖和血压控制好，有助于减慢视网膜病变。"],
+              stopSigns: "眼前突然出现很多黑点、闪光或像拉了一层幕，或视力突然下降，立即停止运动，尽快去眼科急诊。",
+              moderateOnly: true, noImpact: true),
         .init(id: "hypokalemia", name: "低血钾症", aliases: ["低钾血症", "低血钾症", "低血钾", "血钾偏低", "血钾低", "缺钾"],
               summary: "血钾低时肌肉和心脏更容易出问题：运动中可能乏力、抽筋，严重时心律不齐。",
               exercise: ["血钾恢复正常、医生同意之前，运动以中低强度为主，不做间歇和冲刺。",

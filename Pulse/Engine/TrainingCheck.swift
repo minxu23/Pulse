@@ -231,6 +231,10 @@ enum TrainingCheck {
         if let x = p.extraConditions.first(where: { !$0.stopSigns.isEmpty }), session != .easy {
             cautions.append("\(x.name)：" + x.stopSigns)
         }
+        // Above 160/100 no hard sessions until blood pressure is under control (ESC 2020; Docs 2.9).
+        if session == .intervals, let sys = c.bp.avgSys?.rounded(), let dia = c.bp.avgDia?.rounded(), sys >= 160 || dia >= 100 {
+            blockers.append("近 30 天平均血压 \(Int(sys))/\(Int(dia)) mmHg，血压控制好之前先不做高强度训练，改成能说话的中低强度有氧；也请把读数给医生看。")
+        }
         if session == .heavyStrength, let sys = c.bp.avgSys?.rounded(), let dia = c.bp.avgDia?.rounded() {
             if sys >= 160 || dia >= 100 {
                 blockers.append("近 30 天平均血压 \(Int(sys))/\(Int(dia)) mmHg，血压控制好之前先避免大重量和憋气用力，这类动作会让血压明显升高。")
