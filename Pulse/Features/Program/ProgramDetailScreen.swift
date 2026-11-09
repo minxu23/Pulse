@@ -36,7 +36,7 @@ struct ProgramDetailScreen: View {
             Card {
                 CardHeader(title: pack.title, subtitle: "第 \(p.programRound) 轮 · " + (week == 0 ? "下周一开始第 1 周" : "第 \(min(week, p.programRoundWeeks)) / \(p.programRoundWeeks) 周"),
                            icon: pack.icon, color: pack.color)
-                WeekDots(current: week, total: p.programRoundWeeks, color: pack.color)
+                WeekDots(current: week, total: p.programRoundWeeks)
                 if p.programRoundWeeks > 4 {
                     Text("有生病或出差的周不计入，这一轮顺延到 \(p.programRoundWeeks) 周（每轮最多顺延 2 周）。").foregroundStyle(.secondary)
                 }
@@ -59,7 +59,8 @@ struct ProgramDetailScreen: View {
                 if let avg = r.average { FactRow(label: "4 周平均收缩压", value: TargetTracker.text(target, avg)) }
                 if target == .weeklyRunKm, let planned = r.plannedKm { FactRow(label: "本周", value: "\((r.runKm ?? 0).shortDecimal) / \(planned.shortDecimal) 公里") }
                 if r.series.count >= 2 { chart(r, goal: goal) }
-                Text("读数 \(r.count) 条 · 最近记录：" + (r.latest?.formatted(date: .abbreviated, time: .shortened) ?? "暂无"))
+                Text((target == .weeklyRunKm ? "本周跑步 \(r.count) 次 · 最近一次：" : "读数 \(r.count) 条 · 最近记录：")
+                     + (r.latest?.formatted(date: .abbreviated, time: .shortened) ?? "暂无"))
                     .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 if target.isBloodPressure {
                     Text("当前值同时显示收缩压和舒张压；本轮按收缩压目标评价。图表展示每日收缩压均值。" + (target == .homeBP ? "主数值为最近七天均值。" : "主数值为最近一次读数；第 4 周结束时用最后两周读数的平均和基线比，每周都要有读数。"))
@@ -111,8 +112,10 @@ struct ProgramDetailScreen: View {
                     .foregroundStyle(r.target.color).symbolSize(16)
             }
             if let start = profiles.first?.programRoundStart {
+                // The label sits on the side of the line with more room.
+                let late = r.series.first.map { start.timeIntervalSince($0.day) > (r.series.last?.day ?? start).timeIntervalSince(start) } ?? false
                 RuleMark(x: .value("本轮开始", start)).foregroundStyle(Color.gray).lineStyle(StrokeStyle(dash: [4, 4]))
-                    .annotation(position: .top, alignment: .leading, overflowResolution: Self.inside) { Text("本轮开始").font(Theme.TypeScale.body) }
+                    .annotation(position: .top, alignment: late ? .trailing : .leading, overflowResolution: Self.inside) { Text("本轮开始").font(Theme.TypeScale.body) }
             }
             if let b = t.baseline {
                 RuleMark(y: .value("基线", b)).foregroundStyle(Color.gray).lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
@@ -127,8 +130,8 @@ struct ProgramDetailScreen: View {
         .frame(height: 190)
     }
 
-    /// Chart labels stay within the chart, clear of the rows above it.
-    static let inside = AnnotationOverflowResolution(x: .fit(to: .chart), y: .fit(to: .chart))
+    /// Chart labels stay within the plot, clear of the rows above it and of the axis labels.
+    static let inside = AnnotationOverflowResolution(x: .fit(to: .plot), y: .fit(to: .chart))
 
     /// Why this goal: what four weeks can change, and how much the number wobbles on its own.
     static func why(_ t: TargetMetric) -> String {
@@ -149,7 +152,7 @@ struct ProgramDetailScreen: View {
 private struct WeekDots: View {
     let current: Int
     let total: Int
-    var color: Color = .secondary
+    var color: Color = .primary
     var body: some View {
         HStack(spacing: Theme.Space.item) {
             ForEach(1...max(1, total), id: \.self) { i in

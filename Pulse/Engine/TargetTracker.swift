@@ -92,7 +92,9 @@ enum TargetTracker {
             r.count = runs(ws).count
             r.value = r.plannedKm.map { km(ws) / $0 * 100 }
             r.latest = workouts.last { $0.type == .run && $0.start < end }?.start
-            for i in 0..<8 {
+            // Whole weeks only: the week under way would show as a drop on the chart.
+            let first = end >= ws.adding(days: 7) ? 0 : 1
+            for i in first..<first + 8 {
                 let s = ws.adding(days: -7 * i)
                 if let p = planned(s) { r.series.insert(TargetPoint(day: s, value: km(s) / p * 100), at: 0) }
             }
