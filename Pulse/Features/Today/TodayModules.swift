@@ -341,7 +341,7 @@ struct GlucoseHourChart: View {
                     .foregroundStyle(Theme.glucose).lineStyle(StrokeStyle(lineWidth: 2, dash: [4, 3]))
             }
             RuleMark(x: .value("现在", forecast.from)).foregroundStyle(Color.secondary.opacity(0.4)).lineStyle(StrokeStyle(lineWidth: 1))
-        }.pulseChartAxes()
+        }.pulseChartYAxis()
         .chartYScale(domain: max(2, (values.min() ?? 4) - 0.5)...((values.max() ?? 10) + 0.5))
         .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 1)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()).font(Theme.TypeScale.body) } }
         .chartYAxis { AxisMarks(position: .trailing, values: [low, high]) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }

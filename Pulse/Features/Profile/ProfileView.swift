@@ -323,6 +323,12 @@ struct DataSourcesView: View {
                     if let last = profile.lastSync {
                         LabeledContent("上次同步", value: last.formatted(date: .abbreviated, time: .shortened))
                     }
+                    // Whether Health is read while Pulse is closed: the way to check it on the phone.
+                    let bg = BackgroundCheck.lastRead
+                    LabeledContent("最近一次后台读取", value: bg.map { $0.date.formatted(date: .abbreviated, time: .shortened) + ($0.newReading ? " · 有新读数" : " · 定时检查") } ?? "还没有")
+                    if let bg, !bg.ok {
+                        Text("那次手机锁着，健康数据读不到；解锁后的下一次检查或打开 Pulse 时会补上。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                    }
                     if let msg = hk.lastMessage { Text(msg).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
                 }
             } header: {

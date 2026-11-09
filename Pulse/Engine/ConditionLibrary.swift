@@ -25,12 +25,15 @@ struct ConditionInfo: Identifiable, Equatable {
     var avoidHeat = false
     /// No jumping, sprinting or heavy loads.
     var noImpact = false
+    /// What recording it changes, for one that works differently from the others (慢性失眠).
+    var ownChanges: [String]? = nil
 
     /// Built in or in the library; otherwise only the name is known.
     var known: Bool { native != nil || !summary.isEmpty }
 
     /// What Pulse does differently once it is recorded.
     var changes: [String] {
+        if let ownChanges { return ownChanges }
         if let n = native { return ConditionLibrary.builtInChanges(n) }
         guard known else {
             return ["回答你的问题时会考虑你有\(name)，就诊摘要里也会列出",
@@ -91,9 +94,21 @@ enum ConditionLibrary {
 
     /// Proliferative or severe non-proliferative diabetic retinopathy: offered beside diabetes in 健康状况.
     static let retinopathyID = "retinopathy"
+    /// Chronic insomnia: recording it answers the 基础信息 question (`insomniaSymptoms`), not a condition entry.
+    static let insomniaID = "insomnia"
 
     /// Conditions without built-in care, with what Pulse changes for them.
     static let entries: [ConditionInfo] = [
+        // Only phrases that mean months of it: one bad night (「我昨晚失眠了」) is not chronic insomnia.
+        .init(id: insomniaID, name: "慢性失眠",
+              aliases: ["慢性失眠", "失眠症", "失眠障碍", "长期失眠", "常年失眠", "一直失眠", "经常失眠", "失眠很久",
+                        "失眠好几个月", "失眠几个月", "失眠好几年", "失眠多年"],
+              summary: "每周至少 3 晚很难入睡、夜里醒来难再睡或醒得太早，持续 3 个月以上。首选的治疗是失眠认知行为治疗（CBT-I）。",
+              exercise: ["规律运动能改善睡眠质量；剧烈运动最好在睡前 1 小时以前结束。"],
+              daily: ["先别提前上床，在床上躺得越久越难睡。", "每天同一时间起床，躺下 20 分钟睡不着就起来，困了再回床。"],
+              ownChanges: ["不再建议你提前上床，睡眠方案也先不开始：在床上躺得越久越难睡",
+                           "改为建议去睡眠门诊做失眠认知行为治疗（CBT-I）",
+                           "「基础信息」里的失眠一题记为「是」，以后可以在那里改回"]),
         // ADA 2026: vigorous aerobic or resistance exercise may be contraindicated (vitreous haemorrhage, retinal detachment).
         .init(id: retinopathyID, name: "糖尿病视网膜病变（增殖期或重度）",
               aliases: ["增殖期糖尿病视网膜病变", "增殖性糖尿病视网膜病变", "增殖期视网膜病变", "增殖性视网膜病变", "增殖期糖网", "重度非增殖期视网膜病变",
@@ -218,6 +233,7 @@ enum ConditionLibrary {
         for (e, alias) in all {
             guard let r = q.range(of: alias, options: .caseInsensitive), aboutSelf(q, at: r) else { continue }
             if let n = e.native { if p.conditions.contains(n) { return nil } }
+            else if e.id == insomniaID { if p.insomnia { return nil } }
             else if p.extraConditions.contains(where: { $0.id == e.id }) { return nil }
             return ConditionProposal(id: UUID(), info: e, said: String(q[r]))
         }

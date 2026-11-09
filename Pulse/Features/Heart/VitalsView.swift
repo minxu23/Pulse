@@ -90,7 +90,7 @@ struct VitalsView: View {
                             PointMark(x: .value("日期", v.time), y: .value("舒张压", d)).foregroundStyle(by: .value("类型", "舒张压")).symbol(by: .value("类型", "舒张压"))
                         }
                     }
-                }.pulseChartAxes()
+                }.pulseChartYAxis()
                 .chartForegroundStyleScale(["收缩压": Theme.heartData, "舒张压": Theme.heartData.opacity(0.45)])
                 .chartXAxis { dateAxis }
                 .frame(height: 160)
@@ -154,7 +154,7 @@ struct VitalsView: View {
                                         .foregroundStyle(Theme.glucose).symbolSize(24)
                                 }
                             }
-                        }.pulseChartAxes()
+                        }.pulseChartYAxis()
                         .chartYScale(domain: 2.5...max(11, (shown.map(\.value).max() ?? 8) + 1))
                         .chartXAxis {
                             if m.isContinuous {
@@ -225,7 +225,7 @@ struct VitalsView: View {
                                 .foregroundStyle(d.1 < 88 ? Color.red : Theme.respiratory)
                                 .symbol(d.1 < 88 ? .triangle : .circle).symbolSize(d.1 < 88 ? 40 : 14)
                         }
-                    }.pulseChartAxes()
+                    }.pulseChartYAxis()
                     .chartYScale(domain: 80...100)
                     .chartXAxis { dateAxis }
                     .frame(height: 120)
@@ -343,7 +343,7 @@ private struct ForecastSection: View {
                     LineMark(x: .value("周", w.start), y: .value(what, w.mid), series: .value("线", "预测"))
                         .foregroundStyle(color).lineStyle(StrokeStyle(lineWidth: 2, dash: [4, 3]))
                 }
-            }.pulseChartAxes()
+            }.pulseChartYAxis()
             .chartYScale(domain: (lo - pad)...(hi + pad))
             .chartXAxis { AxisMarks(values: .stride(by: .weekOfYear, count: 2)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy).font(Theme.TypeScale.body) } }
             .chartYAxis { AxisMarks(position: .trailing) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }

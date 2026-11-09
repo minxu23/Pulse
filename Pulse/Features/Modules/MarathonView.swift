@@ -174,7 +174,7 @@ struct MarathonView: View {
                 RuleMark(y: .value("本周目标", week.weeklyKm))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray)
                     .annotation(position: .top, alignment: .leading) { Text("本周目标 \(Int(week.weeklyKm))").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
-            }.pulseChartAxes()
+            }.pulseChartYAxis()
             .chartXAxis { AxisMarks(values: .stride(by: .weekOfYear, count: 2)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy).font(Theme.TypeScale.body) } }
             .frame(height: 140)
             .accessibilityLabel("近 8 周每周跑量")

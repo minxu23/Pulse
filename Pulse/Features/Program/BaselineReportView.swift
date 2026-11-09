@@ -206,7 +206,7 @@ private struct HabitsCard: View {
                             BarMark(x: .value("时", hour), y: .value("步数", h.hourly[hour]))
                                 .foregroundStyle(h.peakHours.contains(hour) ? Theme.activity : Theme.activity.opacity(0.35))
                         }
-                    }.pulseChartAxes()
+                    }.pulseChartYAxis()
                     .chartXAxis { AxisMarks(values: [0, 6, 12, 18, 23]) { v in AxisValueLabel { Text("\(v.as(Int.self) ?? 0) 时") }.font(Theme.TypeScale.body) } }
                     .chartYAxis(.hidden)
                     .frame(height: 90)

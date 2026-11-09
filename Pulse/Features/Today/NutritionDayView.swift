@@ -395,7 +395,7 @@ struct GlucoseDayCard: View {
                     RuleMark(x: .value("进餐", m.time)).foregroundStyle(Color.gray.opacity(0.6))
                         .annotation(position: .top) { Image(systemName: "fork.knife").font(Theme.TypeScale.body).foregroundStyle(Color.gray) }
                 }
-            }.pulseChartAxes()
+            }.pulseChartYAxis()
             .chartYScale(domain: 2.5...max(11, (points.map(\.value).max() ?? 8) + 1))
             .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 3)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()).font(Theme.TypeScale.body) } }
             .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }

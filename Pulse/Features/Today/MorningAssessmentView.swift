@@ -306,7 +306,7 @@ struct BloodPressureNightCard: View {
                     PointMark(x: .value("日期", b.time.startOfDay.adding(days: 1), unit: .day), y: .value("睡前", b.value))
                         .symbol(.diamond).foregroundStyle(Color.gray).symbolSize(36)
                 }
-            }.pulseChartAxes()
+            }.pulseChartYAxis()
             .chartYScale(domain: ((values.min() ?? 110) - 6)...((values.max() ?? 140) + 6))
             .chartXAxis { AxisMarks(values: .stride(by: .day, count: 7)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy).font(Theme.TypeScale.body) } }
             .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
@@ -338,7 +338,7 @@ struct GlucoseNightCard: View {
                         LineMark(x: .value("时间", v.time), y: .value("mmol/L", v.value))
                             .foregroundStyle(Theme.glucose).interpolationMethod(.monotone)
                     }
-                }.pulseChartAxes()
+                }.pulseChartYAxis()
                 .chartYScale(domain: 2.5...max(11, hi + 1))
                 .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 2)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()).font(Theme.TypeScale.body) } }
                 .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }

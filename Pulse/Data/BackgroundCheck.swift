@@ -28,7 +28,7 @@ enum BackgroundCheck {
         if CareReminders.eventsEnabled, let p = DataHub.profile(in: ctx), p.onboardingDone {
             let new = await newEvents(in: ctx) {
                 // Health data can only be read while the phone is unlocked; otherwise this check uses what is already here.
-                if p.useHealthKit { await HealthKitService.shared.sync(into: ctx, days: 3) }
+                if p.useHealthKit { await readInBackground(ctx, newReading: false) }
                 DataHub.refreshAlerts(in: ctx)
                 try? ctx.save()
             }
@@ -48,7 +48,7 @@ enum BackgroundCheck {
         let ctx = DataStores.shared.ownContainer().mainContext
         guard let p = DataHub.profile(in: ctx), p.onboardingDone, p.useHealthKit else { return }
         let new = await newEvents(in: ctx) {
-            await HealthKitService.shared.sync(into: ctx, days: 3)
+            await readInBackground(ctx, newReading: true)
             DataHub.refreshAlerts(in: ctx)
             try? ctx.save()
         }
@@ -57,6 +57,37 @@ enum BackgroundCheck {
         await CareReminders.notifyNow(CareReminders.notices(new.map {
             CareReminders.Event(id: $0.id.uuidString, title: $0.title, detail: $0.detail, severity: $0.severity)
         }))
+    }
+
+    // MARK: The last read in the background (数据来源)
+
+    /// When Pulse last read Apple Health while not on screen, what woke it, and whether the read got
+    /// through (Health can't be read while the phone is locked).
+    struct BackgroundRead: Equatable {
+        var date: Date
+        var ok: Bool
+        /// A new reading woke Pulse; otherwise the check iOS runs every few hours.
+        var newReading: Bool
+    }
+
+    private static let readKey = "health.backgroundRead"
+
+    static var lastRead: BackgroundRead? {
+        guard let d = UserDefaults.standard.dictionary(forKey: readKey), let t = d["date"] as? Double else { return nil }
+        return BackgroundRead(date: Date(timeIntervalSince1970: t), ok: d["ok"] as? Bool ?? false, newReading: d["new"] as? Bool ?? false)
+    }
+
+    static func note(_ r: BackgroundRead) {
+        UserDefaults.standard.set(["date": r.date.timeIntervalSince1970, "ok": r.ok, "new": r.newReading], forKey: readKey)
+    }
+
+    /// The last 3 days from Apple Health; off screen, the attempt is noted for 数据来源.
+    @MainActor static func readInBackground(_ ctx: ModelContext, newReading: Bool) async {
+        let before = DataHub.profile(in: ctx)?.lastSync
+        await HealthKitService.shared.sync(into: ctx, days: 3)
+        guard UIApplication.shared.applicationState != .active else { return }
+        let after = DataHub.profile(in: ctx)?.lastSync
+        note(BackgroundRead(date: Date(), ok: after != nil && after != before, newReading: newReading))
     }
 
     /// The events `check` added or made more serious. The Health sync itself stores events, so what

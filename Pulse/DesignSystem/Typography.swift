@@ -28,7 +28,13 @@ extension View {
                 }.font(Theme.TypeScale.body)
             }
         }
-        .chartYAxis {
+        .pulseChartYAxis()
+    }
+
+    /// The y axis only, for a chart that labels its own x axis (hours, minutes): the shared x axis would win
+    /// over it and read the numbers as dates (「1月1日」).
+    func pulseChartYAxis() -> some View {
+        self.chartYAxis {
             AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) {
                 AxisGridLine()
                 AxisTick()

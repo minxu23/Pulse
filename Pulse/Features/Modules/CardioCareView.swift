@@ -296,7 +296,7 @@ struct HomeBPCard: View {
                         LineMark(x: .value("日期", v.time, unit: .day), y: .value("收缩压", v.value), series: .value("时段", "睡前"))
                             .foregroundStyle(Theme.heartData.opacity(0.45)).symbol(.diamond)
                     }
-                }.pulseChartAxes()
+                }.pulseChartYAxis()
                 .chartYScale(domain: ((recent.map(\.value).min() ?? 110) - 8)...((recent.map(\.value).max() ?? 140) + 8))
                 .chartXAxis { AxisMarks(values: .stride(by: .day, count: 4)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy).font(Theme.TypeScale.body) } }
                 .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }

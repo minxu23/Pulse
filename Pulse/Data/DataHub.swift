@@ -434,7 +434,10 @@ enum DataHub {
     @discardableResult
     static func recordCondition(_ x: ConditionInfo, in ctx: ModelContext) -> Bool {
         guard let p = profile(in: ctx) else { return false }
-        if let n = x.native {
+        if x.id == ConditionLibrary.insomniaID {
+            guard p.insomniaSymptoms != true else { return false }
+            p.insomniaSymptoms = true
+        } else if let n = x.native {
             guard !p.conditions.contains(n) else { return false }
             p.conditions.insert(n)
             if n == .sleepApnea { p.apneaStatus = .diagnosed }
@@ -449,7 +452,8 @@ enum DataHub {
 
     static func forgetCondition(_ x: ConditionInfo, in ctx: ModelContext) {
         guard let p = profile(in: ctx) else { return }
-        if let n = x.native { p.conditions.remove(n) } else { p.extraConditionsRaw.removeAll { $0 == x.id } }
+        if x.id == ConditionLibrary.insomniaID { p.insomniaSymptoms = nil }
+        else if let n = x.native { p.conditions.remove(n) } else { p.extraConditionsRaw.removeAll { $0 == x.id } }
         try? ctx.save()
     }
 

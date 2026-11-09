@@ -215,6 +215,26 @@ struct SleepPackTests {
         #expect(p.intensityCapped && p.intensityCaps.contains { $0.contains("视网膜") })
     }
 
+    @Test func theAgentCanRecordChronicInsomnia() {
+        let p = profile()
+        let m = ConditionLibrary.mention(in: "我失眠好几个月了，晚上能早点上床吗", profile: p)
+        #expect(m?.info.id == ConditionLibrary.insomniaID, "\(String(describing: m))")
+        #expect(m?.info.changes.contains { $0.contains("CBT-I") } == true)
+        #expect(ConditionLibrary.mention(in: "我一直失眠", profile: p)?.info.id == ConditionLibrary.insomniaID)
+        #expect(ConditionLibrary.mention(in: "我昨晚失眠了，今天还能跑吗", profile: p) == nil, "one bad night is not chronic insomnia")
+        var already = p
+        already.insomnia = true
+        #expect(ConditionLibrary.mention(in: "我一直失眠", profile: already) == nil, "already answered")
+    }
+
+    @Test func backgroundReadsAreNotedForDataSources() {
+        let saved = BackgroundCheck.lastRead
+        let r = BackgroundCheck.BackgroundRead(date: Date(timeIntervalSince1970: 1_800_000_000), ok: false, newReading: true)
+        BackgroundCheck.note(r)
+        #expect(BackgroundCheck.lastRead == r)
+        if let saved { BackgroundCheck.note(saved) } else { UserDefaults.standard.removeObject(forKey: "health.backgroundRead") }
+    }
+
     // MARK: Age left out
 
     @Test func anAgeLeftOutIsNilNotZero() {

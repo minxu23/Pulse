@@ -377,7 +377,7 @@ struct Last24hCard: View {
                         RuleMark(x: .value("进餐", m.time)).foregroundStyle(Color.gray.opacity(0.6))
                             .annotation(position: .top) { Image(systemName: "fork.knife").font(Theme.TypeScale.body).foregroundStyle(Color.gray) }
                     }
-                }.pulseChartAxes()
+                }.pulseChartYAxis()
                 .chartYScale(domain: 2.5...max(12, (day.map(\.value).max() ?? 8) + 1))
                 .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 6)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()).font(Theme.TypeScale.body) } }
                 .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
@@ -413,7 +413,7 @@ struct AGPCard: View {
                         .foregroundStyle(Theme.glucose.opacity(0.28))
                     LineMark(x: .value("时", h.hour), y: .value("中位数", h.median)).foregroundStyle(Theme.glucose)
                 }
-            }.pulseChartAxes()
+            }.pulseChartYAxis()
             .chartXScale(domain: 0...23)
             .chartXAxis { AxisMarks(values: [0, 6, 12, 18, 23]) { v in AxisGridLine(); AxisValueLabel { Text("\(v.as(Int.self) ?? 0):00") }.font(Theme.TypeScale.body) } }
             .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }

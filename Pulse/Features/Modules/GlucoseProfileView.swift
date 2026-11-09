@@ -140,7 +140,7 @@ struct GlucoseProfileView: View {
                     }
                 }
                 RuleMark(y: .value("饭前", 0)).foregroundStyle(Color.secondary.opacity(0.4))
-            }.pulseChartAxes()
+            }.pulseChartYAxis()
             .chartForegroundStyleScale(domain: p.meals.map(\.kind.label), range: p.meals.map { colors[$0.kind] ?? .gray })
             .chartXAxis { AxisMarks(values: [0, 60, 120, 180]) { v in AxisGridLine(); AxisValueLabel { Text("\(v.as(Int.self) ?? 0) 分") }.font(Theme.TypeScale.body) } }
             .chartYAxis { AxisMarks(position: .trailing) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
@@ -189,7 +189,7 @@ struct GlucoseProfileView: View {
                         LineMark(x: .value("分钟", pt.minutes), y: .value("mmol/L", pt.mid))
                             .foregroundStyle(Theme.glucose).lineStyle(StrokeStyle(lineWidth: 2, dash: [4, 3])).interpolationMethod(.monotone)
                     }
-                }.pulseChartAxes()
+                }.pulseChartYAxis()
                 .chartXAxis { AxisMarks(values: [0, 60, 120, 180]) { v in AxisGridLine(); AxisValueLabel { Text("\(v.as(Int.self) ?? 0) 分") }.font(Theme.TypeScale.body) } }
                 .chartYAxis { AxisMarks(position: .trailing) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
                 .chartYScale(domain: max(2, (pr.points.map(\.low).min() ?? 4) - 1)...max(line + 1, (pr.points.map(\.high).max() ?? 10) + 0.5))
