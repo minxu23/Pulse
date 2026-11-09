@@ -193,6 +193,9 @@ struct BaselineCompleteness: Equatable, Codable {
     var items: [Item]
     var isReady: Bool { items.filter(\.required).allSatisfy(\.met) }
     var missing: [Item] { items.filter { $0.required && !$0.met } }
+    /// What still needs doing with `daysLeft` days to go: one-off items (the outdoor walk for the VO2max estimate)
+    /// until they are done; daily ones only once the days left can't fill them, since wearing the watch fills them.
+    func stillToDo(daysLeft: Int) -> [Item] { missing.filter { $0.need <= 1 || $0.need - $0.have > daysLeft } }
 }
 
 struct BaselineReport: Equatable, Codable {

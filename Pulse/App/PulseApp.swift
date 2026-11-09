@@ -94,9 +94,19 @@ struct RootView: View {
             #if DEBUG
             // Screenshot helper: put the sample user N weeks into a pack (-PulseProgram cardio|fitness|metabolic|event|auto,
             // -PulseProgramWeek N), with the baseline taken from the two weeks before the round began.
-            if let v = DebugLaunch.value("-PulseProgram"), let p = DataHub.profile(in: ctx), p.usesDemoData {
+            // -PulseProgram baseline [-PulseBaselineDay N]: the sample user in 基线期, N days in (the report is
+            // ready at once when N is left out, since sample users have months of history).
+            if DebugLaunch.value("-PulseProgram") == "baseline", let p = DataHub.profile(in: ctx), p.usesDemoData {
+                ProgramFlow.startBaseline(p, in: ctx)
+                if let n = DebugLaunch.value("-PulseBaselineDay").flatMap(Int.init) {
+                    p.programBaselineStart = DayClock.logicalToday(.app).adding(days: -n)
+                }
+                try? ctx.save()
+            } else if let v = DebugLaunch.value("-PulseProgram"), let p = DataHub.profile(in: ctx), p.usesDemoData {
                 p.programQuestionsDone = true
                 p.parqAnswers = Array(repeating: false, count: ParQ.allCases.count)
+                // -PulseNoBPMonitor: without a home monitor, blood pressure comes from clinic readings.
+                if CommandLine.arguments.contains("-PulseNoBPMonitor") { p.hasBPMonitor = false }
                 let n = max(1, Int(DebugLaunch.value("-PulseProgramWeek") ?? "1") ?? 1)
                 let monday = DayClock.logicalToday(.app).weekStart.adding(days: -7 * (n - 1))
                 let window = DateInterval(start: monday.adding(days: -14), end: monday)
@@ -166,6 +176,7 @@ struct RootView: View {
 /// Pages that `-PulseOpen <name>` presents directly, for screenshots.
 enum DebugPage: String, Identifiable {
     case glucose, cardio, marathon, agent, nutrition, evening, review, readiness, cloud, nextweek, labs, events, baseline, packs
+    case program, summary, questions
     var id: String { rawValue }
     @MainActor @ViewBuilder var view: some View {
         switch self {
@@ -183,7 +194,18 @@ enum DebugPage: String, Identifiable {
         case .events: HealthEventsView()
         case .baseline: ProgramReportScreen()
         case .packs: DebugPackPicker()
+        case .program: ProgramDetailScreen()
+        case .summary: ProgramSummaryScreen()
+        case .questions: DebugQuestions()
         }
+    }
+}
+
+/// `-PulseOpen questions`: 基础信息 for the current profile.
+private struct DebugQuestions: View {
+    @Query private var profiles: [UserProfile]
+    var body: some View {
+        if let p = profiles.first { BaselineQuestionsView(profile: p).calmStyle() }
     }
 }
 #endif

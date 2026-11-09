@@ -106,10 +106,15 @@ struct ProgramStatus: Equatable {
     var week = 0
     var weeks = 4
 
-    /// 「基线期第 3/7 天 · 还差：户外快走」 (the 「现在」 card on 今日).
+    /// What still needs doing: not what the remaining days fill up on their own.
+    var stillToDo: [BaselineCompleteness.Item] {
+        BaselineCompleteness(items: missing).stillToDo(daysLeft: max(0, ProgramFlow.baselineDays - baselineDays))
+    }
+
+    /// 「基线期第 3/7 天 · 还差：心肺能力估算」 (the 「现在」 card on 今日).
     var baselineLine: String {
         let day = "基线期第 \(min(baselineDays + 1, ProgramFlow.baselineDays))/\(ProgramFlow.baselineDays) 天"
-        return missing.isEmpty ? day + " · 照常生活就好" : day + " · 还差：" + missing.map(\.label).joined(separator: "、")
+        return stillToDo.isEmpty ? day + " · 照常生活就好" : day + " · 还差：" + stillToDo.map(\.label).joined(separator: "、")
     }
 }
 
@@ -168,6 +173,8 @@ enum ProgramFlow {
         p.programTargetGoal = nil
         // A new assessment: its danger signs are asked about again.
         p.programClearedFlags = []
+        // The week's minutes are no goal while the baseline records what is usual.
+        p.weeklyTargetReason = "基线期照常生活，这周的分钟数只作参考，不用刻意多练。"
         try? ctx.save()
         DataHub.clearPlannedDays(from: now.startOfDay, in: ctx)
         DataHub.insertPlan(for: p, weekStart: now.weekStart, fromDay: now.startOfDay, in: ctx)

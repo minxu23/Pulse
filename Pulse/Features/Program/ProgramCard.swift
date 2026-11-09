@@ -57,7 +57,8 @@ struct ProgramCard: View {
                     CardHeader(title: "基线期 · 第 \(min(s.baselineDays + 1, ProgramFlow.baselineDays)) / \(ProgramFlow.baselineDays) 天",
                                subtitle: "照常生活，不用刻意多练", icon: "calendar")
                     ProgressView(value: Double(min(s.baselineDays, ProgramFlow.baselineDays)), total: Double(ProgramFlow.baselineDays))
-                    ForEach(s.missing, id: \.label) { item in
+                        .tint(.primary)
+                    ForEach(s.stillToDo, id: \.label) { item in
                         IconTextRow(icon: "circle.dashed", color: .secondary, title: "还差：\(item.label)", text: item.hint)
                     }
                 }
@@ -117,7 +118,7 @@ struct BaselineProgressLine: View {
                 .buttonStyle(.plain)
             } else if let s = status {
                 Button { tab = .plan } label: {
-                    NavRowLabel(icon: "calendar", title: s.baselineLine, detail: "照常生活，不用刻意多练；摸底周的安排在「计划」里")
+                    NavRowLabel(icon: "calendar", title: s.baselineLine, detail: "不用刻意多练，摸底周的安排在「计划」里")
                 }
                 .buttonStyle(.plain)
             } else {

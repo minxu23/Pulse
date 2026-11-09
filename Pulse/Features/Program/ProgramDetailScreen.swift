@@ -112,20 +112,23 @@ struct ProgramDetailScreen: View {
             }
             if let start = profiles.first?.programRoundStart {
                 RuleMark(x: .value("本轮开始", start)).foregroundStyle(Color.gray).lineStyle(StrokeStyle(dash: [4, 4]))
-                    .annotation(position: .top, alignment: .leading) { Text("本轮开始").font(Theme.TypeScale.body) }
+                    .annotation(position: .top, alignment: .leading, overflowResolution: Self.inside) { Text("本轮开始").font(Theme.TypeScale.body) }
             }
             if let b = t.baseline {
                 RuleMark(y: .value("基线", b)).foregroundStyle(Color.gray).lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                    .annotation(position: .top, alignment: .leading) { Text("基线").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
+                    .annotation(position: .top, alignment: .leading, overflowResolution: Self.inside) { Text("基线").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
             }
             if let g = t.goal {
                 RuleMark(y: .value("目标", g)).foregroundStyle(Theme.good)
-                    .annotation(position: .top, alignment: .trailing) { Text("目标").font(Theme.TypeScale.body).foregroundStyle(.primary) }
+                    .annotation(position: .top, alignment: .trailing, overflowResolution: Self.inside) { Text("目标").font(Theme.TypeScale.body).foregroundStyle(.primary) }
             }
         }.pulseChartAxes()
         .chartYScale(domain: .automatic(includesZero: false))
         .frame(height: 190)
     }
+
+    /// Chart labels stay within the chart, clear of the rows above it.
+    static let inside = AnnotationOverflowResolution(x: .fit(to: .chart), y: .fit(to: .chart))
 
     /// Why this goal: what four weeks can change, and how much the number wobbles on its own.
     static func why(_ t: TargetMetric) -> String {
@@ -133,7 +136,7 @@ struct ProgramDetailScreen: View {
         case .vo2max: "训练后最大摄氧量通常 3 周左右开始上升。手表每次的估算会上下浮动 1–2，所以看近两周几次估算的平均。"
         case .restingHR: "规律有氧通常能让静息心率降 3–6 次/分，起点越高降得越多。每天会上下浮动约 3 次，所以看 7 天平均。"
         case .homeBP: "坚持有氧和静力练习，家庭血压通常几周内就会下降；降 5 mmHg 就有临床意义。一周平均会自然浮动几毫米汞柱，所以看整周平均。"
-        case .clinicBP: "单次读数可能差 10 毫米汞柱以上，读数越多越准。添置血压计并同步到 Apple 健康后，可在「更换改善方案」中重新确认家庭血压靶点。"
+        case .clinicBP: "单次读数可能差 10 毫米汞柱以上，读数越多越准。"
         case .weight: "每周减 0.5–1 公斤比较稳妥。体重每天会因为喝水和饮食浮动 1 公斤左右，所以看 7 天平均。"
         case .cgmTIR: "达标时间每提高 10 个百分点，糖化血红蛋白大约降 0.5–0.8%。"
         case .postMealGlucose: "健康成人大多数时间都在 7.8 以下。饭后走一走、晚饭别太晚，通常很快就能看到变化。"

@@ -44,6 +44,7 @@ struct ProgramWeekCard: View {
 /// 长期复盘 › 所处阶段: the three phases with where the user is now.
 struct ProgramStageCard: View {
     @Environment(\.modelContext) private var ctx
+    @Environment(\.dynamicTypeSize) private var size
     @Query private var profiles: [UserProfile]
     @State private var rounds: [ProgramRoundResult] = []
 
@@ -55,9 +56,9 @@ struct ProgramStageCard: View {
             // One above the other at accessibility sizes, so no stage name is cut off.
             AdaptiveStack(spacing: Theme.Space.item) {
                 stage("基线期", index: 0, phase: phase)
-                Image(systemName: "chevron.right").font(Theme.TypeScale.body).imageScale(.small).foregroundStyle(.tertiary).accessibilityHidden(true)
+                arrow
                 stage(phase.runsPack ? "改善期 · 第 \(p?.programRound ?? 1) 轮" : "改善期", index: 1, phase: phase)
-                Image(systemName: "chevron.right").font(Theme.TypeScale.body).imageScale(.small).foregroundStyle(.tertiary).accessibilityHidden(true)
+                arrow
                 stage("总结期", index: 2, phase: phase)
             }
             Text(Self.line(phase, p)).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -66,6 +67,14 @@ struct ProgramStageCard: View {
             }
         }
         .task(id: "\(phase.rawValue)|\(p?.programRound ?? 0)") { rounds = ProgramFlow.roundResults(in: ctx) }
+    }
+
+    /// Right between stages in a row, down when they stack at accessibility sizes.
+    private var arrow: some View {
+        Image(systemName: size.isAccessibilitySize ? "chevron.down" : "chevron.right")
+            .font(Theme.TypeScale.body).imageScale(.small).foregroundStyle(.tertiary)
+            .padding(.leading, size.isAccessibilitySize ? Theme.Space.item : 0)
+            .accessibilityHidden(true)
     }
 
     private func stage(_ title: String, index: Int, phase: ProgramPhase) -> some View {
@@ -137,7 +146,9 @@ struct ProgramSummaryScreen: View {
         ScreenScroll {
             if let b = baseline, let n = now {
                 Card {
-                    CardTitle("这几轮的变化", detail: "\(BaselineReportView.range(b.report.window)) → \(BaselineReportView.range(n.report.window))")
+                    CardTitle("这几轮的变化")
+                    Text("基线 \(BaselineReportView.range(b.report.window))\n现在 \(BaselineReportView.range(n.report.window))")
+                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     ForEach(Self.kinds, id: \.self) { k in
                         if let before = b.report.metric(k), let after = n.report.metric(k), before.value != nil, after.value != nil {
                             FactRow(label: before.title, value: "\(before.valueText) → \(after.valueText)" + Self.band(before, after))
@@ -160,7 +171,7 @@ struct ProgramSummaryScreen: View {
                 } else {
                     ForEach(worked) { a in
                         IconTextRow(icon: a.icon, color: .secondary, title: a.factor,
-                                    text: "\(a.factor)的日子，\(a.metric)平均\(a.diff > 0 ? "高" : "低") \(abs(a.diff).shortDecimal) \(a.unit)（关联\(a.strength.label)）")
+                                    text: "\(a.metric)平均\(a.diff > 0 ? "高" : "低") \(abs(a.diff).shortDecimal) \(a.unit)（关联\(a.strength.label)）")
                     }
                 }
                 Text("这些是你记录里的关联，不代表因果。").foregroundStyle(.secondary)
@@ -209,7 +220,8 @@ struct ProgramSummaryScreen: View {
         }
     }
 
-    static let kinds: [BaselineMetric.Kind] = [.vo2max, .rhr, .bloodPressure, .bmi, .bodyFat, .glucose, .steps, .sleepDuration]
+    /// Steps are under 习惯的变化, not here as well.
+    static let kinds: [BaselineMetric.Kind] = [.vo2max, .rhr, .bloodPressure, .bmi, .bodyFat, .glucose, .sleepDuration]
 
     static func band(_ a: BaselineMetric, _ b: BaselineMetric) -> String {
         guard let x = a.rank?.band, let y = b.rank?.band, x != y else { return "" }

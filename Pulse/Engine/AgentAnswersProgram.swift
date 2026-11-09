@@ -53,10 +53,11 @@ extension HealthAgent {
             let days = today.daysSince(start)
             let r = BaselineAssessment.assess(baselineInput(c, window: DateInterval(start: start, end: max(start, today))))
             let ready = (days >= 7 && r.completeness.isReady) || days >= 14
+            let todo = r.completeness.stillToDo(daysLeft: max(0, 7 - days))
             lines.append("你在基线期第 \(min(days + 1, 7))/7 天。")
             if ready { lines.append("数据已经够了，可以在「计划」里查看基线报告，再选一个改善方案。") }
-            else if r.completeness.missing.isEmpty { lines.append("照常生活就好，满 7 天就能生成基线报告。") }
-            else { lines.append("还差：" + r.completeness.missing.map { "\($0.label)（\($0.hint)）" }.joined(separator: "；") + "。") }
+            else if !todo.isEmpty { lines.append("还差：" + todo.map { "\($0.label)（\($0.hint)）" }.joined(separator: "；") + "。") }
+            else { lines.append("照常生活就好，满 7 天就能生成基线报告。") }
             lines.append("这一周保持平时的运动和作息，不用刻意多练，否则基线不准。")
         case .improve:
             let week = x.roundStart.map { s in today.daysSince(s) < 0 ? 0 : today.daysSince(s) / 7 + 1 } ?? 0

@@ -167,12 +167,12 @@ enum PackPlanner {
                                                guidance: "平时的速度就好，不用刻意加快。", minutes: 25, minimumMinutes: 20,
                                                minimumDetail: "户外快走 20 分钟", intensity: .moderate, isKey: true))
             } else if wd == test {
-                sessions.append(PlannedSession(weekday: wd, kind: .test, title: "力量自测（可选）",
+                sessions.append(PlannedSession(weekday: wd, kind: .strength, title: "力量自测（可选）",
                                                detail: "热身后做俯卧撑，做到做不动为止（女性可以跪姿），或者 30 秒内从椅子上站起坐下的次数（60 岁以上做这个）。做完记到「基础信息」里。",
                                                guidance: "动作做标准，累了就停，不要憋气。", minutes: 10, minimumMinutes: 0,
                                                minimumDetail: "今天不方便就跳过", intensity: .moderate, isKey: false))
             } else {
-                sessions.append(PlannedSession(weekday: wd, kind: .walk, title: "照常生活",
+                sessions.append(PlannedSession(weekday: wd, kind: .walk, title: "日常活动",
                                                detail: "保持平时的运动和作息，不用刻意多练，否则基线不准。",
                                                guidance: Intensity.easy.talkTest, minutes: 20, minimumMinutes: 10,
                                                minimumDetail: "饭后散步 10 分钟", intensity: .easy, isKey: false))
