@@ -71,15 +71,7 @@ struct ReadinessDetailView: View {
             }
             .cardSurface()
 
-            VStack(alignment: .leading, spacing: Theme.Space.block) {
-                CardTitle("准备度与活力度")
-                IconTextRow(icon: "gauge.with.dots.needle.50percent", color: .secondary, title: "身体准备度",
-                            text: "回答「今天适合安排多少」，依据昨夜睡眠、夜间身体指标、近期负荷和醒后感受。")
-                IconTextRow(icon: "bolt.heart.fill", color: Theme.activity, title: "身体活力度",
-                            text: "回答「今天实际活动了多少」，依据步数与活动时间。两者一起用于调整当天计划。")
-            }
-            .cardSurface()
-            PageFootnote("缺少的项目不计入总分，并会降低判断的把握程度。")
+            PageFootnote("准备度看今天适合安排多少，活力度看今天实际动了多少。缺少的项目不计分，判断的把握会低一些。")
         }
         .navigationTitle("准备度依据")
         .navigationBarTitleDisplayMode(.inline)
@@ -87,13 +79,14 @@ struct ReadinessDetailView: View {
     }
 
     private func factorRow(_ f: ReadinessFactor) -> some View {
-        let status: MetricStatus = !f.available ? .neutral("未计入") :
-            (f.impact == .positive ? .good("支持今天的安排") : (f.impact == .negative ? .attention("拉低了准备度") : .neutral("影响不大")))
+        // The bar's colour already says a factor helps; words only when it is missing or pulls the score down.
+        let status: MetricStatus? = !f.available ? .neutral("未计入") : (f.impact == .negative ? .attention("拉低了准备度") : nil)
         return HStack(alignment: .top, spacing: Theme.Space.block) {
             IconTile(icon: f.icon, color: .secondary)
             VStack(alignment: .leading, spacing: Theme.Space.tight) {
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.item) {
                     Text(f.name).font(Theme.TypeScale.body.weight(.semibold))
+                    Text("占 \(Int(f.weight * 100))%").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     Spacer()
                     Text(f.value).font(Theme.TypeScale.body).monospacedDigit().foregroundStyle(.secondary)
                 }
@@ -101,9 +94,8 @@ struct ReadinessDetailView: View {
                     ProgressBar(value: s / 100, color: f.impact == .negative ? .orange : (f.impact == .positive ? .green : .gray), height: 6)
                         .accessibilityHidden(true)
                 }
-                StatusLabel(status).font(Theme.TypeScale.body)
-                Text(f.detail).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Text("权重 \(Int(f.weight * 100))%").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                if let status { StatusLabel(status).font(Theme.TypeScale.body) }
+                Text(f.detail.withoutOrphan).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.vertical, Theme.Space.item)

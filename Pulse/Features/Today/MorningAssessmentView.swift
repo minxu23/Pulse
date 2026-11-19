@@ -37,7 +37,7 @@ struct MorningAssessmentView: View {
 
         WakeFeelingCard(record: data.record, canCheckIn: !night, onCheckIn: onCheckIn)
 
-        PageFootnote("各项指标都与你自己近 4 周的数据比较。设备信号和自述线索用于提示关注，不能代替医疗诊断。")
+        PageFootnote("各项都和你自己近 4 周的数据比较。")
     }
 
     private func nightSubtitle(_ d: DayData?) -> String? {
@@ -57,7 +57,7 @@ struct MorningAssessmentView: View {
         return HealthMetricCard(title: "睡眠", icon: "bed.double.fill", color: Theme.sleep,
                                 value: d?.sleepMinutes.map { ($0 / 60).oneDecimal } ?? "—", unit: "小时",
                                 status: d?.sleepMinutes.map { m in
-                                    m >= need - 30 ? .good("达到目标 \((need / 60).oneDecimal) 小时") : .attention("少于目标 \((need / 60).oneDecimal) 小时")
+                                    m >= need - 30 ? .good("达到 \((need / 60).oneDecimal) 小时") : .attention("不到 \((need / 60).oneDecimal) 小时")
                                 } ?? .neutral("暂无数据")) {
             if let total = d?.sleepMinutes, total > 0 {
                 SleepStagesBar(total: total, deep: d?.deepMinutes, rem: r?.remMinutes, awake: r?.awakeMinutes)
@@ -78,7 +78,7 @@ struct MorningAssessmentView: View {
             let diff = r - n
             if diff >= 4 { return .attention("比平时高 \(diff.noDecimal)") }
             if diff <= -2 { return .good("比平时低 \(abs(diff).noDecimal)") }
-            return .neutral("与平时相近（\(n.noDecimal)）")
+            return .neutral("接近平时 \(n.noDecimal)")
         }()
         return HealthMetricCard(title: "静息心率", icon: "heart.fill", color: Theme.heartData,
                                 value: d?.rhr.map { $0.noDecimal } ?? "—", unit: "bpm", status: status) { EmptyView() }
@@ -88,8 +88,8 @@ struct MorningAssessmentView: View {
         let status: MetricStatus = {
             guard d?.hrv != nil else { return .neutral("暂无数据") }
             switch impact("hrv") {
-            case .positive: return .good("在你的常见范围内")
-            case .negative: return .attention("低于你的常见范围")
+            case .positive: return .good("在常见范围内")
+            case .negative: return .attention("低于常见范围")
             case .neutral: return .neutral("略低于常见范围")
             case nil: return .neutral("参照建立中")
             }
@@ -135,11 +135,18 @@ struct SleepStagesBar: View {
             .frame(height: 8)
             .clipShape(Capsule())
             if deep != nil {
-                HStack(spacing: Theme.Space.item) {
-                    legend("深睡", deepM, .indigo)
-                    if rem != nil { legend("快速眼动", remM, .cyan) }
+                // Side by side when they fit, otherwise one per line (a half-width card cuts them to 「深睡 7…」).
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: Theme.Space.item) {
+                        legend("深睡", deepM, .indigo)
+                        if rem != nil { legend("快速眼动", remM, .cyan) }
+                    }
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
+                        legend("深睡", deepM, .indigo)
+                        if rem != nil { legend("快速眼动", remM, .cyan) }
+                    }
                 }
-                .font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1)
+                .font(Theme.TypeScale.caption).foregroundStyle(.secondary).lineLimit(1)
             }
         }
         .accessibilityElement(children: .ignore)
@@ -167,7 +174,7 @@ struct ReadinessHeroCard: View {
         let color = Theme.readiness(result.score == nil ? nil : result.level)
         VStack(alignment: .leading, spacing: Theme.Space.block) {
             HStack {
-                Text("身体准备度").font(Theme.TypeScale.title)
+                Text("身体准备度").font(Theme.TypeScale.headline)
                 Spacer()
                 Text(result.confidence.label).font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
@@ -226,7 +233,7 @@ struct ArrangementCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("今日安排").font(Theme.TypeScale.title).padding(.bottom, Theme.Space.tight)
+            Text("今日安排").font(Theme.TypeScale.headline).padding(.bottom, Theme.Space.tight)
             row("运动", "figure.run", Theme.activity, guidance.exercise)
             Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block)
             row("负荷", "gauge.with.dots.needle.50percent", Theme.heartData, guidance.load)
@@ -295,7 +302,7 @@ struct BloodPressureNightCard: View {
             Chart {
                 RuleMark(y: .value("参考", 135))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray.opacity(0.7))
-                    .annotation(position: .top, alignment: .leading) { Text("135").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
+                    .annotation(position: .top, alignment: .leading) { Text("135").font(Theme.TypeScale.caption).foregroundStyle(.secondary) }
                 ForEach(Array(bp.series.enumerated()), id: \.offset) { _, v in
                     LineMark(x: .value("日期", v.time, unit: .day), y: .value("晨起收缩压", v.value))
                         .foregroundStyle(Theme.heartData).interpolationMethod(.catmullRom)
@@ -308,13 +315,13 @@ struct BloodPressureNightCard: View {
                 }
             }.pulseChartYAxis()
             .chartYScale(domain: ((values.min() ?? 110) - 6)...((values.max() ?? 140) + 6))
-            .chartXAxis { AxisMarks(values: .stride(by: .day, count: 7)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy).font(Theme.TypeScale.body) } }
-            .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
+            .chartXAxis { AxisMarks(values: .stride(by: .day, count: 7)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy).font(Theme.TypeScale.caption) } }
+            .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.caption) } }
             .frame(height: 120)
             .accessibilityLabel("近 14 天晨起收缩压")
             .accessibilityValue("范围 \(Int(bp.series.map(\.value).min() ?? 0)) 到 \(Int(bp.series.map(\.value).max() ?? 0))")
-            Text("近 14 天晨起收缩压\(bp.bedtime != nil ? " · ◆ 昨晚睡前" : "") · 虚线 135 为家庭血压参考值")
-                .font(Theme.TypeScale.body).foregroundStyle(.secondary)
+            Text("近 14 天晨起收缩压\(bp.bedtime != nil ? "，菱形为昨晚睡前" : "")；虚线 135 是家庭血压参考线")
+                .font(Theme.TypeScale.caption).foregroundStyle(.secondary)
         }
         .padding(.top, Theme.Space.tight)
     }
@@ -340,13 +347,13 @@ struct GlucoseNightCard: View {
                     }
                 }.pulseChartYAxis()
                 .chartYScale(domain: 2.5...max(11, hi + 1))
-                .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 2)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()).font(Theme.TypeScale.body) } }
-                .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
+                .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 2)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()).font(Theme.TypeScale.caption) } }
+                .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.caption) } }
                 .frame(height: 110)
                 .accessibilityLabel("夜间血糖曲线")
                 .accessibilityValue("范围 \(lo.oneDecimal) 到 \(hi.oneDecimal) 毫摩尔每升")
-                Text("虚线之间为目标范围 \(profile.glucoseLow.oneDecimal)–\(profile.glucoseHigh.oneDecimal) mmol/L")
-                    .font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                Text("虚线之间为目标范围 \(profile.glucoseLow.oneDecimal)–\(profile.glucoseHigh.oneDecimal)")
+                    .font(Theme.TypeScale.caption).foregroundStyle(.secondary)
             }
         } else if let f = glucose.fasting {
             HealthMetricCard(title: "空腹血糖", icon: "drop.fill", color: Theme.glucose,
@@ -376,7 +383,7 @@ struct BreathingNightCard: View {
     let day: DayData?
 
     var body: some View {
-        let cues: [(String, Bool)] = [("打鼾", breathing.snoring), ("憋醒", breathing.gasping), ("被观察到暂停", breathing.witnessed)]
+        let cues: [(String, Bool)] = [("打鼾", breathing.snoring), ("憋醒", breathing.gasping), ("呼吸暂停", breathing.witnessed)]
         let count = cues.filter(\.1).count
         HealthMetricCard(title: "睡眠呼吸", icon: "lungs.fill", color: Theme.respiratory,
                          value: count == 0 ? "无明显线索" : "\(count) 项线索",
@@ -447,7 +454,7 @@ struct WakeFeelingCard: View {
                 } icon: {
                     Image(systemName: "face.smiling").foregroundStyle(Theme.mind)
                 }
-                .font(Theme.TypeScale.title)
+                .font(Theme.TypeScale.headline)
                 if let t = record?.checkInAt { Text(Clock.text(t.minutesOfDay)).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
                 Spacer()
                 if record?.hasCheckIn == true {

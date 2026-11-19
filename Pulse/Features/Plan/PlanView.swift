@@ -8,7 +8,7 @@ struct PlanView: View {
         var id: String { rawValue }
     }
     @Query private var profiles: [UserProfile]
-    @State private var segment: Segment = .exercise
+    @State private var segment: Segment = DebugLaunch.value("-PulseSegment").flatMap { ["sleep": .sleep, "habits": .habits][$0] } ?? .exercise
 
     var body: some View {
         NavigationStack {
@@ -84,7 +84,7 @@ struct WeeklyPlanView: View {
                 .padding(.top, Theme.Space.section - Theme.Space.cardGap)
             historyCard
             if let p { NavigationLink { PlanSettingsView(profile: p) } label: { settingsRow } .buttonStyle(.plain) }
-            Disclaimer(text: "运动计划为一般性健康建议。有心血管疾病、糖尿病、妊娠或其他健康状况时，请遵循医生的个人照护要求。")
+            Disclaimer(text: "有心血管病、糖尿病或怀孕时，以医生的要求为准。")
         }
         .sheet(item: $logItem) { QuickLogSheet(kind: .workout, date: $0.day, planItemID: $0.id) }
         .onAppear {
@@ -108,18 +108,16 @@ struct WeeklyPlanView: View {
             }
             MetricRow {
                 if isNext {
-                    MetricTile(label: "计划训练", value: "\(planned)", unit: "/ \(target) 分钟", icon: "timer", color: Theme.activity)
+                    MetricTile(label: "计划训练", value: "\(planned)", unit: "/ \(target) 分钟")
                 } else {
-                    MetricTile(label: "已活动", value: "\(Int(minutesDone))", unit: "/ \(target) 分钟", icon: "timer", color: Theme.activity)
+                    MetricTile(label: "已活动", value: "\(Int(minutesDone))", unit: "/ \(target) 分钟")
                 }
-                MetricTile(label: "力量训练", value: "\(strength)", unit: "次/周", icon: "dumbbell", color: .orange)
+                MetricTile(label: "力量训练", value: "\(strength)", unit: "次/周")
             }
             if !isNext { ProgressBar(value: minutesDone / Double(max(1, target)), color: Theme.activity) }
             if let reason = reasonText, !reason.isEmpty {
                 Label(reason, systemImage: "arrow.up.forward.circle").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
-            Text("参考：成年人每周 150–300 分钟中等强度有氧，并进行 2 次以上力量训练。计划会从你的现状出发，按完成情况逐步进阶。")
-                .font(Theme.TypeScale.body).foregroundStyle(.secondary)
             AgentAskButton(title: AgentNameSettings.shared.phrase("和", "调整\(isNext ? "下周" : "本周")计划"),
                            question: isNext ? "帮我调整下周计划" : "帮我调整这周的训练计划")
         }
@@ -164,7 +162,7 @@ struct WeeklyPlanView: View {
                         Image(systemName: item.kind.icon).foregroundStyle(Theme.intensity(item.intensity)).frame(width: Theme.Size.iconTile)
                         VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                             HStack(spacing: Theme.Space.item) {
-                                Text(item.title).font(Theme.TypeScale.title)
+                                Text(item.title).font(Theme.TypeScale.headline)
                                 if item.isKey { Chip(text: "重点", icon: "star.fill", color: .yellow) }
                             }
                             Text("\(item.minutes > 0 ? "\(item.minutes) 分钟 · " : "")\(item.intensity.label) · \(item.status.label)")
@@ -218,7 +216,7 @@ struct WeeklyPlanView: View {
         return Group {
             if !data.isEmpty {
                 Card {
-                    CardHeader(title: "近 6 周完成率", subtitle: "完成率会自动影响下周的目标", icon: "chart.bar", color: .secondary)
+                    CardHeader(title: "近 6 周完成率", subtitle: "下周的量按完成情况调整", icon: "chart.bar", color: .secondary)
                     Chart {
                         ForEach(data, id: \.0) { d in
                             BarMark(x: .value("周", d.0, unit: .weekOfYear), y: .value("完成率", d.1 * 100))
@@ -229,10 +227,10 @@ struct WeeklyPlanView: View {
                             .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray)
                     }.pulseChartAxes()
                     .chartYScale(domain: 0...100)
-                    .chartYAxis { AxisMarks(values: [0, 50, 100]) { v in AxisGridLine(); AxisValueLabel { Text("\(v.as(Int.self) ?? 0)%") }.font(Theme.TypeScale.body) } }
+                    .chartYAxis { AxisMarks(values: [0, 50, 100]) { v in AxisGridLine(); AxisValueLabel { Text("\(v.as(Int.self) ?? 0)%") }.font(Theme.TypeScale.caption) } }
                     .frame(height: 120)
                     // Below the chart, not on it: bars reach the line and would cover the label.
-                    Text("虚线为 85%，达到即为完成良好").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                    Text("虚线为 85%，达到算完成良好").font(Theme.TypeScale.caption).foregroundStyle(.secondary)
                 }
             }
         }
@@ -255,9 +253,9 @@ struct MarathonPhaseCard: View {
         Card {
             CardHeader(title: "专项：\(week.phase.label)", subtitle: week.weeksToRace >= 0 ? "距比赛 \(week.weeksToRace) 周" : "赛后恢复", icon: "flag.checkered", color: .purple)
             MetricRow {
-                MetricTile(label: "本周跑量", value: "\(Int(week.weeklyKm))", unit: "km", icon: "road.lanes", color: Theme.activity)
-                MetricTile(label: "长距离", value: "\(Int(week.longRunKm))", unit: "km", icon: "arrow.right", color: Theme.activity)
-                MetricTile(label: "马拉松配速", value: MarathonPlanner.paceText(week.marathonPace), icon: "speedometer", color: Theme.activity)
+                MetricTile(label: "本周跑量", value: "\(Int(week.weeklyKm))", unit: "km")
+                MetricTile(label: "长距离", value: "\(Int(week.longRunKm))", unit: "km")
+                MetricTile(label: "马拉松配速", value: MarathonPlanner.paceText(week.marathonPace))
             }
             Text(week.phase.focus).font(Theme.TypeScale.body).foregroundStyle(.secondary)
             ForEach(week.warnings, id: \.self) { Callout(kind: .caution, text: $0) }
@@ -276,7 +274,7 @@ struct PlanSettingsView: View {
             Section {
                 Stepper("本周有氧目标 \(profile.weeklyTargetMinutes) 分钟", value: $profile.weeklyTargetMinutes, in: 30...600, step: 10)
             } footer: {
-                Text("通常无需手动修改：每周会根据上周完成情况自动调整（完成良好 +10%，完成较少则降低）。")
+                Text("一般不用改：每周按上周的完成情况自动调整。")
             }
             ExerciseBaseSection(p: profile)
             Section {

@@ -14,15 +14,19 @@ struct EveningDayView: View {
         if let r = data.record {
             RecoveryChecklistCard(record: r, analytics: data.analytics, readiness: data.readiness, tomorrow: data.tomorrow)
         }
-        SectionTitle(title: "今天的身体感受", subtitle: data.record?.eveningCheckInAt.map { "记录于 \(Clock.text($0.minutesOfDay))" })
-        MetricGrid {
-            fatigueCard
-            sorenessCard
-            stressCard
+        // Before the check-in the feelings would be three empty tiles; the button above asks for them.
+        if checked {
+            SectionTitle(title: "今天的身体感受", subtitle: data.record?.eveningCheckInAt.map { "记录于 \(Clock.text($0.minutesOfDay))" })
+            MetricGrid {
+                fatigueCard
+                sorenessCard
+                stressCard
+                caffeineCard
+            }
+        } else {
             caffeineCard
         }
         TomorrowCard(sessions: data.tomorrow)
-        PageFootnote("睡前感受与今晚的睡眠会一起影响明天的身体准备度。明早记录醒后感受后，Pulse 会据此调整当天安排。")
     }
 
     private var checked: Bool { data.record?.hasEveningCheckIn == true }
@@ -247,6 +251,6 @@ struct DayReviewView: View {
         .cardSurface(padding: 0)
         .sheet(isPresented: $askAgent) { HealthAgentChatView(initialQuestion: "总结一下今天，明天要注意什么？") }
 
-        PageFootnote("每天的回顾会汇总进周复盘；持续记录后，回顾页会比较行为与身体变化之间的关联。")
+        PageFootnote("每天的回顾会汇总到周复盘。")
     }
 }

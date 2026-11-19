@@ -163,7 +163,7 @@ enum InsightEngine {
             let score = trainings.reduce(0.0) { $0 + ($1.status == .done ? 1 : ($1.status == .partial ? 0.5 : 0)) }
             let rate = score / Double(trainings.count)
             out.append(.init(id: "plan", name: "计划运动", icon: "figure.run", rate: rate,
-                             detail: "完成 \(Int(score)) / \(trainings.count) 次（部分完成计半次）",
+                             detail: "完成 \(Int(score)) / \(trainings.count) 次",
                              suggestion: rate < 0.6 ? "完成率偏低：考虑减少每次时长、调整到更容易执行的时段，或多使用精简版。" : "节奏合适，可以按计划逐步进阶。"))
         }
 
@@ -172,7 +172,7 @@ enum InsightEngine {
             let ok = nights.filter { abs(Clock.nightOffset($0.minutesOfDay) - Clock.nightOffset(p.bedtimeMinutes)) <= 45 }.count
             let rate = Double(ok) / Double(nights.count)
             out.append(.init(id: "bedtime", name: "按时入睡", icon: "bed.double", rate: rate,
-                             detail: "\(ok) / \(nights.count) 晚在 \(Clock.text(p.bedtimeMinutes)) ±45 分钟内入睡",
+                             detail: "\(ok) / \(nights.count) 晚在 \(Clock.text(p.bedtimeMinutes)) 前后入睡",
                              suggestion: rate < 0.6 ? (p.insomnia ? "可以先把目标就寝时间调整为更现实的时间，固定起床时间更要紧。" : "可以先把目标就寝时间调整为更现实的时间，再每周提前 15 分钟。") : "作息比较规律，继续保持。"))
         }
 

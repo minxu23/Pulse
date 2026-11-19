@@ -80,11 +80,11 @@ enum SleepAnalyzer {
         let message: String
         switch level {
         case .notable:
-            message = "近 \(window) 天记录到较多与睡眠呼吸相关的线索。这些线索不能用于诊断，但值得进行专业睡眠评估（通常包括问诊和睡眠监测）。"
+            message = "睡眠呼吸的线索较多，值得做一次专业睡眠评估。"
         case .some:
-            message = "有少量线索。继续记录打鼾、憋醒与白天困倦情况，必要时咨询医生。"
+            message = "有少量线索。继续记录打鼾、憋醒和白天困倦，必要时咨询医生。"
         case .none:
-            message = "暂未记录到明显线索。若家人观察到你睡眠中打鼾或呼吸暂停，请及时记录。"
+            message = "没有明显线索。家人看到你打鼾或呼吸暂停时记下来。"
         }
         return BreathingCues(nightsObserved: observed, snoring: snoring, gasping: gasping, witnessed: witnessed,
                              headache: headache, sleepy: sleepy, lowSpO2Nights: lowO2, avgDisturbances: dist,

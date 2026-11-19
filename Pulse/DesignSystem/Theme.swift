@@ -295,7 +295,7 @@ struct CardHeader<Trailing: View>: View {
         let heading = HStack(alignment: .center, spacing: Theme.Space.block) {
             IconTile(icon: icon, color: calm ? .secondary : color)
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                Text(title).font(Theme.TypeScale.title)
+                Text(title).font(Theme.TypeScale.headline)
                 if let subtitle { Text(subtitle).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
             }
         }
@@ -355,25 +355,20 @@ struct ScoreRing<Center: View>: View {
     }
 }
 
+/// A small figure: label, number with unit, optional footnote. No glyph: three of these share a row on a
+/// phone, where an icon would push a four-character label onto two lines.
 struct MetricTile: View {
     let label: String
     let value: String
     var unit: String = ""
-    var icon: String
-    var color: Color = .secondary
     var footnote: String? = nil
-    @Environment(\.calmColors) private var calm
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.tight) {
-            HStack(spacing: Theme.Space.iconGap) {
-                Image(systemName: icon).imageScale(.small).foregroundStyle(Theme.tone(color, calm: calm))
-                Text(label).foregroundStyle(.secondary)
-            }
-            .font(Theme.TypeScale.body)
-            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
-                // A number shrinks a little rather than being cut to 「12…」 in a narrow tile.
-                Text(value).font(Theme.TypeScale.title.weight(.semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
-                if !unit.isEmpty { Text(unit).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1) }
+            Text(label).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1)
+            // The unit goes under the number when the two don't fit side by side, instead of being cut to 「mm…」.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) { number; unitText }
+                VStack(alignment: .leading, spacing: 0) { number; unitText }
             }
             // One line, so a footnote never makes one tile taller than its neighbours.
             if let footnote { Text(footnote).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1) }
@@ -381,6 +376,15 @@ struct MetricTile: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(Theme.Space.block)
         .background(Theme.subtle.opacity(0.6), in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
+    }
+
+    private var number: some View {
+        // A long number shrinks a little rather than being cut to 「12…」.
+        Text(value).font(Theme.TypeScale.title.weight(.semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+    }
+
+    @ViewBuilder private var unitText: some View {
+        if !unit.isEmpty { Text(unit).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1) }
     }
 }
 
@@ -449,7 +453,7 @@ struct Callout: View {
             Image(systemName: kind.icon).foregroundStyle(color).font(Theme.TypeScale.body).imageScale(.small)
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 if let title { Text(title).font(Theme.TypeScale.body.weight(.semibold)) }
-                Text(text).font(Theme.TypeScale.body).foregroundStyle(.primary)
+                Text(text.withoutOrphan).font(Theme.TypeScale.body).foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
@@ -482,7 +486,7 @@ struct BulletText: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.item) {
             Circle().fill(Theme.tone(color, calm: calm)).frame(width: 5, height: 5).offset(y: -2)
-            Text(text).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
+            Text(text.withoutOrphan).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -504,9 +508,9 @@ struct ProgressBar: View {
 }
 
 struct Disclaimer: View {
-    var text = "Pulse 帮助你记录与理解自己的健康数据，不提供医疗诊断。出现胸痛、晕厥、严重气短等情况请立即拨打 120。"
+    var text = "Pulse 不提供医疗诊断。胸痛、晕厥、严重气短时，请立即拨打 120。"
     var body: some View {
-        Text(text)
+        Text(text.withoutOrphan)
             .font(Theme.TypeScale.body)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)

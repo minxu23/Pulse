@@ -236,28 +236,22 @@ enum TargetTracker {
     }
 
     /// 「基线 143 · 目标 138」 or what is missing, under the number on 今日.
+    /// One short line under the number on 今日 (half the card wide): where it started and where it is going.
+    /// How to measure and the latest dates are on the program page.
     static func footnote(_ r: TargetReading, goal t: TargetGoal?, now: Date) -> String {
         let baseline = t?.baseline, goal = t?.goal
         if r.target == .vo2max, let last = r.latest {
             let ago = now.daysSince(last)
-            if ago >= 7 { return "\(ago) 天没有新估算 · 去户外快走 20 分钟" }
-        }
-        if r.target.isBloodPressure {
-            let b = baseline.map { "基线收缩压 " + text(r.target, $0) } ?? "基线待补充"
-            let g = goal.map { "目标 ≤ " + text(r.target, $0) } ?? "目标待确认"
-            let measured = r.target == .clinicBP
-                ? (r.latest.map { " · 最近 " + $0.formatted(.dateTime.month().day()) } ?? " · 还没有读数") + (r.average.map { " · 4 周平均 \(Int($0.rounded()))" } ?? "")
-                : ""
-            return b + " · " + g + measured
+            if ago >= 7 { return "\(ago) 天没有新估算" }
         }
         if r.target == .weeklyRunKm {
-            guard let planned = r.plannedKm else { return "在「专项运动」里填好比赛日期后，按计划跑量来算" }
-            return "本周 \((r.runKm ?? 0).shortDecimal) / \(planned.shortDecimal) 公里 · 目标 ≥ \(Int(goal ?? 90))%"
+            guard let planned = r.plannedKm else { return "先填比赛日期" }
+            return "本周 \((r.runKm ?? 0).shortDecimal) / \(planned.shortDecimal) 公里"
         }
-        if r.value == nil { return r.target.howToMeasure }
+        if r.value == nil { return "还没有读数" }
         var parts: [String] = []
         if let b = baseline { parts.append("基线 \(text(r.target, b))") }
-        if let g = goal { parts.append("目标 \(text(r.target, g))") }
+        if let g = goal { parts.append("目标 \(r.target.isBloodPressure ? "≤" : "")\(text(r.target, g))") }
         return parts.joined(separator: " · ")
     }
 

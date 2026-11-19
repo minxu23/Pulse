@@ -109,14 +109,14 @@ enum TargetMetric: String, Codable, CaseIterable {
     var howToMeasure: String {
         switch self {
         case .vo2max: "每周至少 2 次 20 分钟以上的户外快走或慢跑，手表才会更新估算"
-        case .weeklyRunKm: "跑步时戴着手表，距离自动记录；每周完成计划跑量的 90% 以上就算做到"
+        case .weeklyRunKm: "跑步时戴着手表，距离自动记录"
         case .homeBP: "每周至少 3 天，早晚各测 2 次；血压计同步到 Apple 健康后自动读取"
         case .clinicBP: "每周至少 2 次，在社区卫生服务中心或药店测，坐着休息 5 分钟后再测，测完记到 Pulse"
         case .restingHR: "夜里戴着手表，早上自动读取"
         case .cgmTIR, .postMealGlucose: "一直戴着 CGM，数据同步到 Apple 健康"
         case .weight: "每天早上起床、排便后空腹称"
         case .fastingGlucose: "每周至少 3 个早上测空腹血糖"
-        case .sleepDuration, .sleepRegularity: "睡觉时戴着手表，并在健康 App 里打开睡眠追踪，早上自动读取"
+        case .sleepDuration, .sleepRegularity: "睡觉戴着手表，在健康 App 里打开睡眠追踪"
         }
     }
 }
@@ -203,7 +203,7 @@ enum ProgramPacks {
             if p.goals.contains(.fitness) { return "你的目标里有提升运动能力" }
             return nil
         case .sleep:
-            if let h = r.metric(.sleepDuration)?.value, h < 7 { return "平均每晚睡 \(h.shortDecimal) 小时，少于 7 小时" }
+            if let h = r.metric(.sleepDuration)?.value, h < 7 { return "平均每晚 \(h.shortDecimal) 小时，不到 7 小时" }
             if let g = r.metric(.sleepRegularity), g.verdict == .attention, let sd = g.value { return "入睡时间每天相差约 \(Int(sd.rounded())) 分钟" }
             return nil
         }

@@ -50,7 +50,7 @@ enum VitalForecaster {
     static let damping = 0.8
     /// 80% range: wide enough to be honest, narrow enough to say something.
     static let z = 1.28
-    static let caveat = "这是按近几周平均值推算的大致范围，不代表某一次测量，也不能用来调整药物或胰岛素。"
+    static let caveat = "按近几周的平均推算，不代表单次读数，不能据此调整药物或胰岛素。"
 
     /// Weekly means over the last `history` weeks; weeks with fewer than `minPerWeek` readings are left out.
     static func weekly(_ points: [(time: Date, value: Double)], now: Date, minPerWeek: Int) -> [(start: Date, mean: Double)] {
@@ -103,9 +103,9 @@ enum VitalForecaster {
         let above = s.end.mid > Double(p.bpTargetSys) || d.end.mid > Double(p.bpTargetDia)
         let home = s.end.mid >= 135 || d.end.mid >= 85
         let message: String = switch s.direction {
-        case .rising: "按最近几周的变化，到 \(when) 那周，家庭血压平均可能升到 \(range)" + (above ? "，高于目标 \(target)。" : "。")
-        case .falling: "按最近几周的变化，到 \(when) 那周，家庭血压平均可能降到 \(range)" + (above ? "，仍高于目标 \(target)。" : "，继续保持现在的做法。")
-        case .steady: "最近几周大致平稳，到 \(when) 那周家庭血压平均可能在 \(range)" + (above ? "，仍高于目标 \(target)。" : "，在目标以内。")
+        case .rising: "按最近几周的变化，到 \(when)那周，家庭血压平均可能升到 \(range)" + (above ? "，高于目标 \(target)。" : "。")
+        case .falling: "按最近几周的变化，到 \(when)那周，家庭血压平均可能降到 \(range)" + (above ? "，仍高于目标 \(target)。" : "，继续保持现在的做法。")
+        case .steady: "最近几周大致平稳，到 \(when)那周家庭血压平均可能在 \(range)" + (above ? "，仍高于目标 \(target)。" : "，在目标以内。")
         }
         return BloodPressureForecast(systolic: s, diastolic: d,
                                      message: message + (home ? "复诊时带上记录和医生讨论。" : ""), needsDoctor: home)
@@ -131,9 +131,9 @@ enum VitalForecaster {
         let high = m.end.mid > threshold
         let low = m.end.low < p.glucoseLow + 1
         var message: String = switch m.direction {
-        case .rising: "按最近几周的变化，到 \(when) 那周，\(measure)平均可能升到 \(range)。"
-        case .falling: "按最近几周的变化，到 \(when) 那周，\(measure)平均可能降到 \(range)。"
-        case .steady: "最近几周大致平稳，到 \(when) 那周\(measure)平均可能在 \(range)。"
+        case .rising: "按最近几周的变化，到 \(when)那周，\(measure)平均可能升到 \(range)。"
+        case .falling: "按最近几周的变化，到 \(when)那周，\(measure)平均可能降到 \(range)。"
+        case .steady: "最近几周大致平稳，到 \(when)那周\(measure)平均可能在 \(range)。"
         }
         if high { message += "高于常用目标 \(threshold.oneDecimal) mmol/L，和医生一起看看最近的饮食、运动和作息。" }
         else if low && m.direction == .falling { message += "接近低血糖范围，留意不适并及时测量，需要时联系医生。" }
@@ -187,7 +187,7 @@ enum NextHourForecaster {
     static let horizons = [15, 30, 45, 60]
     /// Minutes for a rate of change to fade (e^-t/τ).
     static let fade = 30.0
-    static let caveat = "这是按最近的变化推算的范围，用于提前留意，不能用来计算胰岛素或药物剂量。"
+    static let caveat = "按最近的变化推算，只供提前留意，不能据此计算胰岛素或药物剂量。"
 
     /// The damped change after `t` minutes at `rate` per minute.
     static func carried(_ rate: Double, _ t: Double) -> Double { rate * fade * (1 - exp(-t / fade)) }

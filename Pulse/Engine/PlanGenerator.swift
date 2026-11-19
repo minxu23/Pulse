@@ -475,12 +475,10 @@ enum MarathonPlanner {
                                            minimumDetail: "", intensity: .rest, isKey: false))
         }
 
-        var notes = ["\(ph.label)：\(ph.focus)"]
+        // The phase's focus, weeks to the race and this week's distances are on the 专项 card above the notes.
+        var notes: [String] = []
         if ph == .build || ph == .base {
-            notes.append("如有条件，可在专业人员指导下进行乳酸阈测试（标准化热身、递增负荷、相同饮食与时段），用测得的阈值心率 / 配速替代估算值。")
-        }
-        if weeksToRace >= 0 {
-            notes.append("距比赛 \(weeksToRace) 周 · 本周目标跑量约 \(Int(km)) km · 长距离 \(Int(longKm)) km")
+            notes.append("有条件的话，可以在专业人员指导下测乳酸阈，用实测的阈值心率和配速代替估算值。")
         }
 
         return MarathonWeek(phase: ph, weeksToRace: weeksToRace, weeklyKm: km, longRunKm: longKm,

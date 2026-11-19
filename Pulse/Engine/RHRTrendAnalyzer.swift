@@ -226,39 +226,44 @@ enum RHRTrendAnalyzer {
 
         switch t.shortTerm {
         case .spikeUp(let d):
-            lines.append("最近一次比前一周平均高 \(d.noDecimal) bpm。单次升高常与前一晚饮酒、睡眠不足、压力或身体不适有关，单独一天不代表趋势改变。")
+            lines.append("最近一次比前一周平均高 \(d.noDecimal) bpm。常见原因是前一晚饮酒、没睡好、压力大或身体不适，单独一天不代表趋势。")
         case .spikeDown(let d):
-            lines.append("最近一次比前一周平均低 \(abs(d).noDecimal) bpm，属于单次波动；请留意测量条件是否与平时一致。")
+            lines.append("最近一次比前一周平均低 \(abs(d).noDecimal) bpm，是单次波动；留意测量方式是否和平时一样。")
         case .typical(let d):
-            lines.append("最近一次与前一周平均相差 \(d.signedText) bpm，在你的日常波动范围内（约 ±\(t.personalSD.noDecimal) bpm）。")
+            lines.append("最近一次和前一周平均差 \(d.signedText) bpm，属于日常波动。")
         case .insufficient:
             break
         }
 
         switch t.sustained {
         case .rise(let d):
-            lines.append("近 7 天中多数日子高于此前 4 周水平，平均高 \(d.noDecimal) bpm——这是持续变化，而非单次波动。若同时感到疲劳、睡眠差或有感染迹象，可能是恢复不足或身体不适的信号：先减少训练强度、优先睡眠；持续 1 周以上或伴随胸闷、心悸、发热，请咨询医生。")
+            lines.append("近 7 天多数日子比此前 4 周高，平均高 \(d.noDecimal) bpm，是持续变化。如果同时累、睡不好或像要生病，先减量、多睡；持续 1 周以上，或有胸闷、心悸、发热，请咨询医生。")
         case .drop(let d):
-            lines.append("近 7 天持续低于此前 4 周水平约 \(abs(d).noDecimal) bpm。规律有氧训练后出现这种变化通常是积极信号；若伴随头晕、乏力或新开始用药，请咨询医生。")
+            lines.append("近 7 天持续比此前 4 周低约 \(abs(d).noDecimal) bpm。规律有氧运动后常见，是好信号；如果头晕、乏力或刚开始用药，请咨询医生。")
         case .none:
-            lines.append("近 7 天没有出现持续性的升高或下降。")
+            lines.append("近 7 天没有持续升高或下降。")
         case .insufficient:
             break
         }
 
-        switch t.longTerm {
-        case .decreasing(let s):
-            lines.append("近 \(t.weeksWithData) 周呈缓慢下降趋势，约每 4 周 \(s.oneDecimal) bpm。")
-        case .increasing(let s):
-            lines.append("近 \(t.weeksWithData) 周呈缓慢上升趋势，约每 4 周 +\(s.oneDecimal) bpm，可结合训练、睡眠、压力和用药变化一起回顾。")
-        case .stable:
-            lines.append("近 \(t.weeksWithData) 周整体平稳。静息心率的改善通常需要数周到数月的规律有氧运动，平稳期也很常见。")
-        case .insufficient:
-            lines.append("长期趋势需要至少 4 周、每周 3 天以上的数据。")
+        // The long-term line repeats the headline when that is what the headline says; the tiles show the baseline.
+        let headlineIsLongTerm: Bool = switch (t.sustained, t.shortTerm) {
+        case (.rise, _), (.drop, _), (_, .spikeUp): false
+        default: true
         }
-
-        if let b = t.baseline, let change = t.changeFromBaseline, let a = t.avg28 ?? t.avg7 {
-            lines.append("个人基线 \(b.noDecimal) bpm，近 4 周平均 \(a.noDecimal) bpm（\(change.signedText) bpm）。")
+        if !headlineIsLongTerm {
+            switch t.longTerm {
+            case .decreasing(let s): lines.append("近 \(t.weeksWithData) 周缓慢下降，约每 4 周 \(s.oneDecimal) bpm。")
+            case .increasing(let s): lines.append("近 \(t.weeksWithData) 周缓慢上升，约每 4 周 +\(s.oneDecimal) bpm。")
+            case .stable: lines.append("近 \(t.weeksWithData) 周整体平稳。")
+            case .insufficient: lines.append("长期趋势需要至少 4 周、每周 3 天以上的数据。")
+            }
+        } else if case .increasing = t.longTerm {
+            lines.append("可以结合训练、睡眠、压力和用药的变化一起看。")
+        } else if case .stable = t.longTerm {
+            lines.append("静息心率的改善通常要数周到数月的规律有氧运动，平稳期很常见。")
+        } else if case .insufficient = t.longTerm {
+            lines.append("长期趋势需要至少 4 周、每周 3 天以上的数据。")
         }
 
         switch (t.sustained, t.shortTerm, t.longTerm) {

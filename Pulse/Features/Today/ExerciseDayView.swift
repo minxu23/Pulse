@@ -41,7 +41,7 @@ struct ExerciseDayView: View {
 
         WorkoutLogCard(sessions: data.todaySessions, onLog: { sheet = .workout(nil) })
 
-        PageFootnote("活力度综合步数与活动时间，反映今天实际活动了多少；准备度则说明今天适合安排多少。")
+        PageFootnote("活力度看今天实际动了多少，准备度看今天适合安排多少。")
     }
 
     private func setStatus(_ item: PlanItem, _ status: PlanStatus) {
@@ -90,7 +90,7 @@ struct ExerciseDayView: View {
         let target = max(v.plannedMinutes, 20)
         return HealthMetricCard(title: "活动时间", icon: "flame.fill", color: Theme.activity,
                                 value: "\(Int(v.activeMinutes))", unit: "分钟",
-                                status: v.activeMinutes >= Double(target) ? .good("达到今日安排") : .neutral("今日安排 \(target) 分钟")) {
+                                status: v.activeMinutes >= Double(target) ? .good("达到今天的目标") : .neutral("目标 \(target) 分钟")) {
             ProgressBar(value: v.activeMinutes / Double(target), color: Theme.activity, height: 6)
         }
     }
@@ -132,7 +132,7 @@ struct SessionHeroCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.block) {
             HStack {
-                Text("今日训练").font(Theme.TypeScale.title)
+                Text("今日训练").font(Theme.TypeScale.headline)
                 Spacer()
                 if item.isKey { Chip(text: "重点课", icon: "star.fill", color: .yellow) }
             }
@@ -140,7 +140,7 @@ struct SessionHeroCard: View {
             HStack(alignment: .top, spacing: Theme.Space.block) {
                 HeroIcon(icon: item.kind.icon, color: Theme.activity)
                 VStack(alignment: .leading, spacing: Theme.Space.tight) {
-                    Text(item.title).font(Theme.TypeScale.title.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+                    Text(item.title).font(Theme.TypeScale.headline).fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: Theme.Space.item) {
                         if item.minutes > 0 { Text("\(item.minutes) 分钟").font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit() }
                         StatusLabel(text: item.intensity.label, icon: "circle.fill", color: Theme.intensity(item.intensity), secondaryText: true)
@@ -226,11 +226,11 @@ struct ActivityDayHeroCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.block) {
-            Text("今日安排").font(Theme.TypeScale.title)
+            Text("今日安排").font(Theme.TypeScale.headline)
             HStack(alignment: .top, spacing: Theme.Space.block) {
                 HeroIcon(icon: "figure.walk", color: Theme.activity)
                 VStack(alignment: .leading, spacing: Theme.Space.tight) {
-                    Text(title).font(Theme.TypeScale.title.weight(.semibold))
+                    Text(title).font(Theme.TypeScale.headline)
                     Text(detail).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -251,7 +251,7 @@ struct OtherSessionsCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("其他安排").font(Theme.TypeScale.title).padding(.bottom, Theme.Space.tight)
+            Text("其他安排").font(Theme.TypeScale.headline).padding(.bottom, Theme.Space.tight)
             ForEach(items) { item in
                 HStack(spacing: Theme.Space.block) {
                     Image(systemName: item.kind.icon).foregroundStyle(Theme.activity).frame(width: Self.glyphWidth)
@@ -299,7 +299,7 @@ struct PreExerciseCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("提示").font(Theme.TypeScale.title).padding(.bottom, Theme.Space.tight)
+            Text("提示").font(Theme.TypeScale.headline).padding(.bottom, Theme.Space.tight)
             ForEach(tips) { tip in
                 Group {
                     if tip.destination == .marathon {
@@ -333,7 +333,7 @@ struct WorkoutLogCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("运动记录").font(Theme.TypeScale.title)
+                Text("运动记录").font(Theme.TypeScale.headline)
                 Spacer()
                 Button(action: onLog) { Label("记录", systemImage: "plus") }
                     .buttonStyle(.bordered)

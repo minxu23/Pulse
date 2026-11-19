@@ -42,12 +42,11 @@ struct SleepCareView: View {
                 .font(Theme.TypeScale.body)
             }
             MetricRow {
-                MetricTile(label: "平均睡眠", value: s.avgMinutes.map { ($0 / 60).oneDecimal } ?? "—", unit: "小时", icon: "moon", color: Theme.sleep,
-                           footnote: "目标 \((a.profile.sleepNeedMinutes / 60).oneDecimal) 小时")
-                MetricTile(label: "平均入睡", value: s.avgBedtime.map(Clock.text) ?? "—", icon: "clock", color: Theme.sleep,
+                MetricTile(label: "平均睡眠", value: s.avgMinutes.map { ($0 / 60).oneDecimal } ?? "—", unit: "小时",
+                           footnote: "目标 \((a.profile.sleepNeedMinutes / 60).oneDecimal)")
+                MetricTile(label: "平均入睡", value: s.avgBedtime.map(Clock.text) ?? "—",
                            footnote: "目标 \(Clock.text(a.profile.bedtimeMinutes))")
-                MetricTile(label: "睡够的夜晚", value: "\(s.nightsMeetingNeed)", unit: "/ \(s.nights)", icon: "checkmark.circle", color: .green,
-                           footnote: "共 \(s.nights) 晚")
+                MetricTile(label: "睡够的夜晚", value: "\(s.nightsMeetingNeed)", unit: "/ \(s.nights)")
             }
         }
     }
@@ -75,7 +74,7 @@ struct SleepCareView: View {
 
     private func tipsCard(_ s: SleepSummary, _ a: Analytics) -> some View {
         var tips: [String] = []
-        if (s.bedtimeSD ?? 0) > 45 { tips.append("入睡时间波动较大：先固定起床时间（包括周末），再逐步把上床时间稳定下来。") }
+        if (s.bedtimeSD ?? 0) > 45 { tips.append("入睡时间波动大：先固定起床时间（周末也一样），再慢慢把上床时间稳定下来。") }
         if let avg = s.avgMinutes, avg < a.profile.sleepNeedMinutes - 30 {
             tips.append(a.profile.insomnia ? ProfileSnapshot.insomniaAdvice : "平均睡眠少于目标：可以每周把上床时间提前 15 分钟，直到睡够。")
         }
@@ -84,7 +83,7 @@ struct SleepCareView: View {
         let alcohol = a.days.suffix(14).filter(\.hadAlcohol).count
         if alcohol >= 3 { tips.append("饮酒会让睡眠变浅、夜间心率升高，近两周饮酒 \(alcohol) 天。") }
         tips.append("睡前 1 小时调暗灯光、放下工作；卧室保持凉爽、安静、黑暗。")
-        tips.append("白天接触自然光、规律运动有助于夜间入睡，但睡前 2 小时内避免剧烈运动。")
+        tips.append("白天多晒太阳、规律运动有助于入睡，睡前 2 小时别剧烈运动。")
         return Card {
             CardHeader(title: "作息与睡眠习惯", icon: "sparkles", color: .yellow)
             ForEach(tips, id: \.self) { BulletText(text: $0) }
@@ -100,7 +99,7 @@ struct SleepCareView: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Theme.Space.item), count: 3), spacing: Theme.Space.item) {
                 cueTile("打鼾", c.snoring, "zzz")
                 cueTile("憋醒", c.gasping, "exclamationmark.bubble")
-                cueTile("被观察到暂停", c.witnessed, "eye")
+                cueTile("呼吸暂停", c.witnessed, "eye")
                 cueTile("晨起头痛", c.headache, "brain.head.profile")
                 cueTile("白天困倦", c.sleepy, "cup.and.saucer")
                 cueTile("血氧 <88%", c.lowSpO2Nights, "lungs")
@@ -121,7 +120,7 @@ struct SleepCareView: View {
                 .buttonStyle(.plain)
                 if c.level == .notable || p.apneaStatus == .suspected || (p.stopBangAnswers.count == 8 && SleepAnalyzer.stopBang(p.stopBangAnswers).score >= 3) {
                     Callout(kind: .info, title: "获得专业评估",
-                            text: "睡眠呼吸暂停的诊断需要专业评估，通常包括问诊和睡眠监测（家庭睡眠监测或医院多导睡眠图）。可以到睡眠门诊、呼吸科或耳鼻喉科就诊，并带上 Pulse 生成的就诊摘要。")
+                            text: "到睡眠门诊、呼吸科或耳鼻喉科，做问诊和睡眠监测；带上下面生成的就诊摘要。")
                     HStack {
                         Button { addTask = true } label: { Label("添加就诊事项", systemImage: "calendar.badge.plus") }
                             .buttonStyle(.bordered)
@@ -140,11 +139,16 @@ struct SleepCareView: View {
                     }
                 }
             }
-            Picker("我的状态", selection: Binding(get: { p.apneaStatus }, set: { p.apneaStatus = $0 })) {
-                ForEach(ApneaStatus.allCases) { Text($0.label).tag($0) }
+            // Labelled, so the menu reads as a setting rather than a stray link.
+            HStack {
+                Text("我的状态").font(Theme.TypeScale.body)
+                Spacer(minLength: Theme.Space.item)
+                Picker("我的状态", selection: Binding(get: { p.apneaStatus }, set: { p.apneaStatus = $0 })) {
+                    ForEach(ApneaStatus.allCases) { Text($0.label).tag($0) }
+                }
+                .labelsHidden()
             }
-            .font(Theme.TypeScale.body)
-            Text("设备的呼吸紊乱、血氧信号和自述线索只能提示可能性，不能代替专业诊断。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+            .frame(minHeight: Theme.Size.tap)
         }
     }
 
@@ -170,8 +174,8 @@ struct SleepCareView: View {
             }
             if p.apneaTreatment == .cpap {
                 MetricRow {
-                    MetricTile(label: "达标夜晚 · ≥\(Int(p.cpapTargetHours)) 小时", value: "\(adherent)", unit: "/ \(used.count)", icon: "checkmark.circle", color: .green)
-                    MetricTile(label: "平均使用", value: Stats.mean(used.map(\.1)).map { $0.oneDecimal } ?? "—", unit: "小时", icon: "clock", color: Theme.respiratory)
+                    MetricTile(label: "达标夜晚 · ≥\(Int(p.cpapTargetHours)) 小时", value: "\(adherent)", unit: "/ \(used.count)")
+                    MetricTile(label: "平均使用", value: Stats.mean(used.map(\.1)).map { $0.oneDecimal } ?? "—", unit: "小时")
                 }
                 if !used.isEmpty {
                     Chart {
@@ -182,10 +186,10 @@ struct SleepCareView: View {
                     }.pulseChartAxes()
                     .frame(height: 110)
                 }
-                Text("在晨起感受中记录每晚使用时长。面罩不适、漏气、口干等问题，请与睡眠医生或设备服务方沟通调整，而不是自行停用。")
+                Text("每晚的使用时长在晨起感受里记。面罩不舒服、漏气、口干，找睡眠医生或设备方调整，别自己停用。")
                     .font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
-            Text("持续治疗后，可留意白天精力、血压与静息心率是否有变化，并在复诊时与医生讨论。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+            Text("坚持治疗后，留意白天精力、血压和静息心率的变化，复诊时和医生聊聊。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
     }
 
@@ -228,7 +232,7 @@ struct StopBangView: View {
                     }
                 }
             } footer: {
-                Text("STOP-BANG 是常用的阻塞性睡眠呼吸暂停筛查问卷，只用于判断是否需要进一步评估，不能用于诊断。")
+                Text("STOP-BANG 是常用的睡眠呼吸暂停筛查问卷，只用来判断要不要进一步评估，不能诊断。")
             }
             Section("结果") {
                 HStack {

@@ -39,7 +39,7 @@ struct DiabetesCareView: View {
             lowCard(g, snap)
             guidanceCard(snap)
             followUpCard
-            PageFootnote("参考目标来自国际 CGM 共识，个人目标与处理方式请以医疗团队制定的照护计划为准。Pulse 不提供胰岛素或药物剂量建议。")
+            PageFootnote("目标参考国际 CGM 共识，以医生给你定的为准。Pulse 不给胰岛素或药物剂量建议。")
         }
         .navigationTitle("血糖管理").calmStyle()
         .navigationBarTitleDisplayMode(.inline)
@@ -97,9 +97,8 @@ struct DiabetesCareView: View {
                         AdaptiveRow(spacing: Theme.Space.tight) {
                             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                                 Text("\(r.kind.label) · \(r.time.formatted(.dateTime.month().day())) \(Clock.text(r.time.minutesOfDay))").font(Theme.TypeScale.body)
-                                Text([r.carbs.map { "\(Int($0)) g 碳水" } ?? "", r.note, "\(r.minutesToPeak) 分钟达峰 \(r.peak.oneDecimal)"]
-                                    .filter { !$0.isEmpty }.joined(separator: " · "))
-                                    .font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(2)
+                                PartsText([r.carbs.map { "\(Int($0)) g 碳水" } ?? "", r.note, "\(r.minutesToPeak) 分钟达峰 \(r.peak.oneDecimal)"], maxLines: 3)
+                                    .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                             }
                         } trailing: {
                             StatusLabel(r.rise >= 3 ? .attention("+\(r.rise.oneDecimal)") : .neutral("+\(r.rise.oneDecimal)")).font(Theme.TypeScale.body).monospacedDigit()
@@ -109,7 +108,7 @@ struct DiabetesCareView: View {
                     .frame(minHeight: Theme.Size.tap)
                     .accessibilityElement(children: .combine)
                 }
-                Text("餐后上升超过 3 mmol/L 时，可以留意这一餐的碳水量、进餐顺序和餐后活动。这些是观察到的关联，调整饮食前请与医疗团队讨论。")
+                Text("餐后升高超过 3 mmol/L 时，留意这一餐的碳水、进餐顺序和饭后活动；调整饮食前先和医生商量。")
                     .font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
@@ -128,7 +127,7 @@ struct DiabetesCareView: View {
                     AdaptiveRow(spacing: Theme.Space.tight) {
                         VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                             Text("\(r.type.label) \(Int(r.minutes)) 分钟 · \(r.start.formatted(.dateTime.month().day()))").font(Theme.TypeScale.body)
-                            Text("\(r.before.oneDecimal) → \(r.after.oneDecimal) mmol/L\(r.lowestNext12h.map { " · 之后 12 小时最低 \($0.oneDecimal)" } ?? "")")
+                            PartsText(["\(r.before.oneDecimal) → \(r.after.oneDecimal) mmol/L", r.lowestNext12h.map { "之后 12 小时最低 \($0.oneDecimal)" } ?? ""])
                                 .font(Theme.TypeScale.body).foregroundStyle(.secondary).monospacedDigit()
                         }
                     } trailing: {
@@ -379,13 +378,13 @@ struct Last24hCard: View {
                     }
                 }.pulseChartYAxis()
                 .chartYScale(domain: 2.5...max(12, (day.map(\.value).max() ?? 8) + 1))
-                .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 6)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()).font(Theme.TypeScale.body) } }
-                .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
+                .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 6)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()).font(Theme.TypeScale.caption) } }
+                .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.caption) } }
                 .padding(.top, 14)
                 .frame(height: 180)
                 .accessibilityLabel("最近 24 小时血糖曲线")
                 .accessibilityValue("范围 \((day.map(\.value).min() ?? 0).oneDecimal) 到 \((day.map(\.value).max() ?? 0).oneDecimal)")
-                Text("虚线之间为目标范围 · 灰色竖线为进餐 · 跑步图标为运动").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                Text("虚线之间为目标范围，竖线为进餐，跑步图标为运动").font(Theme.TypeScale.caption).foregroundStyle(.secondary)
             }
         }
         .cardSurface()
@@ -415,11 +414,11 @@ struct AGPCard: View {
                 }
             }.pulseChartYAxis()
             .chartXScale(domain: 0...23)
-            .chartXAxis { AxisMarks(values: [0, 6, 12, 18, 23]) { v in AxisGridLine(); AxisValueLabel { Text("\(v.as(Int.self) ?? 0):00") }.font(Theme.TypeScale.body) } }
-            .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
+            .chartXAxis { AxisMarks(values: [0, 6, 12, 18, 23]) { v in AxisGridLine(); AxisValueLabel { Text("\(v.as(Int.self) ?? 0):00") }.font(Theme.TypeScale.caption) } }
+            .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.caption) } }
             .frame(height: 160)
             .accessibilityLabel("14 天每日血糖规律")
-            Text("线为中位数，深色带为 25%–75%，浅色带为 10%–90%").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+            Text("线为中位数，深色带是一半日子落在的范围，浅色带是大多数日子的范围").font(Theme.TypeScale.caption).foregroundStyle(.secondary)
             HStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: Theme.Space.tight) {
                     Text("白天范围内").font(Theme.TypeScale.body).foregroundStyle(.secondary)

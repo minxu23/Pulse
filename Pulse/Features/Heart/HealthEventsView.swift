@@ -18,7 +18,7 @@ struct HealthEventsList: View {
             } header: {
                 Text("待处理")
             } footer: {
-                Text("出现这些提示时，先按建议复测或核实；需要专业处理的，请及时就医，并在这里记录结果。")
+                if !active.isEmpty { Text("先按建议复测；看过医生后，在这里记下结果。") }
             }
             let openTasks = tasks.filter { !$0.done }
             if !openTasks.isEmpty {
@@ -37,7 +37,7 @@ struct HealthEventsList: View {
 
 struct HealthEventsView: View {
     var body: some View {
-        HealthEventsList().navigationTitle("异常与跟进").calmStyle()
+        HealthEventsList().navigationTitle("异常跟进").calmStyle()
     }
 }
 
@@ -72,7 +72,7 @@ struct HealthEventDetailView: View {
                 VStack(alignment: .leading, spacing: Theme.Space.item) {
                     StatusLabel(text: event.severity.label, icon: event.severity.icon, color: Theme.severity(event.severity))
                         .font(Theme.TypeScale.body.weight(.semibold))
-                    Text(event.title).font(Theme.TypeScale.title.bold())
+                    Text(event.title).font(Theme.TypeScale.headline)
                     Text(event.detail).font(Theme.TypeScale.body)
                     Text("\(event.relatedDate.formatted(date: .abbreviated, time: .shortened))\(event.valueText.isEmpty ? "" : " · \(event.valueText)")")
                         .font(Theme.TypeScale.body).foregroundStyle(.secondary)

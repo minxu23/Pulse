@@ -27,7 +27,7 @@ struct CardioCareView: View {
                 todayCard(snap, points)
                 AbnormalRecallCard(kind: .bloodPressure)
                 if let n = NextHourForecaster.bloodPressure(points) {
-                    Label { Text("未来 1 小时：" + n.message).fixedSize(horizontal: false, vertical: true) }
+                    Label { Text(n.message).fixedSize(horizontal: false, vertical: true) }
                         icon: { Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary) }
                         .font(Theme.TypeScale.body)
                         .cardSurface()
@@ -45,7 +45,7 @@ struct CardioCareView: View {
                 medsCard(snap)
                 eventsCard
                 followUpCard
-                PageFootnote("Pulse 帮助你记录并整理数据，用药与治疗调整请遵医嘱。")
+                PageFootnote("用药和治疗的调整，请听医生的。")
             }
             .navigationTitle("心血管健康").calmStyle()
             .navigationBarTitleDisplayMode(.inline)
@@ -138,9 +138,9 @@ struct CardioCareView: View {
             }
         } else {
             let s = BPAnalyzer.summary(points, profile: p)
-            HealthMetricCard(title: "血压达标", icon: "target", color: Theme.heartData, time: "近 30 天",
+            HealthMetricCard(title: "血压达标", icon: "target", color: Theme.heartData, time: "近 30 天 \(s.count) 次",
                              value: s.inTargetRate.map { "\(Int($0 * 100))" } ?? "—", unit: s.inTargetRate == nil ? "" : "%",
-                             status: .neutral("目标 \(p.bpTargetSys)/\(p.bpTargetDia) · \(s.count) 次"))
+                             status: .neutral("目标 \(p.bpTargetSys)/\(p.bpTargetDia)"))
         }
     }
 
@@ -180,19 +180,20 @@ struct CardioCareView: View {
             }
             Divider().padding(.leading, Theme.Size.iconTile + Theme.Space.block)
             NavigationLink { Form { MedicationsSection() }.navigationTitle("用药").calmStyle() } label: {
-                NavRowLabel(icon: "list.bullet", title: "管理用药", detail: "用药调整请遵医嘱，Pulse 仅记录背景")
+                NavRowLabel(icon: "list.bullet", title: "管理用药")
             }
             .buttonStyle(.plain)
         }
         .cardSurface()
     }
 
-    private var eventsCard: some View {
+    /// Only when there is something to show: an empty card saying so adds nothing.
+    @ViewBuilder private var eventsCard: some View {
         let kinds: [EventKind] = [.bpCrisis, .bpHigh, .bpLow, .irregularRhythm, .rhrHigh, .rhrLow, .rhrSustainedRise, .symptom, .deviceHRAlert]
         let related = Array(events.filter { kinds.contains($0.kind) }.prefix(5))
-        return VStack(alignment: .leading, spacing: Theme.Space.item) {
+        if !related.isEmpty {
+        VStack(alignment: .leading, spacing: Theme.Space.item) {
             CardTitle("相关事件")
-            if related.isEmpty { EmptyLine("近期没有相关事件。") }
             ForEach(related) { e in
                 NavigationLink { HealthEventDetailView(event: e) } label: {
                     HStack { EventRow(event: e); Spacer(); Image(systemName: "chevron.right").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.tertiary) }
@@ -202,6 +203,7 @@ struct CardioCareView: View {
             }
         }
         .cardSurface()
+        }
     }
 
     private var followUpCard: some View {
@@ -287,7 +289,7 @@ struct HomeBPCard: View {
                 Chart {
                     RuleMark(y: .value("目标", profile.bpTargetSys))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray)
-                        .annotation(position: .top, alignment: .leading) { Text("目标 \(profile.bpTargetSys)").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
+                        .annotation(position: .top, alignment: .leading) { Text("目标 \(profile.bpTargetSys)").font(Theme.TypeScale.caption).foregroundStyle(.secondary) }
                     ForEach(Array(morning.enumerated()), id: \.offset) { _, v in
                         LineMark(x: .value("日期", v.time, unit: .day), y: .value("收缩压", v.value), series: .value("时段", "晨起"))
                             .foregroundStyle(Theme.heartData).symbol(.circle)
@@ -298,13 +300,13 @@ struct HomeBPCard: View {
                     }
                 }.pulseChartYAxis()
                 .chartYScale(domain: ((recent.map(\.value).min() ?? 110) - 8)...((recent.map(\.value).max() ?? 140) + 8))
-                .chartXAxis { AxisMarks(values: .stride(by: .day, count: 4)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy).font(Theme.TypeScale.body) } }
-                .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
+                .chartXAxis { AxisMarks(values: .stride(by: .day, count: 4)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy).font(Theme.TypeScale.caption) } }
+                .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.caption) } }
                 .frame(height: 140)
                 .accessibilityLabel("近 14 天晨起与睡前收缩压")
-                Text("近 14 天收缩压 · ● 晨起 · ◆ 睡前").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                Text("近 14 天收缩压：圆点为晨起，菱形为睡前").font(Theme.TypeScale.caption).foregroundStyle(.secondary)
             }
-            Text("每次测量前静坐 5 分钟，连测 2 遍取平均；晨起在服药和早餐前。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+            Text("测前静坐 5 分钟，连测 2 遍取平均；早上在服药和早饭前测。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
         .cardSurface()
     }

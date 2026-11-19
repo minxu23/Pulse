@@ -138,13 +138,13 @@ struct TodayView: View {
     }
 
     private func header(_ d: TodayData) -> some View {
-        let cgm = d.recentVitals.filter { $0.kind == .glucose && $0.time > d.now.addingTimeInterval(-24 * 3600) }.count >= 48
-        let source: String = d.profile?.useHealthKit == true ? "手表已连接"
-            : (d.profile?.usesDemoData == true ? (DemoClock.isShifted ? "示例数据 · 演示 \(Clock.text(d.now.minutesOfDay))" : "示例数据") : "手动记录")
+        // The date, and the shift or early start when there is one; where the data comes from lives in 我的.
+        let date = ([d.day.formatted(.dateTime.month().day().weekday(.wide))]
+            + [d.window.kind?.label, DayClock.startedEarly(d.now, d.p) ? DayClock.earlyStart.map { "\(Clock.text($0.minutesOfDay)) 开始" } : nil].compactMap { $0 })
+            .joined(separator: " · ")
         return HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                Text("\(d.day.formatted(.dateTime.month().day().weekday(.wide)))\(d.window.kind.map { " · \($0.label)" } ?? "")\(DayClock.startedEarly(d.now, d.p) ? DayClock.earlyStart.map { " · \(Clock.text($0.minutesOfDay)) 开始" } ?? "" : "") · \(source)\(cgm ? " · CGM" : "")")
-                    .font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                Text(date).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1)
                 Text("\(greeting(d))，\(d.profile?.displayName ?? "你")").font(Theme.TypeScale.title.bold())
             }
             Spacer()
@@ -305,11 +305,10 @@ struct StateCard: View {
         .chartYScale(domain: (lo - pad)...(hi + pad))
     }
 
+    /// Whole beats, like the number above it; the goal is on 趋势.
     private func footnote(_ delta: Double?, _ t: RHRTrend) -> String {
-        var parts: [String] = []
-        if let d = delta { parts.append("较基线 \(d.signedText)") } else { parts.append(t.points.isEmpty ? "尚无静息心率记录" : "已有 \(t.points.count) 天记录") }
-        if let target = data.profile?.targetRHR { parts.append("目标 \(target.noDecimal)") }
-        return parts.joined(separator: " · ")
+        guard let d = delta?.rounded() else { return t.points.isEmpty ? "还没有记录" : "已有 \(t.points.count) 天记录" }
+        return d == 0 ? "与基线持平" : "比基线\(d < 0 ? "低" : "高") \(Int(abs(d)))"
     }
 
     private func advice(_ title: String, _ value: String) -> some View {
@@ -460,7 +459,8 @@ struct PhaseTileInfo {
     let phase: DayPhase
     let metric: String
     let unit: String
-    let caption: String
+    /// Short facts under the number; they wrap between facts, never inside one.
+    let caption: [String]
     let state: State
     let flag: String?
     /// The badge's glyph (a weather symbol for a weather reminder).
@@ -482,7 +482,7 @@ struct PhaseTileInfo {
             else if let f = g.fasting { parts.append("空腹 \(f.value.oneDecimal)") }
             let flag = g.lowAlert ? "血糖" : (bp.needsAttention ? "血压" : (br.needsAttention ? "呼吸" : nil))
             return PhaseTileInfo(phase: ph, metric: d?.sleepMinutes.map { ($0 / 60).oneDecimal } ?? "—", unit: "小时睡眠",
-                                 caption: parts.isEmpty ? "夜间血压、血糖与呼吸" : parts.joined(separator: " · "),
+                                 caption: parts.isEmpty ? ["夜间血压、血糖与呼吸"] : parts,
                                  state: state(data.record?.hasCheckIn == true), flag: flag)
         case .exercise:
             let v = data.vitality
@@ -490,10 +490,10 @@ struct PhaseTileInfo {
                 let status = main.status == .planned ? (main.wasAdjusted ? "已调整" : "待完成") : main.status.label
                 // Today's weather for the outdoor session still to do.
                 let w = data.weatherReminder
-                return PhaseTileInfo(phase: ph, metric: "\(main.minutes)", unit: "分钟", caption: w?.short ?? "\(main.title) · \(status)",
+                return PhaseTileInfo(phase: ph, metric: "\(main.minutes)", unit: "分钟", caption: w.map { [$0.short] } ?? [main.title, status],
                                      state: state(data.trainings.allSatisfy { $0.status != .planned }), flag: w?.badge, flagIcon: w?.icon)
             }
-            return PhaseTileInfo(phase: ph, metric: d?.steps.map { $0.formatted(.number.locale(Locale(identifier: "zh_CN"))) } ?? "未记录", unit: d?.steps == nil ? "" : "步", caption: d?.steps == nil ? "同步健康或手动记录运动" : "活动 \(Int(v.activeMinutes)) 分钟",
+            return PhaseTileInfo(phase: ph, metric: d?.steps.map { $0.formatted(.number.locale(Locale(identifier: "zh_CN"))) } ?? "未记录", unit: d?.steps == nil ? "" : "步", caption: [d?.steps == nil ? "同步健康或手动记录运动" : "活动 \(Int(v.activeMinutes)) 分钟"],
                                  state: state(v.score >= 80), flag: nil)
         case .nutrition:
             var parts: [String] = ["\(data.todayMeals.count) 餐"]
@@ -505,21 +505,21 @@ struct PhaseTileInfo {
             let due = data.openTasks.contains {
                 ($0.due ?? .distantFuture) < data.now.adding(days: LabRecheck.groups(inTitle: $0.title).isEmpty ? 1 : LabRecheck.flagLead)
             }
-            return PhaseTileInfo(phase: ph, metric: (data.record?.waterMl ?? 0) > 0 ? "\(data.record!.waterMl)" : "未记录", unit: (data.record?.waterMl ?? 0) > 0 ? "ml 饮水" : "饮水", caption: parts.joined(separator: " · "),
+            return PhaseTileInfo(phase: ph, metric: (data.record?.waterMl ?? 0) > 0 ? "\(data.record!.waterMl)" : "未记录", unit: (data.record?.waterMl ?? 0) > 0 ? "ml 饮水" : "饮水", caption: parts,
                                  state: state(false), flag: due ? "照护" : nil)
         case .evening:
             let r = data.record
             let bed = r?.plannedBedtime?.minutesOfDay ?? data.window.bed.minutesOfDay
-            var caption = "疲劳、酸痛、压力、咖啡因"
+            var caption = ["记录今天的感受"]
             if let r, r.hasEveningCheckIn {
-                caption = [r.eveningFatigue.map { "疲劳 \($0)/5" }, r.eveningStress.map { "压力 \($0)/5" }].compactMap { $0 }.joined(separator: " · ")
+                caption = [r.eveningFatigue.map { "疲劳 \($0)/5" }, r.eveningStress.map { "压力 \($0)/5" }].compactMap { $0 }
             }
             return PhaseTileInfo(phase: ph, metric: Clock.text(bed), unit: "上床", caption: caption,
                                  state: state(r?.hasEveningCheckIn == true), flag: nil)
         case .review:
             let reviewed = data.record?.reviewedAt != nil
             return PhaseTileInfo(phase: ph, metric: reviewed ? "已完成" : "待回顾", unit: "",
-                                 caption: reviewed ? (data.summary.arrangements.first ?? "") : "汇总全天，安排恢复",
+                                 caption: [reviewed ? (data.summary.arrangements.first ?? "") : "汇总全天，安排恢复"],
                                  state: state(reviewed), flag: nil)
         }
     }
@@ -574,8 +574,7 @@ struct PhaseTile: View {
                 if !info.unit.isEmpty { Text(info.unit).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1) }
             }
             .padding(.top, Theme.Space.hairline)
-            Text(info.caption).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(2)
-                .padding(.top, Theme.Space.hairline)
+            TileCaption(parts: info.caption)
         }
         .padding(Theme.Space.cardPadding)
         .frame(maxWidth: .infinity, minHeight: 156, alignment: .topLeading)
@@ -597,6 +596,18 @@ struct PhaseTile: View {
     }
 }
 
+/// Two lines under a tile's number, kept even when the text needs one, so titles line up across a row.
+private struct TileCaption: View {
+    let parts: [String]
+    var body: some View {
+        Text("\n").hidden()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(alignment: .topLeading) { PartsText(parts) }
+            .font(Theme.TypeScale.body).foregroundStyle(.secondary)
+            .padding(.top, Theme.Space.hairline)
+    }
+}
+
 struct QuickLogTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -606,14 +617,15 @@ struct QuickLogTile: View {
                 .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: Theme.Radius.tile(Theme.Size.tileIcon), style: .continuous))
             Spacer(minLength: Theme.Space.block)
             Text("快速记录").font(Theme.TypeScale.body.weight(.semibold))
+            // In the number's place, so the title lines up with the phase tiles beside it.
             HStack(spacing: Theme.Space.item) {
-                ForEach(["fork.knife", "drop", "gauge.with.dots.needle.33percent", "drop.fill", "figure.run"], id: \.self) {
-                    Image(systemName: $0).font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                ForEach(["fork.knife", "drop", "gauge.with.dots.needle.33percent", "figure.run"], id: \.self) {
+                    Image(systemName: $0).foregroundStyle(.secondary)
                 }
             }
-            .padding(.top, Theme.Space.item)
-            Text("饮食 · 饮水 · 指标 · 运动").font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1)
-                .padding(.top, Theme.Space.tight)
+            .font(Theme.TypeScale.title).imageScale(.small)
+            .padding(.top, Theme.Space.hairline)
+            TileCaption(parts: ["饮食", "饮水", "指标", "运动"])
         }
         .padding(Theme.Space.cardPadding)
         .frame(maxWidth: .infinity, minHeight: 156, alignment: .topLeading)

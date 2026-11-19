@@ -2,16 +2,19 @@ import SwiftUI
 import Charts
 
 extension Theme {
-    /// Two content sizes, both scaled by the user's preferred text size.
-    /// System navigation and date/keyboard controls retain native accessibility behaviour.
+    /// Four sizes on one scale (×1.2 steps), all scaled by the user's preferred text size:
+    /// title for page sections and key numbers, headline for card titles, body for everything people read,
+    /// caption only for chart axes and legends. System navigation and date/keyboard controls keep their own.
     enum TypeScale {
-        static let body: Font = .custom("PingFangSC-Regular", size: 16, relativeTo: .body)
         static let title: Font = .custom("PingFangSC-Regular", size: 22, relativeTo: .title3).weight(.semibold)
+        static let headline: Font = .custom("PingFangSC-Regular", size: 19, relativeTo: .headline).weight(.semibold)
+        static let body: Font = .custom("PingFangSC-Regular", size: 16, relativeTo: .body)
+        static let caption: Font = .custom("PingFangSC-Regular", size: 13, relativeTo: .footnote)
     }
 }
 
 extension View {
-    /// Chart labels use the same reading size; fewer ticks leave room for the larger labels.
+    /// Chart labels in the caption size, three ticks per axis.
     func pulseChartAxes() -> some View {
         self.chartXAxis {
             AxisMarks(values: .automatic(desiredCount: 3)) { value in
@@ -25,7 +28,7 @@ extension View {
                     } else if let label = value.as(String.self) {
                         Text(label).fixedSize()
                     }
-                }.font(Theme.TypeScale.body)
+                }.font(Theme.TypeScale.caption)
             }
         }
         .pulseChartYAxis()
@@ -38,7 +41,7 @@ extension View {
             AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) {
                 AxisGridLine()
                 AxisTick()
-                AxisValueLabel().font(Theme.TypeScale.body)
+                AxisValueLabel().font(Theme.TypeScale.caption)
             }
         }
     }

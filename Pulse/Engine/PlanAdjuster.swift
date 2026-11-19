@@ -191,27 +191,27 @@ enum RecoveryAdvisor {
         let chronic = (Stats.mean(history.suffix(28).map(\.load)) ?? 0)
 
         let bedtime = Clock.text(d.plannedBedtime?.minutesOfDay ?? p.bedtimeMinutes)
-        var bedDetail = "目标睡眠 \((p.sleepNeedMinutes / 60).oneDecimal) 小时。睡前 1 小时调暗灯光、减少屏幕。"
+        var bedDetail = "睡够 \((p.sleepNeedMinutes / 60).oneDecimal) 小时；睡前 1 小时调暗灯光、少看屏幕。"
         if readiness?.level == .low || readiness?.level == .rest {
-            bedDetail = "今天恢复偏弱，今晚比平时早 30 分钟上床，优先补足睡眠。"
+            bedDetail = "今天恢复偏弱，比平时早 30 分钟上床。"
         }
         items.append(.init(id: "bedtime", icon: "moon.stars.fill", title: "\(bedtime) 前上床", detail: bedDetail, priority: 0))
 
         if d.load > 0 && (d.hardSession || (chronic > 0 && d.load > 1.5 * chronic)) {
             items.append(.init(id: "refuel", icon: "fork.knife", title: "训练后的补充",
-                               detail: "今天训练负荷较高：晚餐保证优质蛋白和适量碳水，\(p.fluidLimited ? "饮水仍按医生定的量" : "补足水分")。", priority: 1))
+                               detail: "今天练得多：晚餐吃够蛋白质和碳水，\(p.fluidLimited ? "饮水仍按医生定的量" : "补足水分")。", priority: 1))
         }
         if d.hadAlcohol {
             items.append(.init(id: "alcohol", icon: "wineglass", title: "饮酒后的恢复",
-                               detail: "今天饮酒 \(d.alcoholUnits.oneDecimal) 单位：\(p.fluidLimited ? "" : "睡前补水，")不再继续饮酒。明早心率偏高时，Pulse 会把这一因素纳入解读。", priority: 1))
+                               detail: "今天喝了 \(d.alcoholUnits.oneDecimal) 单位酒：\(p.fluidLimited ? "" : "睡前补点水，")不再喝了。明早心率偏高时会算上这一条。", priority: 1))
         }
         if d.lateCaffeine(cutoff: p.caffeineCutoffHour) {
             items.append(.init(id: "caffeine", icon: "cup.and.saucer", title: "咖啡因可能影响入睡",
-                               detail: "今天 \(p.caffeineCutoffHour) 点后摄入了咖啡因。若入睡困难，先做放松练习，不要强迫入睡。", priority: 2))
+                               detail: "今天 \(p.caffeineCutoffHour) 点后喝了咖啡因饮料。睡不着就先放松，别硬睡。", priority: 2))
         }
         if (d.eveningSoreness ?? 0) >= 2 {
             items.append(.init(id: "soreness", icon: "figure.cooldown", title: "放松酸痛部位",
-                               detail: "睡前 10 分钟轻柔拉伸或泡沫轴放松，温水淋浴也有帮助；避免在疼痛部位用力按压。", priority: 1))
+                               detail: "睡前 10 分钟轻柔拉伸或泡沫轴，冲个温水澡；别用力按疼的地方。", priority: 1))
         }
         if (d.eveningFatigue ?? 0) >= 4 {
             items.append(.init(id: "fatigue", icon: "battery.25", title: "今天比较疲劳",
@@ -219,11 +219,11 @@ enum RecoveryAdvisor {
         }
         if d.highStress || (d.eveningStress ?? 0) >= 4 {
             items.append(.init(id: "stress", icon: "wind", title: "睡前放松 10 分钟",
-                               detail: "今天压力较大：慢呼吸（每分钟约 6 次）、轻柔拉伸，或把明天的待办写下来。", priority: 1))
+                               detail: "慢呼吸（每分钟约 6 次）、轻柔拉伸，或把明天的事写下来。", priority: 1))
         }
         if d.lateMeal {
             items.append(.init(id: "meal", icon: "clock", title: "晚餐较晚",
-                               detail: "睡前 2–3 小时避免大量进食，若饥饿可选择少量清淡食物。", priority: 3))
+                               detail: "睡前 2–3 小时别吃太多，饿了吃点清淡的。", priority: 3))
         }
         if p.fluidLimited {
             if d.waterMl > p.waterTargetMl {
@@ -232,7 +232,7 @@ enum RecoveryAdvisor {
             }
         } else if d.waterMl > 0 && Double(d.waterMl) < Double(p.waterTargetMl) * 0.6 {
             items.append(.init(id: "water", icon: "drop", title: "适量补水",
-                               detail: "今天饮水约 \(d.waterMl) ml，傍晚前适当补充，睡前不要大量饮水以免夜醒。", priority: 3))
+                               detail: "今天喝了约 \(d.waterMl) ml，傍晚前补一些，睡前别喝太多。", priority: 3))
         }
         if p.apneaStatus == .diagnosed && p.apneaTreatment == .cpap {
             items.append(.init(id: "cpap", icon: "lungs.fill", title: "整晚使用 CPAP",
@@ -241,18 +241,18 @@ enum RecoveryAdvisor {
             items.append(.init(id: "oral", icon: "mouth", title: "佩戴口腔矫治器", detail: "按医嘱整晚佩戴。", priority: 0))
         } else if p.apneaStatus == .suspected || p.apneaStatus == .evaluating || history.suffix(7).filter(\.snoring).count >= 3 {
             items.append(.init(id: "breathing", icon: "lungs", title: "照顾夜间呼吸",
-                               detail: "尽量侧卧睡，睡前 3 小时不饮酒、不服用助眠类药物（除非医生要求）；家人观察到憋气或呼吸暂停时请记录下来。", priority: 1))
+                               detail: "尽量侧睡，睡前 3 小时不喝酒、不吃助眠药（医生开的除外）；家人看到憋气就记下来。", priority: 1))
         }
         if p.hasDiabetes && p.hypoRiskMeds() && d.activeMinutes >= 30 {
             items.append(.init(id: "glucose", icon: "drop.fill", title: "睡前血糖",
-                               detail: "今天有运动且使用胰岛素 / 磺脲类药物，夜间低血糖风险较高，按照护计划检查睡前血糖。", priority: 0))
+                               detail: "今天运动了又在用胰岛素或磺脲类药，夜里容易低血糖，睡前按照护计划测一次。", priority: 0))
         }
         if let key = tomorrow.first(where: { $0.isKey && $0.status == .planned }) {
             items.append(.init(id: "tomorrow", icon: "calendar", title: "明天：\(key.title)",
-                               detail: "明天有重点训练，今晚保证睡眠；运动装备提前准备好。", priority: 2))
+                               detail: "今晚睡够，装备提前备好。", priority: 2))
         }
         items.append(.init(id: "device", icon: "applewatch", title: "佩戴设备入睡",
-                           detail: "确认手表电量充足（>30%）并佩戴入睡，以记录夜间心率、HRV 和睡眠。没有设备时，明早醒来静躺 1 分钟后手动测量。", priority: 4))
+                           detail: "电量 30% 以上再戴着睡；没有手表的话，明早醒来静躺 1 分钟手动测心率。", priority: 4))
         return items.sorted { $0.priority < $1.priority }
     }
 }

@@ -42,7 +42,7 @@ struct BaselineQuestionsView: View {
             } header: {
                 Text("运动前安全问题")
             } footer: {
-                Text("参照 PAR-Q+ 的一般健康问题。任何一题回答「是」，建议先咨询医生，医生确认后再开始方案；在那之前可以做基础层（步行、拉伸、作息）。回答「是」不代表不能运动。")
+                Text("参照 PAR-Q+。任何一题答「是」，先问医生，确认后再开始方案；在那之前可以步行、拉伸、调作息。答「是」不代表不能运动。")
             }
 
             Section {
@@ -60,7 +60,7 @@ struct BaselineQuestionsView: View {
             } header: {
                 Text("睡眠")
             } footer: {
-                Text("选「是」时，Pulse 不会让你提前上床（在床上躺得越久越难睡），会建议去睡眠门诊：首选的治疗是失眠认知行为治疗（CBT-I）。")
+                Text("选「是」时不会让你提前上床（躺得越久越难睡），会建议去睡眠门诊做失眠认知行为治疗（CBT-I）。")
             }
 
             Section {
@@ -69,7 +69,7 @@ struct BaselineQuestionsView: View {
             } header: {
                 Text("力量自测（可选）")
             } footer: {
-                Text("俯卧撑做到做不动为止，女性可以跪姿；60 岁以上做 30 秒坐站：双手抱胸，30 秒内从椅子上完全站起再坐下的次数。用来和同龄同性别的人比。")
+                Text("俯卧撑做到做不动为止，女性可以跪着做；60 岁以上做 30 秒坐站：双手抱胸，数 30 秒内从椅子上站起再坐下几次。")
             }
 
             Section {

@@ -182,7 +182,7 @@ struct RootView: View {
 #if DEBUG
 /// Pages that `-PulseOpen <name>` presents directly, for screenshots.
 enum DebugPage: String, Identifiable {
-    case glucose, cardio, marathon, agent, nutrition, evening, review, readiness, cloud, nextweek, labs, events, baseline, packs
+    case glucose, cardio, marathon, agent, morning, exercise, nutrition, evening, review, readiness, cloud, nextweek, labs, events, baseline, packs
     case program, summary, questions
     var id: String { rawValue }
     @MainActor @ViewBuilder var view: some View {
@@ -191,6 +191,8 @@ enum DebugPage: String, Identifiable {
         case .cardio: CardioCareView()
         case .marathon: MarathonView()
         case .agent: HealthAgentChatView()
+        case .morning: TodayPhaseView(phase: .morning, tab: .constant(.today))
+        case .exercise: TodayPhaseView(phase: .exercise, tab: .constant(.today))
         case .nutrition: TodayPhaseView(phase: .nutrition, tab: .constant(.today))
         case .evening: TodayPhaseView(phase: .evening, tab: .constant(.today))
         case .review: TodayPhaseView(phase: .review, tab: .constant(.today))

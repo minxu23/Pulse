@@ -31,15 +31,15 @@ struct ProgramCard: View {
         case .none where p.usageIntent == .recording:
             Card {
                 CardTitle("记录身体状况")
-                Text("当前不设置改善目标或训练完成率。需要时可以选择改善方向，再开始基线评估。")
+                Text("现在只记录，不设目标。想改善时，先选个方向。")
                     .foregroundStyle(.secondary)
                 NavigationLink("选择改善方向") { UsageDirectionView(profile: p) }
                     .buttonStyle(.borderedProminent)
             }
         case .none:
             Card {
-                CardHeader(title: "三阶段健康计划", subtitle: "先用一周摸清身体和习惯，再按结果选改善方案", icon: "chart.line.uptrend.xyaxis")
-                Text("基线期 1 周 → 改善期每轮 4 周、每周复盘 → 总结期。数据够的话，马上就能生成基线报告。")
+                CardHeader(title: "三阶段健康计划", subtitle: "先用一周了解你的身体和习惯", icon: "chart.line.uptrend.xyaxis")
+                Text("基线期 1 周 → 改善期每轮 4 周 → 总结期。数据够的话，马上就能出报告。")
                     .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Button("开始基线评估") {
                     ProgramFlow.startBaseline(p, in: ctx)

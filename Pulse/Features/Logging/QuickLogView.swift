@@ -125,7 +125,7 @@ struct AlcoholLogForm: View {
                     }
                 }
             } footer: {
-                Text("1 单位 ≈ 10 g 酒精。饮酒常使当晚睡眠变浅、次日静息心率升高，Pulse 会在解读数据时考虑这一点。")
+                Text("1 单位约 10 g 酒精。喝酒常让当晚睡得浅、第二天静息心率偏高，解读时会算上。")
             }
         }
         .onAppear { date = initialDate; units = DataHub.record(for: date, in: ctx).alcoholUnits }
@@ -207,7 +207,7 @@ struct WaterLogForm: View {
                 .padding(.vertical, Theme.Space.tight)
             } footer: {
                 Text(limited ? (ml > target ? "已超过医生定的 \(target) ml 上限，今天不再额外喝水；留意脚踝是否浮肿，明早称一下体重。" : "限水中：汤、粥、水果里的水分也算在内。")
-                             : "运动日、炎热天气需要更多水分；睡前 1 小时少量饮水即可，减少夜醒。")
+                             : "运动日和热天多喝一些；睡前 1 小时少喝，免得夜里醒。")
             }
         }
         .onAppear { date = initialDate; ml = DataHub.record(for: date, in: ctx).waterMl }
@@ -266,7 +266,7 @@ struct DietLogForm: View {
                     TextField("吃了什么（可选）", text: $note)
                 }
             } footer: {
-                Text("不需要精确计算。均衡饮食指蔬菜、优质蛋白和全谷物较充足，少油炸与高糖。")
+                Text("记个大概就行。均衡指蔬菜、蛋白质和粗粮够，油炸和甜食少。")
             }
             // With a CGM, what this meal will probably do — from the user's own past meals.
             if addMeal, date.isSameDay(.app), [.breakfast, .lunch, .dinner, .snack].contains(mealKind),
@@ -565,7 +565,7 @@ struct ContextLogForm: View {
             } header: {
                 Text("当天的特殊状况")
             } footer: {
-                Text("这些背景会用于解释静息心率和准备度的变化，例如生病、出差或经期时数值偏高是常见的。")
+                Text("用来解释静息心率和准备度的变化，比如生病、出差、经期时偏高很常见。")
             }
         }
         .onAppear { date = initialDate; tags = DataHub.record(for: date, in: ctx).tags }
@@ -709,7 +709,7 @@ struct SymptomLogForm: View {
                         .buttonStyle(.borderedProminent).tint(.red)
                     }
                 } footer: {
-                    Text("已加入「异常与跟进」，你可以在那里记录复测、就医和处理结果。")
+                    Text("已加入「异常跟进」，复测和就医结果可以记在那里。")
                 }
                 Button("完成") { dismiss() }
             } else {
@@ -791,7 +791,7 @@ struct VitalLogForm: View {
                         }
                         .buttonStyle(.borderedProminent).tint(.red)
                     }
-                } footer: { Text("已加入「异常与跟进」，请按建议复测或就医，并记录处理结果。") }
+                } footer: { Text("已加入「异常跟进」，请按建议复测或就医，并记录处理结果。") }
                 recallSection
                 Button("完成") { dismiss() }
             } else if savedNoAlert {
@@ -815,8 +815,8 @@ struct VitalLogForm: View {
                     }
                 } footer: {
                     switch kind {
-                    case .bloodPressure: Text("规范测量：测前安静坐 5 分钟，背部有支撑，袖带与心脏同高，测 2 次取平均。")
-                    case .lactate: Text("乳酸数据需在标准化测试条件下、由专业人员指导采集，单次数值请结合测试方案解读。")
+                    case .bloodPressure: Text("测前静坐 5 分钟，背靠着，袖带和心脏一样高，测 2 次取平均。")
+                    case .lactate: Text("乳酸要在专业人员指导下、按固定的测试方案采集。")
                     case .glucose: Text("单位 mmol/L。如使用 mg/dL，请除以 18。")
                     default: EmptyView()
                     }
@@ -965,7 +965,7 @@ struct SleepLogForm: View {
             } header: {
                 Text("睡眠呼吸线索")
             } footer: {
-                Text("这些线索不能用于诊断，但持续记录有助于判断是否需要专业睡眠评估。")
+                Text("这些线索不能诊断，但持续记录能帮你判断要不要做睡眠评估。")
             }
         }
         .onAppear {
@@ -1058,7 +1058,7 @@ struct WorkoutLogForm: View {
                     }
                 }
                 if feeling == .unwell {
-                    Callout(kind: .urgent, text: "运动中出现胸痛、明显气短、头晕或心悸时，请停止运动；可在「症状」中记录，便于跟进。")
+                    Callout(kind: .urgent, text: "运动中胸痛、明显气短、头晕或心悸时，立即停下，并在「症状」里记下来。")
                 }
             } header: { Text("运动感受") }
             if showFuel {

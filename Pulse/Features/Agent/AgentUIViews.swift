@@ -40,7 +40,7 @@ private struct BlockHeader: View {
     var trailing: String? = nil
     var body: some View {
         AdaptiveRow(alignment: .firstTextBaseline, spacing: Theme.Space.item) {
-            Label(title, systemImage: icon).font(Theme.TypeScale.title)
+            Label(title, systemImage: icon).font(Theme.TypeScale.headline)
         } trailing: {
             if let trailing { Text(trailing).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1) }
         }
@@ -193,10 +193,12 @@ struct PlanProposalCard: View {
                 ForEach(p.lines) { line in
                     HStack(alignment: .firstTextBaseline, spacing: Theme.Space.block) {
                         Text(Weekday.name(line.weekday)).font(Theme.TypeScale.body.weight(.semibold)).frame(width: dayColumn, alignment: .leading)
+                        // 「室内间歇 50 分钟 · 中等强度」 wraps between its parts, not before a lone 「· 中等强度」.
                         VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                            Text(line.before).font(Theme.TypeScale.body).foregroundStyle(.secondary).strikethrough()
-                            Text(line.after).font(Theme.TypeScale.body).fixedSize(horizontal: false, vertical: true)
+                            PartsText(line.before.components(separatedBy: " · "), maxLines: 3).foregroundStyle(.secondary).strikethrough()
+                            PartsText(line.after.components(separatedBy: " · "), maxLines: 3)
                         }
+                        .font(Theme.TypeScale.body)
                     }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("\(Weekday.name(line.weekday))：原来\(line.before)，改为\(line.after)")
@@ -207,9 +209,9 @@ struct PlanProposalCard: View {
             }
             Divider()
             VStack(alignment: .leading, spacing: Theme.Space.item) {
-                Label("Pulse 本机安全检查", systemImage: "checkmark.shield").font(Theme.TypeScale.body.weight(.semibold))
+                Label("本机安全检查", systemImage: "checkmark.shield").font(Theme.TypeScale.body.weight(.semibold))
                 ForEach(p.checks, id: \.self) { c in
-                    Text("• " + c).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    BulletText(text: c).foregroundStyle(.secondary)
                 }
             }
             actions

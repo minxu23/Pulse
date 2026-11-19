@@ -33,7 +33,7 @@ struct BaselineReportView: View {
 
             if onChoose == nil { recommendationCard(r) }
 
-            PageFootnote("这份报告不是诊断。排名参考的人群和数据误差写在每一项下面；手表和体脂秤的数值是估算，看变化趋势比看单次更有意义。")
+            PageFootnote("这份报告不是诊断。点 ⓘ 看每一项的数据来源；手表和体脂秤的数值是估算，看趋势比看单次更有意义。")
         }
         .safeAreaInset(edge: .bottom) {
             if let onChoose {
@@ -65,7 +65,7 @@ struct BaselineReportView: View {
             HStack(alignment: .top, spacing: Theme.Space.block) {
                 IconTile(icon: rec.pack.icon, color: rec.pack.color)
                 VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                    Text(rec.pack.title).font(Theme.TypeScale.title)
+                    Text(rec.pack.title).font(Theme.TypeScale.headline)
                     Text(rec.reason).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -130,22 +130,34 @@ struct VerdictChip: View {
 
 private struct MetricLine: View {
     let metric: BaselineMetric
+    @State private var showsNote = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.tight) {
             HStack(alignment: .firstTextBaseline, spacing: Theme.Space.item) {
                 Text(metric.title).font(Theme.TypeScale.body.weight(.semibold))
                 if metric.quality == .estimated { Text("估算").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
+                // Sources behind one small glyph per line, instead of a 「数据来源与参考」 link under every metric.
+                if metric.note != nil {
+                    Button { withAnimation { showsNote.toggle() } } label: {
+                        Image(systemName: showsNote ? "info.circle.fill" : "info.circle").imageScale(.small)
+                            .frame(minWidth: Theme.Size.tap, minHeight: Theme.Size.tap / 2, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel(showsNote ? "收起数据来源" : "数据来源与参考")
+                }
                 Spacer(minLength: Theme.Space.item)
                 Text(metric.valueText).font(Theme.TypeScale.body.weight(.semibold)).monospacedDigit()
                     .foregroundStyle(metric.quality == .missing ? .secondary : .primary)
             }
             if let rank = metric.rank { RankBar(rank: rank) }
             Text(metric.detail).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            if let note = metric.note {
-                DisclosureGroup("数据来源与参考") {
-                    Text(note).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                }
+            if let note = metric.note, showsNote {
+                Text(note).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .padding(Theme.Space.block)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.subtle.opacity(0.6), in: RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
             }
         }
     }
@@ -207,7 +219,7 @@ private struct HabitsCard: View {
                                 .foregroundStyle(h.peakHours.contains(hour) ? Theme.activity : Theme.activity.opacity(0.35))
                         }
                     }.pulseChartYAxis()
-                    .chartXAxis { AxisMarks(values: [0, 6, 12, 18, 23]) { v in AxisValueLabel { Text("\(v.as(Int.self) ?? 0) 时") }.font(Theme.TypeScale.body) } }
+                    .chartXAxis { AxisMarks(values: [0, 6, 12, 18, 23]) { v in AxisValueLabel { Text("\(v.as(Int.self) ?? 0) 时") }.font(Theme.TypeScale.caption) } }
                     .chartYAxis(.hidden)
                     .frame(height: 90)
                     .accessibilityLabel("走得最多的时段：" + h.peakHours.map { "\($0) 点" }.joined(separator: "、"))

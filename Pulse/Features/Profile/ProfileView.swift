@@ -22,7 +22,7 @@ struct ProfileView: View {
                         .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
 
                     Section {
-                        NavigationLink("方案与历史报告") { ProgramHistoryView() }
+                        link("方案与历史报告", "doc.text", .teal) { ProgramHistoryView() }
                         link("基础信息", "person", Theme.body) { Form { BasicsSection(p: p) }.navigationTitle("基础信息").calmStyle() }
                         link("健康状况与用药", "cross.case", .pink) { Form { ConditionsSection(p: p); DietTargetsSection(p: p); if p.conditions.contains(.ckd) || p.dialysis { DialysisSection(p: p) }; MedicationsSection() }.navigationTitle("健康状况与用药").calmStyle() }
                         link("运动基础与生活节奏", "figure.walk", Theme.activity) { Form { ExerciseBaseSection(p: p); LifeConstraintsSection(p: p) }.navigationTitle("运动与生活节奏").calmStyle() }
@@ -54,9 +54,7 @@ struct ProfileView: View {
                                 } label: { Text("打开\(m.label)").font(Theme.TypeScale.body).foregroundStyle(Theme.accent) }
                             }
                         }
-                    } header: { Text("按需启用的专业支持") } footer: {
-                        Text("专业支持用于配合教练或医生的个人要求，不替代专业评估与照护。")
-                    }
+                    } header: { Text("专项管理") }
 
                     Section {
                         link("数据来源", "applewatch", .gray) { DataSourcesView(profile: p) }
@@ -76,7 +74,7 @@ struct ProfileView: View {
                             }
                         })) {
                             Label {
-                                setting("到期提醒", "复查、复诊到期前一周和当天上午 9 点提醒；设了时间的事项按时提醒。")
+                                setting("到期提醒", "复查、复诊提前一周和当天早上提醒")
                             } icon: { tileIcon("bell", .red) }
                         }
                         Toggle(isOn: Binding(get: { eventReminders }, set: { on in
@@ -89,7 +87,7 @@ struct ProfileView: View {
                             }
                         })) {
                             Label {
-                                setting("异常提醒", "健康 App 有新的血压、血糖或体重时在后台查看，其他数据每隔几小时看一次，需要联系医生时提醒你。手机锁着时要等解锁后才能读取。不能代替急救。")
+                                setting("异常提醒", "读数需要联系医生时通知你")
                             } icon: { tileIcon("exclamationmark.triangle", .orange) }
                         }
                         if remindersDenied {
@@ -98,7 +96,7 @@ struct ProfileView: View {
                             }
                         }
                     } header: { Text("提醒") } footer: {
-                        Text(remindersDenied ? "通知被关掉了：在系统「设置 › 通知 › Pulse」里允许后，再回来打开。" : "提醒都在本机完成，不经过网络。")
+                        Text(remindersDenied ? "通知被关掉了：在「设置 › 通知 › Pulse」里允许后再打开。" : "提醒在本机完成，不经过网络。异常提醒不能代替急救。")
                     }
 
                     Section {
@@ -158,7 +156,7 @@ struct ProfileView: View {
                             }
                         }
                     } header: { Text("示例用户") } footer: {
-                        Text(AgentNameSettings.shared.phrase("晓林、陈杰、林悦、王建国、刘洋有 120 天的模拟记录（刘洋每周打两次网球）；孙浩、周敏、赵立强、何静有一整年，各有一种需要长期照护的情况，适合看长期变化。陈杰、林悦、王建国的健康情况一般、计划遵从性较差，可用来查看 Pulse 和", "如何应对。示例数据和你自己的记录分开保存，载入示例用户不会影响你的记录，随时可以回来。"))
+                        Text("示例数据和你自己的记录分开保存，随时可以回来。")
                     }
                     }
                     Section {
@@ -224,9 +222,9 @@ struct ProfileView: View {
                 }
             }
             MetricRow {
-                MetricTile(label: "基线", value: a.trend.baseline.map { $0.noDecimal } ?? "—", unit: "bpm", icon: "flag", color: Theme.heartData)
-                MetricTile(label: "近 4 周", value: a.trend.avg28.map { $0.noDecimal } ?? "—", unit: "bpm", icon: "calendar", color: Theme.heartData)
-                MetricTile(label: "每周可用", value: "\(p.weeklyTimeBudget)", unit: "分钟", icon: "clock", color: .green)
+                MetricTile(label: "基线", value: a.trend.baseline.map { $0.noDecimal } ?? "—", unit: "bpm")
+                MetricTile(label: "近 4 周", value: a.trend.avg28.map { $0.noDecimal } ?? "—", unit: "bpm")
+                MetricTile(label: "每周可用", value: "\(p.weeklyTimeBudget)", unit: "分钟")
             }
             FlowLayout(spacing: Theme.Space.item) {
                 ForEach(Array(p.goals).sorted { $0.rawValue < $1.rawValue }) { Chip(text: $0.label, icon: $0.icon, color: .orange) }
@@ -259,13 +257,13 @@ struct BaselineView: View {
                 LabeledContent("方式", value: profile.baselineIsManual ? "手动设定" : "自动（前 14 天中位数）")
                 LabeledContent("比较所用测量方式", value: t.dominantSource?.label ?? "—")
             } footer: {
-                Text("基线是你自己的参照点，用于判断变化方向，不代表「正常」或「理想」值。")
+                Text("基线是你自己的参照点，用来看变化方向，不代表「正常」或「理想」。")
             }
             Section("测量方式") {
                 Picker("主要来源", selection: Binding(get: { profile.rhrMethod }, set: { profile.rhrMethod = $0 })) {
                     ForEach(RHRSource.allCases) { Text($0.label).tag($0) }
                 }
-                Text("改变测量方式后，前后数值不宜直接比较。建议以新方式记录 2 周后重新建立基线。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                Text("换了测量方式，前后数值不好直接比；用新方式记 2 周后重新建立基线。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
             Section {
                 if let m = recentMedian {
@@ -286,7 +284,7 @@ struct BaselineView: View {
             } header: {
                 Text("重新建立")
             } footer: {
-                Text("在开始或停用影响心率的药物、病愈后、或测量方式改变后，重新建立基线能让后续比较更有意义。")
+                Text("换药、病好以后或换了测量方式，都适合重新建立基线。")
             }
         }
         .navigationTitle("静息心率基线").calmStyle()
@@ -327,16 +325,16 @@ struct DataSourcesView: View {
                     let bg = BackgroundCheck.lastRead
                     LabeledContent("最近一次后台读取", value: bg.map { $0.date.formatted(date: .abbreviated, time: .shortened) + ($0.newReading ? " · 有新读数" : " · 定时检查") } ?? "还没有")
                     if let bg, !bg.ok {
-                        Text("那次手机锁着，健康数据读不到；解锁后的下一次检查或打开 Pulse 时会补上。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                        Text("那次手机锁着读不到，解锁后会补上。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                     }
                     if let msg = hk.lastMessage { Text(msg).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
                 }
             } header: {
                 Text("智能手表 / 手环 / CGM")
             } footer: {
-                Text(profile.usesDemoData ? "现在看的是示例用户，不读取 Apple 健康。到「我的 › 示例用户」回到你自己的数据后再连接。" : hk.isAvailable
-                     ? "读取 Apple Watch 等设备写入健康 App 的静息心率、HRV、睡眠、活动、血氧、血压、血糖（含 CGM）等。Pulse 只读取，不会写入。权限可随时在「设置 › 健康 › 数据访问与设备」中修改。"
-                     : "此设备不支持健康数据，可使用手动记录。")
+                Text(profile.usesDemoData ? "示例用户不读取 Apple 健康；回到你自己的数据后再连接。" : hk.isAvailable
+                     ? "读取手表、血压计、CGM 等写进健康 App 的数据，只读不写。权限在「设置 › 健康 › 数据访问与设备」里改。"
+                     : "这台设备不支持健康数据，可以手动记录。")
             }
             if profile.useHealthKit && hk.isAvailable {
                 Section {
@@ -362,7 +360,7 @@ struct DataSourcesView: View {
                 } header: {
                     Text("Apple 健康里的数据（近 60 天）")
                 } footer: {
-                    Text("「没有数据」有两种可能：设备或它的 App 没有把这一项写入 Apple 健康；或者没有允许 Pulse 读取。健康 App 里能看到、这里却没有的，到「设置 › 健康 › 数据访问与设备 › Pulse」把对应项目打开。静息心率、心率变异性、睡眠分期、锻炼分钟、最大摄氧量通常只有 Apple Watch 会写入；手环只写入心率时，Pulse 用夜间最低的心率估算静息心率。")
+                    Text("「没有数据」：设备没写进健康 App，或没允许 Pulse 读取。健康 App 里有、这里没有的，到「设置 › 健康 › 数据访问与设备 › Pulse」打开。静息心率、HRV 和睡眠分期通常只有 Apple Watch 会写入；手环只写心率时，用夜间最低心率估算静息心率。")
                 }
                 .task { if hk.inventory.isEmpty { await hk.checkInventory() } }
             }
@@ -373,7 +371,7 @@ struct DataSourcesView: View {
             } header: {
                 Text("没有设备时")
             } footer: {
-                Text("缺少设备时，仍然可以完成基本记录、准备度评估（基于主观感受）与回顾。手动修改的数值不会被设备同步覆盖。")
+                Text("没有设备也能记录、按感受评估准备度和复盘；手动改过的数值不会被同步覆盖。")
             }
             Section("如何选择") {
                 BulletText(text: "只关注静息心率与睡眠：一块可整晚佩戴的手表即可。")
@@ -384,7 +382,7 @@ struct DataSourcesView: View {
             Section {
                 AgentAskButton(title: "按我的训练指导设备使用", question: "根据我的训练，手表和 CGM 怎么用更准？")
             } footer: {
-                Text(AgentNameSettings.shared.phrase("", "会结合你的训练内容和近期数据的完整度，给出佩戴与设置建议；开启云端模型时由云端模型生成个性化指导。"))
+                Text(AgentNameSettings.shared.phrase("", "会按你的训练和数据完整度给出佩戴建议。"))
             }
         }
         .navigationTitle("数据来源").calmStyle()

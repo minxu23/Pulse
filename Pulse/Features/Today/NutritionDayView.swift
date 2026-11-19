@@ -19,7 +19,7 @@ struct NutritionDayView: View {
         if KidneySigns.relevant(p) { KidneySignsCard(data: data, onLog: { sheet = .log($0) }) }
         MealsCard(meals: data.todayMeals, fuelTip: fuelTip, onLog: { sheet = .log($0) })
 
-        SectionTitle(title: "身体指标", subtitle: "结合测量时间、活动和饮食")
+        SectionTitle(title: "身体指标")
         MetricGrid {
             bpCard
             if showGlucose { glucoseCard(glucose, cgm: cgm) }
@@ -34,7 +34,7 @@ struct NutritionDayView: View {
             CareTodayCard(profile: p, record: data.record, readings: data.recentVitals, tasks: data.openTasks)
         }
 
-        PageFootnote("饮食只需记录整体情况，不需要精确计算。指标会与测量时的活动、饮食和用药背景一起解读；读数异常时请先按建议复测。")
+        PageFootnote("饮食记个大概就行，不用精确计算。")
     }
 
     // MARK: Fuelling tip for today's training
@@ -124,7 +124,7 @@ struct NutritionDayView: View {
             let d = data.analytics.today
             HealthMetricCard(title: "心率变异性", icon: "waveform.path.ecg", color: Theme.heartData, time: "今晨",
                              value: d?.hrv.map { $0.noDecimal } ?? "—", unit: "ms",
-                             status: d?.hrv == nil ? .neutral("暂无数据") : .neutral("恢复的参考信号"))
+                             status: d?.hrv == nil ? .neutral("暂无数据") : nil)
         }
     }
 }
@@ -397,13 +397,13 @@ struct GlucoseDayCard: View {
                 }
             }.pulseChartYAxis()
             .chartYScale(domain: 2.5...max(11, (points.map(\.value).max() ?? 8) + 1))
-            .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 3)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()).font(Theme.TypeScale.body) } }
-            .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
+            .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 3)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()).font(Theme.TypeScale.caption) } }
+            .chartYAxis { AxisMarks(position: .trailing, values: [4, 7, 10]) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.caption) } }
             .padding(.top, Theme.Space.block)
             .frame(height: 140)
             .accessibilityLabel("今天的血糖曲线")
             .accessibilityValue("目标范围内 \(Int(inRange * 100))%")
-            Text("虚线之间为目标范围 · 灰色竖线为进餐 · 跑步图标为运动").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+            Text("虚线之间为目标范围，竖线为进餐，跑步图标为运动").font(Theme.TypeScale.caption).foregroundStyle(.secondary)
         }
     }
 }

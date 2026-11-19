@@ -172,7 +172,7 @@ struct WeekProgressCard: View {
         NavigationLink { WeeklyPlanView().navigationTitle("运动计划").navigationBarTitleDisplayMode(.inline).calmStyle() } label: {
             VStack(alignment: .leading, spacing: Theme.Space.block) {
                 HStack {
-                    Label("本周进度", systemImage: "calendar").font(Theme.TypeScale.title).labelStyle(.inline)
+                    Label("本周进度", systemImage: "calendar").font(Theme.TypeScale.headline).labelStyle(.inline)
                     Spacer()
                     Image(systemName: "chevron.right").font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(.tertiary)
                 }

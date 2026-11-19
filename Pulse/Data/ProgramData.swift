@@ -60,12 +60,13 @@ extension BaselineResult {
         let weak = worst?.metrics.filter { outcomes.contains($0.kind) && ($0.verdict ?? .good) >= .fair }
             .min { ($0.verdict ?? .good, -($0.rank?.goodness ?? 50)) > ($1.verdict ?? .good, -($1.rank?.goodness ?? 50)) }
         if let worst, let m = weak {
-            parts.append("最需要改善的是\(worst.ability.title)：\(m.title) \(m.valueText)")
+            parts.append("最该改善的是\(worst.ability.title)（\(m.title) \(m.valueText)）")
         }
         let flagged = cards.filter { ($0.verdict ?? .good) >= .attention }.count
         if flagged >= 2 { parts.append("4 项能力里有 \(flagged) 项需要关注") }
-        parts.append("建议先做「\(pack.title)」" + (weak == nil ? "（\(recommendation.recommended.reason)）" : ""))
-        return parts.joined(separator: "；") + "。"
+        // The recommended pack has its own card right below; named here only when no weakness explains it.
+        if weak == nil { parts.append("建议先做「\(pack.title)」（\(recommendation.recommended.reason)）") }
+        return parts.joined(separator: "，") + "。"
     }
 }
 

@@ -239,8 +239,8 @@ struct AbnormalRecallCard: View {
                 VStack(alignment: .leading, spacing: Theme.Space.block) {
                     StatusLabel(text: "\(TodayModuleCard.when(r.time)) \(a.title) \(a.valueText)", icon: "exclamationmark.circle.fill",
                                 color: a.severe ? .red : .orange)
-                        .font(Theme.TypeScale.title)
-                    Text(a.firstLine ?? "回想一下之前发生了什么，记下来，下次更容易找到规律。")
+                        .font(Theme.TypeScale.headline)
+                    Text(a.firstLine ?? "之前发生了什么？记下来，下次更容易找到规律。")
                         .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: Theme.Space.item) {
                         Button("记下可能的原因") { noting = r }.buttonStyle(.bordered)
@@ -343,8 +343,8 @@ struct GlucoseHourChart: View {
             RuleMark(x: .value("现在", forecast.from)).foregroundStyle(Color.secondary.opacity(0.4)).lineStyle(StrokeStyle(lineWidth: 1))
         }.pulseChartYAxis()
         .chartYScale(domain: max(2, (values.min() ?? 4) - 0.5)...((values.max() ?? 10) + 0.5))
-        .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 1)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()).font(Theme.TypeScale.body) } }
-        .chartYAxis { AxisMarks(position: .trailing, values: [low, high]) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
+        .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 1)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()).font(Theme.TypeScale.caption) } }
+        .chartYAxis { AxisMarks(position: .trailing, values: [low, high]) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.caption) } }
         .frame(height: 110)
         .accessibilityLabel("最近 3 小时血糖和未来 1 小时的推算范围")
         .accessibilityValue("1 小时后约 \(forecast.end.low.oneDecimal) 到 \(forecast.end.high.oneDecimal) 毫摩尔每升")

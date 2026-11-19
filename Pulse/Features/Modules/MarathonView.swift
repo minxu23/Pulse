@@ -39,7 +39,7 @@ struct MarathonView: View {
                 } else {
                     noGoalCard(p)
                 }
-                PageFootnote("专项计划是通用框架。有教练或运动医学专业人员时，以其评估和安排为准；有心血管疾病或其他健康问题时，先获得医生评估。")
+                PageFootnote("有教练的话，以教练的安排为准；有心血管病等健康问题，先请医生评估。")
             }
             .navigationTitle("专项运动").calmStyle()
             .navigationBarTitleDisplayMode(.inline)
@@ -66,7 +66,7 @@ struct MarathonView: View {
                 HeroIcon(icon: "flag.checkered", color: Theme.activity)
                 VStack(alignment: .leading, spacing: Theme.Space.tight) {
                     Text("设定一个赛事目标").font(Theme.TypeScale.title.weight(.semibold))
-                    Text("填写比赛日期、目标成绩和当前跑量，Pulse 会评估可行性并分阶段安排训练。")
+                    Text("填好比赛日期、目标成绩和现在的跑量，Pulse 分阶段安排训练。")
                         .font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             }
@@ -163,7 +163,7 @@ struct MarathonView: View {
             rhrCard
         }
         // Said once under the grid, so the first card is not taller than its neighbours.
-        Text("负荷比 = 近 7 天 ÷ 近 4 周平均，适宜 0.8–1.3。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+        Text("负荷比 = 近 7 天 ÷ 近 4 周平均，0.8–1.3 合适").font(Theme.TypeScale.caption).foregroundStyle(.secondary)
         VStack(alignment: .leading, spacing: Theme.Space.block) {
             CardTitle("近 8 周跑量")
             Chart {
@@ -173,13 +173,13 @@ struct MarathonView: View {
                 }
                 RuleMark(y: .value("本周目标", week.weeklyKm))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray)
-                    .annotation(position: .top, alignment: .leading) { Text("本周目标 \(Int(week.weeklyKm))").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
+                    .annotation(position: .top, alignment: .leading) { Text("本周目标 \(Int(week.weeklyKm))").font(Theme.TypeScale.caption).foregroundStyle(.secondary) }
             }.pulseChartYAxis()
-            .chartXAxis { AxisMarks(values: .stride(by: .weekOfYear, count: 2)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy).font(Theme.TypeScale.body) } }
+            .chartXAxis { AxisMarks(values: .stride(by: .weekOfYear, count: 2)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day(), collisionResolution: .greedy).font(Theme.TypeScale.caption) } }
             .frame(height: 140)
             .accessibilityLabel("近 8 周每周跑量")
             StatusLabel(load.zone == .high || load.zone == .caution ? .attention(load.message) : .neutral(load.message)).font(Theme.TypeScale.body)
-            Text("每周跑量增长控制在约 10% 以内，每 3–4 周安排一次减量周。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+            Text("每周跑量最多加 10%，每 3–4 周减量一周。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
         .cardSurface()
     }
@@ -238,9 +238,9 @@ struct MarathonView: View {
             Stepper("每小时碳水 \(p.fuelCarbsPerHour) g", value: Bindable(p).fuelCarbsPerHour, in: 20...100, step: 5)
                 .font(Theme.TypeScale.body)
             MetricRow {
-                fuelFact("碳水", "\(plan.carbs)", "g", "bolt.fill")
-                fuelFact("能胶约", plan.carbs > 0 ? "\(gels)" : "0", "支", "takeoutbag.and.cup.and.straw.fill")
-                fuelFact("饮水", plan.fluidHigh > 0 ? fluid.0 : "按口渴", plan.fluidHigh > 0 ? fluid.1 : "", "drop.fill")
+                fuelFact("碳水", "\(plan.carbs)", "g")
+                fuelFact("能胶约", plan.carbs > 0 ? "\(gels)" : "0", "支")
+                fuelFact("饮水", plan.fluidHigh > 0 ? fluid.0 : "按口渴", plan.fluidHigh > 0 ? fluid.1 : "")
             }
             Text(plan.note).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if !longRuns.isEmpty {
@@ -255,14 +255,14 @@ struct MarathonView: View {
                     }
                     .frame(minHeight: 32)
                 }
-                Text("在「记录运动」中填写补给量，比赛日只使用训练中试过的补给。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                Text("补给量在「记录运动」里填；比赛日只用训练中试过的补给。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
         .cardSurface()
     }
 
-    private func fuelFact(_ label: String, _ value: String, _ unit: String, _ icon: String) -> some View {
-        MetricTile(label: label, value: value, unit: unit, icon: icon)
+    private func fuelFact(_ label: String, _ value: String, _ unit: String) -> some View {
+        MetricTile(label: label, value: value, unit: unit)
             .accessibilityElement(children: .combine)
     }
 
@@ -283,24 +283,27 @@ struct MarathonView: View {
                 Chart {
                     RuleMark(y: .value("4 mmol/L", 4.0))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Color.gray)
-                        .annotation(position: .top, alignment: .leading) { Text("4 mmol/L").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
+                        .annotation(position: .top, alignment: .leading) { Text("4 mmol/L").font(Theme.TypeScale.caption).foregroundStyle(.secondary) }
                     ForEach(Array(stages.enumerated()), id: \.offset) { _, s in
                         LineMark(x: .value("心率", s.hr ?? 0), y: .value("乳酸", s.lactate)).foregroundStyle(Theme.activity)
                         PointMark(x: .value("心率", s.hr ?? 0), y: .value("乳酸", s.lactate)).foregroundStyle(Theme.activity)
                     }
-                }.pulseChartAxes()
+                }
+                // Heart rate on the x axis: the shared axes would read these numbers as dates.
+                .chartXAxis { AxisMarks(values: .automatic(desiredCount: 4)) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.caption) } }
+                .pulseChartYAxis()
                 .chartXScale(domain: ((stages.compactMap(\.hr).min() ?? 120) - 5)...((stages.compactMap(\.hr).max() ?? 170) + 8))
                 .chartYScale(domain: 0...max(5, (stages.map(\.lactate).max() ?? 4) + 0.5))
                 .chartXAxisLabel("心率 bpm")
                 .frame(height: 150)
                 .accessibilityLabel("乳酸随心率变化曲线")
             } else if stages.isEmpty {
-                EmptyLine("暂无测试记录。测试需在专业人员指导下进行。")
+                EmptyLine("还没有测试记录。测试要在专业人员指导下做。")
             }
             if let r = result {
                 MetricRow {
-                    fuelFact("有氧阈 LT1", r.lt1HR.map { "\(Int($0))" } ?? "—", "bpm", "1.circle")
-                    fuelFact("乳酸阈 LT2", r.lt2HR.map { "\(Int($0))" } ?? "—", "bpm", "2.circle")
+                    fuelFact("有氧阈 LT1", r.lt1HR.map { "\(Int($0))" } ?? "—", "bpm")
+                    fuelFact("乳酸阈 LT2", r.lt2HR.map { "\(Int($0))" } ?? "—", "bpm")
                 }
                 ForEach(r.notes, id: \.self) { Text($0).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
                 if let lt2 = r.lt2HR, p.thresholdHR != Int(lt2.rounded()) {
@@ -309,14 +312,14 @@ struct MarathonView: View {
                         DataHub.regenerateWeekPlan(in: ctx)
                     } label: { Label("采用 \(Int(lt2.rounded())) bpm 作为阈值心率", systemImage: "checkmark.circle") }
                         .buttonStyle(.bordered)
-                    Text("请先与测试人员确认。采用后，心率区间与计划强度以测得的阈值为参照。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                    Text("先和测试人员确认；采用后，心率区间和训练强度按实测阈值来。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             }
             Stepper("阈值心率 \(p.thresholdHR.map { "\($0) bpm" } ?? "未设定")",
                     onIncrement: { p.thresholdHR = (p.thresholdHR ?? 155) + 1 },
                     onDecrement: { p.thresholdHR = max(100, (p.thresholdHR ?? 155) - 1) })
                 .font(Theme.TypeScale.body)
-            Text("测试条件尽量一致：相同时段、饮食与热身，前一天避免高强度训练。单次数值受测试方案影响，请与专业人员一起解读。")
+            Text("每次测试的时段、饮食和热身尽量相同，前一天不做高强度训练。")
                 .font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
         .cardSurface()
@@ -357,7 +360,7 @@ struct RaceHeroCard: View {
             if !profile.hasModule(.marathon) {
                 Button(action: onEnable) { Label("开启专项计划", systemImage: "flag.checkered").frame(maxWidth: .infinity) }
                     .buttonStyle(.borderedProminent).controlSize(.large)
-                Text("开启后，每周计划将按阶段安排长距离、强度课与力量训练。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                Text("开启后，每周按阶段安排长距离、强度课和力量训练。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
         }
         .cardSurface()
@@ -520,7 +523,7 @@ struct RaceGoalSheet: View {
                     Stepper("当前周跑量 \(Int(profile.currentWeeklyKm)) km", value: $profile.currentWeeklyKm, in: 0...150, step: 2)
                     Stepper("近期最长跑 \(Int(profile.longestRecentRunKm)) km", value: $profile.longestRecentRunKm, in: 0...42, step: 1)
                 } header: { Text("当前基础") } footer: {
-                    Text("计划会从当前跑量出发，每周增长不超过约 10%，并定期安排减量周。")
+                    Text("从现在的跑量出发，每周最多加 10%，定期减量。")
                 }
             }
             .navigationTitle("赛事目标")

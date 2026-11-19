@@ -187,7 +187,7 @@ enum AgentDestination: String, Equatable {
         case .glucose: "血糖管理"
         case .cardio: "心血管健康"
         case .marathon: "专项运动"
-        case .events: "异常与跟进"
+        case .events: "异常跟进"
         }
     }
     var icon: String {
@@ -1497,7 +1497,7 @@ enum HealthAgent {
         return AgentReply(text: lines(["有 \(c.openEvents.count) 项待处理的提醒：",
                                        bullets(c.openEvents.prefix(4).map { "\($0.title)（\($0.severity.label)）：\($0.guidance)" }),
                                        "处理后请在「异常跟进」中记录结果，例如复测数值或就医情况。"]),
-                          sources: ["异常与跟进"], followUps: ["我需要去看医生吗？"], destination: .events)
+                          sources: ["异常跟进"], followUps: ["我需要去看医生吗？"], destination: .events)
     }
 
     /// 化验结果: the latest value of each test, how it reads, and how eGFR is moving.

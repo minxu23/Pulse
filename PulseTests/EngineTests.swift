@@ -1782,7 +1782,7 @@ struct NextHourForecastTests {
         // Damped: an hour does not carry the whole 0.07/min fall.
         #expect(5.6 - f.end.mid < 0.07 * 60)
         #expect(f.message.contains("低于") && !f.message.contains("胰岛素"))
-        #expect(NextHourForecaster.caveat.contains("不能用来计算胰岛素"))
+        #expect(NextHourForecaster.caveat.contains("不能据此计算胰岛素"))
     }
 
     @Test func steadyOrStaleGlucoseIsQuiet() {

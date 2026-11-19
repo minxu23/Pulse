@@ -142,8 +142,8 @@ struct GlucoseProfileView: View {
                 RuleMark(y: .value("饭前", 0)).foregroundStyle(Color.secondary.opacity(0.4))
             }.pulseChartYAxis()
             .chartForegroundStyleScale(domain: p.meals.map(\.kind.label), range: p.meals.map { colors[$0.kind] ?? .gray })
-            .chartXAxis { AxisMarks(values: [0, 60, 120, 180]) { v in AxisGridLine(); AxisValueLabel { Text("\(v.as(Int.self) ?? 0) 分") }.font(Theme.TypeScale.body) } }
-            .chartYAxis { AxisMarks(position: .trailing) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
+            .chartXAxis { AxisMarks(values: [0, 60, 120, 180]) { v in AxisGridLine(); AxisValueLabel { Text("\(v.as(Int.self) ?? 0) 分") }.font(Theme.TypeScale.caption) } }
+            .chartYAxis { AxisMarks(position: .trailing) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.caption) } }
             .frame(height: 150)
             .accessibilityLabel("各餐饭后 3 小时的平均血糖升高曲线")
             ForEach(p.meals) { m in
@@ -190,8 +190,8 @@ struct GlucoseProfileView: View {
                             .foregroundStyle(Theme.glucose).lineStyle(StrokeStyle(lineWidth: 2, dash: [4, 3])).interpolationMethod(.monotone)
                     }
                 }.pulseChartYAxis()
-                .chartXAxis { AxisMarks(values: [0, 60, 120, 180]) { v in AxisGridLine(); AxisValueLabel { Text("\(v.as(Int.self) ?? 0) 分") }.font(Theme.TypeScale.body) } }
-                .chartYAxis { AxisMarks(position: .trailing) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
+                .chartXAxis { AxisMarks(values: [0, 60, 120, 180]) { v in AxisGridLine(); AxisValueLabel { Text("\(v.as(Int.self) ?? 0) 分") }.font(Theme.TypeScale.caption) } }
+                .chartYAxis { AxisMarks(position: .trailing) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.caption) } }
                 .chartYScale(domain: max(2, (pr.points.map(\.low).min() ?? 4) - 1)...max(line + 1, (pr.points.map(\.high).max() ?? 10) + 0.5))
                 .frame(height: 140)
                 .accessibilityLabel("\(kind.label)饭后 3 小时血糖预测")
@@ -222,7 +222,7 @@ struct GlucoseProfileEntry: View {
                 HStack(spacing: Theme.Space.block) {
                     IconTile(icon: "chart.xyaxis.line", color: Theme.glucose)
                     VStack(alignment: .leading, spacing: Theme.Space.hairline) {
-                        Text("血糖代谢画像").font(Theme.TypeScale.title)
+                        Text("血糖代谢画像").font(Theme.TypeScale.headline)
                         StatusLabel(text: p.title, icon: p.level.glyph.icon, color: p.level.glyph.color, secondaryText: true)
                             .font(Theme.TypeScale.body).lineLimit(2)
                     }

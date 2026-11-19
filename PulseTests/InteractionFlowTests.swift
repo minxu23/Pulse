@@ -116,9 +116,9 @@ struct InteractionFlowTests {
         #expect(scope.label.contains("复盘"))
     }
 
-    @Test func clinicPressureFootnotesNameTheSystolicTargetAndMeasurementDate() {
+    @Test func pressureFootnotesFitHalfTheCard() {
         let r = TargetReading(target: .clinicBP, value: 140, value2: 85, count: 2, latest: Date().adding(days: -2))
         let text = TargetTracker.footnote(r, goal: TargetGoal(target: r.target, baseline: 145, goal: 135), now: Date())
-        #expect(text.contains("基线收缩压 145") && text.contains("目标 ≤ 135") && text.contains("最近"))
+        #expect(text == "基线 145 · 目标 ≤135")
     }
 }

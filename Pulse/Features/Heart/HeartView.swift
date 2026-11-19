@@ -88,18 +88,19 @@ struct RHRTrendView: View {
                 VStack(alignment: dynamicTypeSize.isAccessibilitySize ? .leading : .trailing, spacing: Theme.Space.item) {
                     statusChip(t)
                     if let c = t.changeFromBaseline {
-                        StatusLabel(text: "较基线 \(c.signedText) bpm", icon: c <= -1 ? "arrow.down.circle.fill" : (c >= 2 ? "arrow.up.circle.fill" : "equal.circle.fill"),
+                        let r = Int(abs(c).rounded())
+                        StatusLabel(text: r == 0 ? "与基线持平" : "比基线\(c < 0 ? "低" : "高") \(r) bpm", icon: c <= -1 ? "arrow.down.circle.fill" : (c >= 2 ? "arrow.up.circle.fill" : "equal.circle.fill"),
                                     color: c <= -1 ? .green : (c >= 2 ? .orange : .gray), secondaryText: true).font(Theme.TypeScale.body)
                     }
                 }
             }
-            Text(t.headline).font(Theme.TypeScale.title).fixedSize(horizontal: false, vertical: true)
+            Text(t.headline).font(Theme.TypeScale.headline).fixedSize(horizontal: false, vertical: true)
             MetricRow {
-                MetricTile(label: "7 日均值", value: t.avg7.map { $0.noDecimal } ?? "—", unit: "bpm", icon: "7.circle", color: Theme.heartData,
+                MetricTile(label: "7 日均值", value: t.avg7.map { $0.noDecimal } ?? "—", unit: "bpm",
                            footnote: "\(t.coverage7)/7 天")
-                MetricTile(label: "4 周均值", value: t.avg28.map { $0.noDecimal } ?? "—", unit: "bpm", icon: "calendar", color: Theme.heartData,
+                MetricTile(label: "4 周均值", value: t.avg28.map { $0.noDecimal } ?? "—", unit: "bpm",
                            footnote: "\(t.coverage28)/28 天")
-                MetricTile(label: "个人基线", value: t.baseline.map { $0.noDecimal } ?? "—", unit: "bpm", icon: "flag", color: .secondary,
+                MetricTile(label: "个人基线", value: t.baseline.map { $0.noDecimal } ?? "—", unit: "bpm",
                            footnote: "波动 ±\(t.personalSD.noDecimal)")
             }
         }
@@ -127,7 +128,7 @@ struct RHRTrendView: View {
         let lo = (values.min() ?? 50) - 3, hi = (values.max() ?? 80) + 3
         let sel = selected.flatMap { s in pts.first { $0.day.isSameDay(s) } }
         return Card {
-            CardHeader(title: "趋势", subtitle: "点：每日数值 · 线：7 日均值 · 带：日常波动范围", icon: "chart.xyaxis.line", color: Theme.heartData)
+            CardHeader(title: "趋势", icon: "chart.xyaxis.line", color: Theme.heartData)
             Picker("范围", selection: $range) {
                 Text("30 天").tag(30); Text("90 天").tag(90); Text("180 天").tag(180); Text("1 年").tag(365)
             }
@@ -146,7 +147,7 @@ struct RHRTrendView: View {
                             .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                             .foregroundStyle(Color.gray)
                             .annotation(position: .top, alignment: .leading) {
-                                Text("基线 \(b.noDecimal)").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                                Text("基线 \(b.noDecimal)").font(Theme.TypeScale.caption).foregroundStyle(.secondary)
                             }
                     }
                     ForEach(excluded) { p in
@@ -183,9 +184,8 @@ struct RHRTrendView: View {
                 .chartYScale(domain: lo...hi)
                 .chartXSelection(value: $selected)
                 .frame(height: 220)
-                if !excluded.isEmpty {
-                    Text("空心灰点为其他测量方式的数值（\(excluded.count) 个），不参与趋势计算。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
-                }
+                Text("点为每天的数值，线为 7 日均值，浅色带为日常波动范围" + (excluded.isEmpty ? "" : "；空心灰点来自其他测量方式，不计入趋势"))
+                    .font(Theme.TypeScale.caption).foregroundStyle(.secondary)
                 if let s = sel, let d = a.day(s.day) {
                     let tags = d.tags.union(a.day(s.day.adding(days: -1))?.tags.filter(\.actsOnNextMorning) ?? [])
                     if !tags.isEmpty {
@@ -200,14 +200,14 @@ struct RHRTrendView: View {
 
     private func interpretationCard(_ t: RHRTrend) -> some View {
         Card {
-            CardHeader(title: "解读", subtitle: "区分单次波动、持续变化与长期趋势", icon: "text.magnifyingglass")
+            CardHeader(title: "解读", icon: "text.magnifyingglass")
             ForEach(t.interpretation, id: \.self) { BulletText(text: $0) }
         }
     }
 
     private func contextCard(_ t: RHRTrend) -> some View {
         Card {
-            CardHeader(title: "偏高的日子与可能背景", subtitle: "近 3 周高于 4 周均值的早晨", icon: "list.bullet.rectangle", color: .orange)
+            CardHeader(title: "偏高的日子", subtitle: "近 3 周比 4 周均值高的早晨", icon: "list.bullet.rectangle", color: .orange)
             ForEach(t.elevatedDays.prefix(6)) { d in
                 VStack(alignment: .leading, spacing: Theme.Space.item) {
                     AdaptiveRow {
@@ -230,18 +230,19 @@ struct RHRTrendView: View {
                 }
                 if d.id != t.elevatedDays.prefix(6).last?.id { Divider() }
             }
-            Text("这些是同时出现的情况，不一定是原因。持续记录后，可在「复盘」中查看哪些因素与你的心率变化关联更稳定。")
+            Text("同一天出现不等于原因；哪些因素真的相关，看「复盘 › 长期」。")
                 .font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
     }
 
+    /// Only when something limits the reading; data in good shape needs no card.
+    @ViewBuilder
     private func limitationsCard(_ t: RHRTrend) -> some View {
-        Card {
-            CardHeader(title: "判断的局限", subtitle: t.limitations.isEmpty ? "当前数据条件良好" : "以下情况会影响解读", icon: "exclamationmark.circle", color: .gray)
-            if t.limitations.isEmpty {
-                Text("近期数据充足，测量方式一致，未记录到影响可比性的用药或生病。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+        if !t.limitations.isEmpty {
+            Card {
+                CardHeader(title: "会影响判断的情况", icon: "exclamationmark.circle", color: .gray)
+                ForEach(t.limitations, id: \.self) { Callout(kind: .limitation, text: $0) }
             }
-            ForEach(t.limitations, id: \.self) { Callout(kind: .limitation, text: $0) }
         }
     }
 
@@ -250,7 +251,7 @@ struct RHRTrendView: View {
         let pts = a.days.filter { $0.day >= Date.app.adding(days: -range) }.compactMap { d in d.hrv.map { (d.day, $0) } }
         if pts.count >= 5 {
             Card {
-                CardHeader(title: "心率变异性（HRV）", subtitle: "通常与静息心率反向变化，较高代表恢复较好（个体差异大）", icon: "waveform.path.ecg", color: Theme.heartData)
+                CardHeader(title: "心率变异性（HRV）", subtitle: "通常越高恢复越好，因人而异", icon: "waveform.path.ecg", color: Theme.heartData)
                 Chart {
                     ForEach(pts, id: \.0) { p in
                         BarMark(x: .value("日期", p.0, unit: .day), y: .value("ms", p.1))
@@ -265,10 +266,10 @@ struct RHRTrendView: View {
     private var guideCard: some View {
         Card {
             CardHeader(title: "让数据可比较", icon: "ruler", color: .secondary)
-            BulletText(text: "固定一种来源：手表夜间数据，或每天醒后静躺 1 分钟手动测量。")
-            BulletText(text: "佩戴松紧适中，睡前确认手表电量。")
-            BulletText(text: "生病、饮酒、熬夜、时差、经期、开始或停用药物时，在「状况」中记一笔，解读会更准确。")
-            BulletText(text: "成人静息心率通常在 60–100 bpm，规律训练者可能更低。静息心率受运动水平、压力、药物等多种因素影响，评估进展时需要结合个人背景（American Heart Association）。")
+            BulletText(text: "只用一种来源：手表夜间数据，或每天醒后静躺 1 分钟手动测。")
+            BulletText(text: "手表松紧适中，睡前看一眼电量。")
+            BulletText(text: "生病、饮酒、熬夜、倒时差、经期或换药时，在「状况」里记一笔。")
+            BulletText(text: "成人静息心率通常在 60–100 bpm，规律运动的人可能更低。")
         }
     }
 }

@@ -628,9 +628,9 @@ enum ProModule: String, Codable, CaseIterable, Identifiable {
     }
     var subtitle: String {
         switch self {
-        case .marathon: "全马等明确目标：评估、计划、补给与复盘"
-        case .cardioCare: "按专业照护要求协调指标、症状、用药与随访"
-        case .diabetesCare: "血糖、饮食、运动、补给与 CGM 数据关联管理"
+        case .marathon: "为一场比赛备赛：计划、补给与配速"
+        case .cardioCare: "高血压、冠心病：血压、症状、用药与复查"
+        case .diabetesCare: "糖尿病或用 CGM：血糖和饮食、运动一起看"
         }
     }
     var icon: String {

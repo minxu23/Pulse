@@ -61,7 +61,7 @@ struct ProgramDetailScreen: View {
                 if r.series.count >= 2 { chart(r, goal: goal) }
                 Text(Self.countLine(r)).font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 if target.isBloodPressure {
-                    Text("当前值同时显示收缩压和舒张压；本轮按收缩压目标评价。图表展示每日收缩压均值。" + (target == .homeBP ? "主数值为最近七天均值。" : "主数值为最近一次读数；第 4 周结束时用最后两周读数的平均和基线比，每周都要有读数。"))
+                    Text("本轮按收缩压评价，图表是每天收缩压的平均。" + (target == .homeBP ? "" : "大数字是最近一次读数；第 4 周结束时用最后两周的平均和基线比，所以每周都要有读数。"))
                         .foregroundStyle(.secondary)
                 }
                 Text(target.howToMeasure).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -76,7 +76,7 @@ struct ProgramDetailScreen: View {
             Card {
                 CardTitle("本周")
                 if week == 0 {
-                    Text("本轮尚未开始。以下步数为日常记录，不计入本轮完成率。").foregroundStyle(.secondary)
+                    Text("这一轮还没开始，下面的步数不计入完成率。").foregroundStyle(.secondary)
                 } else {
                     FactRow(label: "训练", value: "完成 \(done) / \(thisWeek.count) 次")
                     // 睡眠改善: this week's times, the ones the weekly check counts against.
@@ -87,19 +87,19 @@ struct ProgramDetailScreen: View {
                     }
                 }
                 if let steps { FactRow(label: "日均步数", value: "\(Int(steps.rounded())) 步 · 目标 \(p.stepsTarget)") }
-                Text("每周日在「复盘」里看这周做得怎么样，下周的计划会按完成情况调整。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                Text("每周日在「复盘」看这一周，下周计划按完成情况调整。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
 
             Card {
                 NavigationLink("更换改善方案") { ProgramReportScreen() }.buttonStyle(.bordered)
-                Text("更换后开始新的一轮，用最近 14 天的数据重新定起点；基线报告保持不变。").foregroundStyle(.secondary)
+                Text("换方案会开始新的一轮，起点按最近 14 天重新算。").foregroundStyle(.secondary)
                 NavigationLink { ProgramReportScreen() } label: {
-                    NavRowLabel(icon: "doc.text", title: "基线报告", detail: "这一轮开始时的健康画像和原因分析")
+                    NavRowLabel(icon: "doc.text", title: "基线报告", detail: "这一轮开始时的健康画像")
                 }
                 .buttonStyle(.plain)
             }
             PageFootnote(pack == .event ? "每 4 周复盘一次训练阶段，比赛结束后进入总结期。"
-                         : "第 \(p.programRoundWeeks) 周结束时看主靶点有没有达到目标：达到了进入总结期，没达到会分析原因，调整后再来一轮。")
+                         : "第 \(p.programRoundWeeks) 周结束时看有没有达到目标：达到了进入总结期，没达到就调整后再来一轮。")
         }
         .navigationTitle("我的方案")
         .navigationBarTitleDisplayMode(.inline)
@@ -139,7 +139,7 @@ struct ProgramDetailScreen: View {
 
     /// A chart label on the card's own colour, so a line running through it passes behind the words.
     static func label(_ text: String, _ style: HierarchicalShapeStyle = .primary) -> some View {
-        Text(text).font(Theme.TypeScale.body).foregroundStyle(style)
+        Text(text).font(Theme.TypeScale.caption).foregroundStyle(style)
             .padding(.horizontal, 2).background(Theme.card, in: .rect(cornerRadius: 2))
     }
 
@@ -147,29 +147,29 @@ struct ProgramDetailScreen: View {
     static func countLine(_ r: TargetReading) -> String {
         switch r.target {
         case .weeklyRunKm:
-            return "本周跑步 \(r.count) 次 · 最近一次：" + (r.latest?.formatted(date: .abbreviated, time: .shortened) ?? "暂无")
+            return "本周跑了 \(r.count) 次"
         case .sleepDuration, .sleepRegularity:
             // A night is stored under the morning it ends on; people name it by the evening before.
-            return "近 7 晚有 \(r.count) 晚的记录 · 最近一晚：" + (r.latest.map { $0.adding(days: -1).formatted(.dateTime.month().day()) + "夜里" } ?? "暂无")
+            return "近 7 晚记录了 \(r.count) 晚"
         default:
-            return "读数 \(r.count) 条 · 最近记录：" + (r.latest?.formatted(date: .abbreviated, time: .shortened) ?? "暂无")
+            return "\(r.count) 条读数" + (r.latest.map { "，最近 " + $0.formatted(.dateTime.month().day()) } ?? "")
         }
     }
 
     /// Why this goal: what four weeks can change, and how much the number wobbles on its own.
     static func why(_ t: TargetMetric) -> String {
         switch t {
-        case .vo2max: "训练后最大摄氧量通常 3 周左右开始上升。手表每次的估算会上下浮动 1–2，所以看近两周几次估算的平均。"
-        case .restingHR: "规律有氧通常能让静息心率降 3–6 次/分，起点越高降得越多。每天会上下浮动约 3 次，所以看 7 天平均。"
-        case .homeBP: "坚持有氧和静力练习，家庭血压通常几周内就会下降；降 5 mmHg 就有临床意义。一周平均会自然浮动几毫米汞柱，所以看整周平均。"
+        case .vo2max: "最大摄氧量通常练 3 周左右开始上升；手表每次估算会浮动 1–2，所以看近两周的平均。"
+        case .restingHR: "规律有氧通常能让静息心率降 3–6，起点越高降得越多；每天会浮动约 3，所以看 7 天平均。"
+        case .homeBP: "坚持有氧和静力练习，家庭血压通常几周内会降，降 5 就有意义；每周会自然浮动几个数，所以看整周平均。"
         case .clinicBP: "单次读数可能差 10 毫米汞柱以上，读数越多越准。"
-        case .weight: "每周减 0.5–1 公斤比较稳妥。体重每天会因为喝水和饮食浮动 1 公斤左右，所以看 7 天平均。"
+        case .weight: "每周减 0.5–1 公斤比较稳妥；体重每天会浮动 1 公斤左右，所以看 7 天平均。"
         case .cgmTIR: "达标时间每提高 10 个百分点，糖化血红蛋白大约降 0.5–0.8%。"
         case .postMealGlucose: "健康成人大多数时间都在 7.8 以下。饭后走一走、晚饭别太晚，通常很快就能看到变化。"
         case .fastingGlucose: "空腹血糖每天会有波动，看一周的平均。"
-        case .weeklyRunKm: "每周完成计划跑量的 90% 以上就算做到。加长距离时，单次最长的一跑不超过过去 30 天最长那次的 110%，这比「每周加 10%」更能预测受伤；赛前两周减量 41–60%，强度和频率不变。"
-        case .sleepDuration: "起床时间固定、上床时间一点点提前，几周里每晚多睡二三十分钟比较常见。每晚睡多久本身就会差上一个小时，所以看 7 晚的平均，变化超过 45 分钟才算超出平时的波动；第 4 周结束时看最后两周的平均。"
-        case .sleepRegularity: "入睡时间每天差得越多，心血管风险越高，差到 1.5 小时以上时风险约翻倍。只用几晚算出的波动本身也不太准，所以看整周。"
+        case .weeklyRunKm: "完成计划跑量的 90% 以上就算做到。单次最长的一跑不超过过去 30 天最长那次的 110%；赛前两周减量，强度不变。"
+        case .sleepDuration: "起床时间固定、上床一点点提前，几周里每晚多睡二三十分钟很常见。每晚时长本身会差一小时，所以看 7 晚平均；第 4 周结束时看最后两周。"
+        case .sleepRegularity: "入睡时间每天差得越多，心血管风险越高；几晚算出的波动不准，所以看整周。"
         }
     }
 }

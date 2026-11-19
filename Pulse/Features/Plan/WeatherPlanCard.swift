@@ -155,7 +155,7 @@ struct WeatherPlanCard: View {
                         .accessibilityElement(children: .combine)
                     }
                 }
-                Text("小圆点：有户外训练的日子；橙色为天气可能有影响。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                Text("圆点为户外训练日，橙色表示天气有影响").font(Theme.TypeScale.caption).foregroundStyle(.secondary)
                 if let p = proposal {
                     Divider()
                     PlanProposalCard(proposal: p)
@@ -168,7 +168,7 @@ struct WeatherPlanCard: View {
                             .font(Theme.TypeScale.body)
                     }
                 } else {
-                    Text("这周的户外训练日天气都合适，计划不用调整。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
+                    Text("这周户外训练日的天气都合适。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
                 }
             }
         }

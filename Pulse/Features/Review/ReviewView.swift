@@ -31,7 +31,7 @@ struct ReviewView: View {
                     case .week: WeeklyReviewSection(context: ctx, onAsk: ask, shownWeek: $reviewWeek)
                     case .longTerm: LongTermReviewSection(context: ctx, onAsk: ask)
                     }
-                    Disclaimer(text: AgentNameSettings.shared.phrase("复盘中的关联来自你的记录，可能受其他因素影响；只有经过个人验证或专业确认的才标记为「已确认」。", "不做诊断。"))
+                    Disclaimer(text: "关联来自你的记录，可能有别的原因；验证过的才标「已确认」。复盘不做诊断。")
                 }
             }
             .safeAreaInset(edge: .top, spacing: 0) {
@@ -156,7 +156,7 @@ struct ReviewSummaryCard: View {
                         Image(systemName: glyph.icon).font(Theme.TypeScale.title.weight(.semibold)).imageScale(.small)
                             .foregroundStyle(glyph.color).accessibilityHidden(true)
                     }
-                    Text(headline).font(Theme.TypeScale.title.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+                    Text(headline).font(Theme.TypeScale.headline).fixedSize(horizontal: false, vertical: true)
                 }
                 if !summary.isEmpty {
                     Text(summary).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -437,7 +437,7 @@ struct WeekSwitcher: View {
             .accessibilityLabel("上一周")
             Spacer(minLength: Theme.Space.item)
             VStack(spacing: Theme.Space.hairline) {
-                Text(title).font(Theme.TypeScale.title)
+                Text(title).font(Theme.TypeScale.headline)
                 Text(subtitle).font(Theme.TypeScale.body).foregroundStyle(.secondary)
             }
             .accessibilityElement(children: .combine)
@@ -803,7 +803,7 @@ struct GuidedReflectionCard: View {
     @ViewBuilder private func question(_ step: ReflectionStep) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.tight) {
             HStack(alignment: .firstTextBaseline) {
-                Text(step.question).font(Theme.TypeScale.title)
+                Text(step.question).font(Theme.TypeScale.headline)
                 Spacer(minLength: Theme.Space.item)
                 Text("\(index + 1)/\(steps.count)").font(Theme.TypeScale.body).foregroundStyle(.secondary).monospacedDigit()
                     .accessibilityLabel("第 \(index + 1) 题，共 \(steps.count) 题")
@@ -861,7 +861,7 @@ struct GuidedReflectionCard: View {
     @ViewBuilder private var summary: some View {
         let draft = ReviewCoach.draft(brief: brief, answers: collected, note: note)
         VStack(alignment: .leading, spacing: Theme.Space.tight) {
-            Text("这周的复盘").font(Theme.TypeScale.title)
+            Text("这周的复盘").font(Theme.TypeScale.headline)
             Text("保存后，下周计划会参考你的回答。").font(Theme.TypeScale.body).foregroundStyle(.secondary)
         }
         ReviewNotesView(summary: draft.summary, keep: draft.keep, change: draft.change, focus: draft.focus)
@@ -1026,7 +1026,7 @@ struct PastReviewsCard: View {
             CardTitle("过往复盘")
             ForEach(entries) { e in
                 VStack(alignment: .leading, spacing: Theme.Space.tight) {
-                    Text("\(e.periodStart.formatted(.dateTime.month().day())) 那周").font(Theme.TypeScale.body.weight(.semibold))
+                    Text("\(e.periodStart.formatted(.dateTime.month().day()))那周").font(Theme.TypeScale.body.weight(.semibold))
                     if !e.summary.isEmpty { Text(e.summary).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
                     if !e.nextFocus.isEmpty { Text("重点：\(e.nextFocus)").font(Theme.TypeScale.body).foregroundStyle(.secondary) }
                 }
@@ -1293,7 +1293,7 @@ struct WeeklyRHRCard: View {
                     }
                 }.pulseChartAxes()
                 .chartYScale(domain: ((weeks.map(\.1).min() ?? 60) - 3)...((weeks.map(\.1).max() ?? 75) + 3))
-                .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.body) } }
+                .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { AxisGridLine(); AxisTick(); AxisValueLabel().font(Theme.TypeScale.caption) } }
                 .frame(height: 150)
                 .accessibilityLabel("近 20 周静息心率周均值")
                 Text("虚线为个人基线").font(Theme.TypeScale.body).foregroundStyle(.secondary)
@@ -1318,8 +1318,12 @@ struct HabitsAdherenceCard: View {
                         }
                     }
                     ProgressBar(value: h.rate ?? 0, color: Theme.habit(h.verdict), height: 6).accessibilityHidden(true)
-                    StatusLabel(text: "\(h.verdict.label) · \(h.detail)", icon: verdictIcon(h.verdict), color: Theme.habit(h.verdict), secondaryText: true)
-                        .font(Theme.TypeScale.body)
+                    Label {
+                        PartsText([h.verdict.label, h.detail]).foregroundStyle(.secondary)
+                    } icon: {
+                        Image(systemName: verdictIcon(h.verdict)).foregroundStyle(Theme.habit(h.verdict))
+                    }
+                    .font(Theme.TypeScale.body)
                     if h.verdict == .struggling || h.verdict == .partial {
                         Text(h.suggestion).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
@@ -1360,7 +1364,7 @@ struct AssociationsCard: View {
         VStack(alignment: .leading, spacing: 0) {
             CardTitle("发现的关联", detail: "关联 ≠ 已确认的原因").padding(.bottom, Theme.Space.tight)
             if associations.isEmpty {
-                Text("还没有足够数据发现稳定的关联。持续记录饮酒、睡眠、压力等背景后会逐步出现。")
+                Text("数据还不够。多记饮酒、睡眠、压力这些背景，关联会慢慢出现。")
                     .font(Theme.TypeScale.body).foregroundStyle(.secondary).padding(.vertical, Theme.Space.item)
             }
             ForEach(associations) { a in

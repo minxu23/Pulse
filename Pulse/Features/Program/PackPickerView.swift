@@ -47,7 +47,7 @@ struct PackPickerView: View {
             confirmationSummary(latest, person)
             if let p = profiles.first, !p.canStartImprovement {
                 Button("补充年龄与运动前安全问题") { showSafety = true }
-                Text("记录身体状况不需要填写；开始改善方案前需要逐项确认。")
+                Text("开始改善方案前，要先回答这些问题。")
                     .foregroundStyle(.secondary)
             }
             if rec.doctorFirst {
@@ -62,8 +62,8 @@ struct PackPickerView: View {
             .buttonStyle(.borderedProminent)
             .disabled(ProgramPacks.blocker(selected, latest.report, person) != nil)
             .frame(maxWidth: .infinity, alignment: .leading)
-            PageFootnote(selected == .event ? "按比赛日期分阶段，每 4 周复盘一次训练阶段，比赛结束后进入总结期。中途也可以换方案。"
-                         : "每轮 4 周，每周复盘一次；生病或出差的周不计入，这一轮最多顺延 2 周。第 4 周结束时看主靶点有没有达到目标：达到了进入总结期，没达到就调整后再来一轮。中途也可以换方案。")
+            PageFootnote(selected == .event ? "按比赛日期分阶段，每 4 周复盘一次，比赛后进入总结期。中途也能换方案。"
+                         : "每轮 4 周，每周复盘；生病或出差的周不计入，最多顺延 2 周。达到目标进入总结期，没达到就调整后再来一轮。中途也能换方案。")
         }
         .calmStyle()
         .task(id: safetyRevision) {
@@ -117,9 +117,8 @@ struct PackPickerView: View {
             }
             FactRow(label: "首周训练", value: "\(days) 天，共约 \(minutes) 分钟")
             if let steps = preview.stepsTarget { FactRow(label: "首周日均步数", value: "\(steps) 步") }
-            Text(t.howToMeasure).foregroundStyle(.secondary)
-            if start > Date.app.startOfDay { Text("正式开始前保留原有安排，不计入本轮完成率。").foregroundStyle(.secondary) }
-            if profiles.first?.programPhase == .improve { Text("确认更换后开始新一轮，已有记录和报告保留。").foregroundStyle(.secondary) }
+            if start > Date.app.startOfDay { Text("开始前照旧安排，不计入完成率。").foregroundStyle(.secondary) }
+            if profiles.first?.programPhase == .improve { Text("换方案后开始新一轮，记录和报告都保留。").foregroundStyle(.secondary) }
         }
     }
 
@@ -164,7 +163,7 @@ struct PackPickerView: View {
                     }
                 }
             }
-            Text("所有方案都包含基础习惯：步数逐步增加、久坐时起身、睡够 7 小时、每周 2 次力量。方案从你基线期实际做到的量开始，喜欢的运动会算进训练。")
+            Text("每个方案都含基础习惯：多走路、少久坐、睡够 7 小时、每周 2 次力量；起点按你基线期实际做到的量。")
                 .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }

@@ -64,7 +64,7 @@ struct DailyReviewSection: View {
         .cardSurface()
 
         PrioritiesCard(context: context)
-        PageFootnote("颜色按你最在意的几件事和当天早上的身体状态来定；点开一天看全天回顾、写笔记。")
+        PageFootnote("颜色看你最在意的几件事和当天早上的状态；点开一天可以看回顾、写笔记。")
     }
 }
 
@@ -174,7 +174,7 @@ struct DayReviewPage: View {
                         .background(DayLevelStyle.fill(l), in: Capsule())
                 }
                 Text(ReviewPriorities.dayHeadline(top, isToday: offset == 0))
-                    .font(Theme.TypeScale.title.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+                    .font(Theme.TypeScale.headline).fixedSize(horizontal: false, vertical: true)
                 HStack(alignment: .top, spacing: Theme.Space.block) {
                     stat("准备度", v.readiness?.score.map(String.init) ?? "—", v.readiness?.level.label ?? "没有晨起数据")
                     stat("睡眠", d?.sleepMinutes.map { ($0 / 60).oneDecimal } ?? "—", d?.sleepMinutes == nil ? "没有记录" : "小时")
@@ -317,8 +317,8 @@ struct PrioritiesCard: View {
                         .buttonStyle(.bordered).font(Theme.TypeScale.body)
                 }
             }
-            Text(mine.isEmpty ? "按你的病情、目标和最近的数据自动排列，数据变了顺序也会跟着变。复盘的数据、建议和问题按这个顺序排。"
-                              : "按你设定的顺序。复盘的数据、建议和问题按这个顺序排。")
+            Text(mine.isEmpty ? "按你的病情、目标和最近的数据自动排列；复盘的数据和建议也按这个顺序。"
+                              : "按你定的顺序；复盘的数据和建议也按这个顺序。")
                 .font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .cardSurface()
@@ -373,7 +373,7 @@ private struct PrioritiesEditor: View {
                         dismiss()
                     }
                 } footer: {
-                    Text("自动排列按你的病情、目标和最近的数据：哪方面最近不太好就往前排，稳定了就往后。")
+                    Text("自动排列：最近不太好的往前，稳定的往后。")
                 }
             }
             .environment(\.editMode, .constant(.active))

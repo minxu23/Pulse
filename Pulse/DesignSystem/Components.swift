@@ -44,7 +44,7 @@ struct CardTitle<Trailing: View>: View {
     var body: some View {
         // At accessibility sizes the detail and the button go under the title.
         AdaptiveStack(alignment: .firstTextBaseline, spacing: Theme.Space.item, stackedSpacing: Theme.Space.tight) {
-            Text(title).font(Theme.TypeScale.title).accessibilityAddTraits(.isHeader)
+            Text(title).font(Theme.TypeScale.headline).accessibilityAddTraits(.isHeader)
             if let detail { Text(detail).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
             if !size.isAccessibilitySize { Spacer(minLength: Theme.Space.item) }
             trailing
@@ -81,11 +81,17 @@ struct HealthMetricCard<Footer: View>: View {
                     if let time { Text(time).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
                 }
             } else {
-                HStack(spacing: Theme.Space.iconGap) {
-                    Image(systemName: icon).font(Theme.TypeScale.body.weight(.semibold)).imageScale(.small).foregroundStyle(color)
-                    Text(title).font(Theme.TypeScale.body.weight(.semibold))
-                    Spacer(minLength: Theme.Space.tight)
-                    if let time { Text(time).font(Theme.TypeScale.body).foregroundStyle(.secondary) }
+                // In a half-width card the time or period goes under the title rather than squeezing both onto two lines.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: Theme.Space.iconGap) {
+                        titleLabel
+                        Spacer(minLength: Theme.Space.item)
+                        if let time { Text(time).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1) }
+                    }
+                    VStack(alignment: .leading, spacing: Theme.Space.hairline) {
+                        titleLabel
+                        if let time { Text(time).font(Theme.TypeScale.body).foregroundStyle(.secondary).lineLimit(1) }
+                    }
                 }
             }
             HStack(alignment: .firstTextBaseline, spacing: Theme.Space.tight) {
@@ -102,6 +108,13 @@ struct HealthMetricCard<Footer: View>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
         .accessibilityElement(children: .combine)
+    }
+
+    private var titleLabel: some View {
+        HStack(spacing: Theme.Space.iconGap) {
+            Image(systemName: icon).font(Theme.TypeScale.body.weight(.semibold)).imageScale(.small).foregroundStyle(color)
+            Text(title).font(Theme.TypeScale.body.weight(.semibold)).lineLimit(1)
+        }
     }
 }
 
@@ -142,12 +155,65 @@ struct SectionTitle: View {
     }
 }
 
+/// Short facts shown as 「A · B · C」 that wrap only between facts: a number never leaves its label
+/// (「血糖 / 5.6」, 「12 小 / 时」), and no line starts or ends with a dot. Font and colour come from the caller.
+struct PartsText: View {
+    let parts: [String]
+    var maxLines = 2
+
+    init(_ parts: [String], maxLines: Int = 2) {
+        self.parts = parts.filter { !$0.isEmpty }
+        self.maxLines = maxLines
+    }
+
+    var body: some View {
+        let p = parts
+        if p.count < 2 {
+            Text(p.first ?? "").lineLimit(maxLines)
+        } else {
+            // The first arrangement that fits wins: one line, then two lines with as much as possible on the first.
+            ViewThatFits(in: .horizontal) {
+                line(p[...])
+                ForEach(Array((1..<p.count).reversed()), id: \.self) { k in
+                    lines([p[..<k], p[k...]])
+                }
+                if maxLines > 2 {
+                    // Last resort: one fact per line, and a fact longer than the line wraps.
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(p.indices, id: \.self) { Text(p[$0]) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func line(_ s: ArraySlice<String>) -> some View {
+        Text(s.joined(separator: " · ")).lineLimit(1)
+    }
+
+    private func lines(_ groups: [ArraySlice<String>]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(groups.indices, id: \.self) { line(groups[$0]) }
+        }
+    }
+}
+
+extension String {
+    /// Keeps the last few characters of a paragraph together, so its last line is never one character or a lone 「。」.
+    var withoutOrphan: String {
+        guard count > 12 else { return self }
+        let tail = suffix(5)
+        guard !tail.contains("\n") else { return self }
+        return dropLast(5) + tail.map { $0 == " " ? "\u{00A0}" : String($0) }.joined(separator: "\u{2060}")
+    }
+}
+
 /// Explanatory footnote at the end of a page.
 struct PageFootnote: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
-        Text(text)
+        Text(text.withoutOrphan)
             .font(Theme.TypeScale.body).foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, Theme.Space.tight)
@@ -172,8 +238,15 @@ struct IconTextRow: View {
                 if !title.isEmpty { Text(title).font(Theme.TypeScale.body.weight(.semibold)) }
                 if !text.isEmpty {
                     // Without a title the text is the row itself, so it is body text too.
-                    Text(text).font(Theme.TypeScale.body).foregroundStyle(title.isEmpty || urgent ? .primary : .secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Group {
+                        // Facts joined by 「·」 (no sentence punctuation) wrap between facts, not inside 「7.7 小时」.
+                        if text.contains(" · ") && !text.contains("。") && !text.contains("，") {
+                            PartsText(text.components(separatedBy: " · "), maxLines: 3)
+                        } else {
+                            Text(text.withoutOrphan).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .font(Theme.TypeScale.body).foregroundStyle(title.isEmpty || urgent ? .primary : .secondary)
                 }
             }
             Spacer(minLength: 0)
@@ -221,7 +294,7 @@ struct NavRowLabel: View {
             IconTile(icon: icon, color: color)
             VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                 Text(title).font(Theme.TypeScale.body).foregroundStyle(.primary)
-                if let detail { Text(detail).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+                if let detail { Text(detail.withoutOrphan).font(Theme.TypeScale.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
             }
             Spacer(minLength: Theme.Space.item)
             if let value { Text(value).font(Theme.TypeScale.body).foregroundStyle(.secondary).monospacedDigit() }
@@ -266,7 +339,7 @@ struct ChecklistRow: View {
                     .frame(width: Self.glyphColumn)
                 VStack(alignment: .leading, spacing: Theme.Space.hairline) {
                     Text(title).font(Theme.TypeScale.body.weight(.semibold)).foregroundStyle(done ? .secondary : .primary)
-                    Text(detail).font(Theme.TypeScale.body).foregroundStyle(.secondary).multilineTextAlignment(.leading)
+                    Text(detail.withoutOrphan).font(Theme.TypeScale.body).foregroundStyle(.secondary).multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)

@@ -132,13 +132,14 @@ enum WeatherPlanner {
                 if (s.isKey || s.kind == .long || s.intensity == .hard), let to = free.first {
                     ops.append(.move(from: wd, to: to.weekday))
                     taken.remove(wd); taken.insert(to.weekday)
-                    notes.append("\(name)\(why)，「\(s.title)」建议挪到\(Weekday.name(to.weekday))（\(byDay[to]!.label) \(Int(byDay[to]!.high))°C）。")
+                    notes.append("\(name)\(why)，「\(s.title)」挪到\(Weekday.name(to.weekday))（\(byDay[to]!.label) \(Int(byDay[to]!.high))°C）。")
                 } else {
                     let (title, detail) = indoor(s, w)
                     ops.append(.replace(day: wd, kind: s.kind == .walk ? .aerobic : s.kind, title: title, minutes: s.minutes,
                                         intensity: concerns.contains(.extremeHeat) || concerns.contains(.heat) ? min(s.intensity, .moderate) : s.intensity,
                                         detail: detail, target: s.kind))
-                    notes.append("\(name)\(why)，「\(s.title)」建议改为\(title)，时长不变。")
+                    // The proposal's own line shows the new session; the note says why.
+                    notes.append("\(name)\(why)，改在室内，时长不变。")
                 }
             } else if concerns.contains(.heat) {
                 if s.intensity == .hard { ops.append(.intensity(day: wd, .moderate)) }

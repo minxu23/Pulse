@@ -21,7 +21,7 @@ struct AgentAnswerView: View {
             ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
                 switch section {
                 case .verdict(let t):
-                    Text(Self.styled(t, highlight: false)).font(Theme.TypeScale.title).fixedSize(horizontal: false, vertical: true)
+                    Text(Self.styled(t, highlight: false)).font(Theme.TypeScale.headline).fixedSize(horizontal: false, vertical: true)
                     if let f = reply?.figure { AgentFigureView(figure: f, context: context) }
                 case .paragraph(let t):
                     // The figure already shows a paragraph that only lists its numbers.
